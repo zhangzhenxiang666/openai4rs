@@ -1,0 +1,71 @@
+use crate::chat::Chat;
+use reqwest::Client;
+use std::{cell::OnceCell, sync::Arc};
+
+pub struct OpenAI {
+    api_key: String,
+    base_url: String,
+    chat: OnceCell<Chat>,
+    client: Arc<Client>,
+}
+
+impl OpenAI {
+    pub fn new(api_key: String, base_url: String) -> Self {
+        let client = Arc::new(Client::new());
+        Self {
+            api_key,
+            base_url,
+            chat: OnceCell::new(),
+            client,
+        }
+    }
+
+    pub fn from_env() -> Result<Self, String> {
+        let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| "OPENAI_API_KEY not set")?;
+        let base_url =
+            std::env::var("OPENAI_BASE_URL").unwrap_or("https://api.openai.com/v1".to_string());
+        Ok(Self::new(api_key, base_url))
+    }
+}
+
+impl OpenAI {
+    pub fn chat(&self) -> &Chat {
+        self.chat.get_or_init(|| {
+            Chat::new(
+                self.api_key.clone(),
+                self.base_url.clone(),
+                Arc::clone(&self.client),
+            )
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::chat::*;
+    use dotenvy::dotenv;
+
+    use super::*;
+    #[tokio::test]
+    async fn test_chat() {
+        dotenv().ok();
+        let client = OpenAI::from_env().unwrap();
+        let messages = vec![ChatCompletionMessageParam::User(
+            ChatCompletionUserMessageParam {
+                content: Content::Text("Hello".into()),
+                name: None,
+            },
+        )];
+        let res = client
+            .chat()
+            .create(
+                chat_request("meta-llama/llama-3.3-8b-instruct:free", &messages).temperature(0.0),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            Some("Hello! How can I assist you today?".into()),
+            res.choices[0].message.content
+        );
+    }
+}
