@@ -36,7 +36,7 @@ impl Serialize for ChatCompletionMessageToolCallParam {
         S: serde::Serializer,
     {
         match self {
-            ChatCompletionMessageToolCallParam::Function(inner) => {
+            Self::Function(inner) => {
                 let mut map = serde_json::Map::new();
                 map.insert("type".into(), Value::from("function"));
                 map.insert("id".into(), Value::from(inner.id.as_str()));
@@ -57,7 +57,7 @@ impl Serialize for ChatCompletionMessageParam {
         S: serde::Serializer,
     {
         match self {
-            ChatCompletionMessageParam::System(inner) => {
+            Self::System(inner) => {
                 let mut map = serde_json::Map::new();
                 map.insert("role".into(), Value::from("system"));
                 map.insert(
@@ -70,7 +70,7 @@ impl Serialize for ChatCompletionMessageParam {
                 }
                 serializer.collect_map(map)
             }
-            ChatCompletionMessageParam::User(inner) => {
+            Self::User(inner) => {
                 let mut map = serde_json::Map::new();
                 map.insert("role".into(), Value::from("user"));
                 map.insert(
@@ -83,7 +83,7 @@ impl Serialize for ChatCompletionMessageParam {
                 }
                 serializer.collect_map(map)
             }
-            ChatCompletionMessageParam::Assistant(inner) => {
+            Self::Assistant(inner) => {
                 let mut map = serde_json::Map::new();
                 map.insert("role".into(), Value::from("assistant"));
                 if let Some(content) = &inner.content {
@@ -108,7 +108,7 @@ impl Serialize for ChatCompletionMessageParam {
                 }
                 serializer.collect_map(map)
             }
-            ChatCompletionMessageParam::Tool(inner) => {
+            Self::Tool(inner) => {
                 let mut map = serde_json::Map::new();
                 map.insert("role".into(), Value::from("tool"));
                 map.insert(
@@ -126,26 +126,82 @@ impl Serialize for ChatCompletionMessageParam {
     }
 }
 
+impl Serialize for ChatCompletionToolParam {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::Function(inner) => {
+                let mut map = serde_json::Map::new();
+                map.insert("type".into(), Value::from("function"));
+                map.insert(
+                    "function".into(),
+                    serde_json::to_value(inner)
+                        .map_err(|e| serde::ser::Error::custom(e.to_string()))?,
+                );
+                serializer.collect_map(map)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::{chat_request, content, system, user};
+
     use super::*;
 
     #[test]
-    fn test_assistant_serizalize() {
+    fn test_assistant_serialize() {
         let assistant =
             ChatCompletionMessageParam::Assistant(ChatCompletionAssistantMessageParam {
-                content: Some(Content::Text("content".into())),
+                content: Some(content!("content")),
                 name: Some("name".into()),
                 refusal: Some("refusal".into()),
-                tool_calls: Some(vec![ChatCompletionMessageToolCallParam::Function(
-                    Function {
-                        id: "id".into(),
-                        name: "name".into(),
-                        arguments: "{'path': '/.cargo'}".into(),
-                    },
+                tool_calls: Some(vec![ChatCompletionMessageToolCallParam::function(
+                    "id",
+                    "name",
+                    "{'path': '/.cargo'}",
                 )]),
             });
         let json = serde_json::to_string(&assistant).unwrap();
-        println!("{}", json);
+        assert_eq!(
+            &json,
+            r#"{"content":"content","name":"name","refusal":"refusal","role":"assistant","tool_calls":[{"function":{"arguments":"{'path': '/.cargo'}","name":"name"},"id":"id","type":"function"}]}"#
+        );
+    }
+
+    #[test]
+    fn test_request_params_serialize() {
+        let messages = vec![system!("system message"), user!("user message")];
+        let request = chat_request("meta-llama/llama-3.3-8b-instruct:free", &messages)
+            .temperature(0.1)
+            .top_logprobs(1)
+            .n(1)
+            .top_logprobs(1)
+            .max_tokens(1024)
+            .tool_choice(ToolChoice::Auto)
+            .tools(vec![ChatCompletionToolParam::function(
+                "function_name",
+                "function description",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "name of the person"
+                        }
+                    },
+                    "required": ["name"]
+                }),
+            )])
+            .build()
+            .unwrap();
+        let json = serde_json::to_string(&request).unwrap();
+        assert_eq!(
+            &json,
+            r#"{"model":"meta-llama/llama-3.3-8b-instruct:free","messages":[{"content":"system message","role":"system"},{"content":"user message","role":"user"}],"max_tokens":1024,"n":1,"temperature":0.1,"top_logprobs":1,"tools":[{"function":{"description":"function description","name":"function_name","parameters":{"properties":{"name":{"description":"name of the person","type":"string"}},"required":["name"],"type":"object"},"strict":null},"type":"function"}],"tool_choice":"auto"}"#
+        );
     }
 }

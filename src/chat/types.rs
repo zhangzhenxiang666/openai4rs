@@ -5,8 +5,13 @@ use serde::{Deserialize, Serialize};
 pub type ChatCompletion = ChatCompletionGeneric<UnStreamChoice>;
 pub type ChatCompletionChunk = ChatCompletionGeneric<StreamChoice>;
 
+fn default_id() -> String {
+    "0".into()
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct ChatCompletionGeneric<T> {
+    #[serde(default = "default_id")]
     pub id: String,
     pub choices: Vec<T>,
     pub created: i64,
@@ -168,6 +173,19 @@ pub struct ChatCompletionUserMessageParam {
 pub struct ChatCompletionToolMessageParam {
     pub tool_call_id: String,
     pub content: Content,
+}
+
+#[derive(Debug, Clone)]
+pub enum ChatCompletionToolParam {
+    Function(FunctionDefinition),
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FunctionDefinition {
+    pub name: String,
+    pub description: String,
+    pub strict: Option<bool>,
+    pub parameters: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize)]

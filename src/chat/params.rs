@@ -94,7 +94,7 @@ pub struct RequestParams<'a> {
 
     #[builder(default)]
     #[serde(skip_serializing_if = "skip_if_option_vec_empty")]
-    pub tools: Option<Vec<ChatCompletionToolMessageParam>>,
+    pub tools: Option<Vec<ChatCompletionToolParam>>,
 
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -121,16 +121,6 @@ pub fn chat_request<'a>(
         .model(model)
         .messages(messages)
 }
-
-// TODO implement
-//? audio: Optional[ChatCompletionAudioParam] | NotGiven = NOT_GIVEN,
-//? response_format: completion_create_params.ResponseFormat | NotGiven = NOT_GIVEN,
-//? stop: Union[Optional[str], List[str], None] | NotGiven = NOT_GIVEN,
-//? stream_options: Optional[ChatCompletionStreamOptionsParam] | NotGiven = NOT_GIVEN,
-//? web_search_options: completion_create_params.WebSearchOptions | NotGiven = NOT_GIVEN,
-// # Use the following arguments if you need to pass additional parameters to the API that aren't available via kwargs.
-// # The extra values given here take precedence over values defined on the client or passed to this method.
-//? timeout: float | httpx.Timeout | None | NotGiven = NOT_GIVEN,
 
 pub trait IntoRequestParams<'a> {
     fn into_request_params(self) -> RequestParams<'a>;
