@@ -6,8 +6,8 @@ pub(crate) async fn openai_post<F>(
     client: &Client,
     route: &str,
     builder: F,
-    api_key: &str,
-    base_url: &str,
+    api_key: String,
+    base_url: String,
 ) -> Result<Response, RequestError>
 where
     F: FnOnce(RequestBuilder) -> RequestBuilder,
@@ -19,8 +19,8 @@ pub(crate) async fn openai_post_stream<F>(
     client: &Client,
     route: &str,
     builder: F,
-    api_key: &str,
-    base_url: &str,
+    api_key: String,
+    base_url: String,
 ) -> Result<EventSource, RequestError>
 where
     F: FnOnce(RequestBuilder) -> RequestBuilder,
@@ -49,13 +49,13 @@ async fn openai_request<F>(
     client: &Client,
     route: &str,
     builder: F,
-    api_key: &str,
-    base_url: &str,
+    api_key: String,
+    base_url: String,
 ) -> Result<Response, RequestError>
 where
     F: FnOnce(RequestBuilder) -> RequestBuilder,
 {
-    let request = build_openai_request(method, client, route, builder, api_key, base_url);
+    let request = build_openai_request(method, client, route, builder, &api_key, &base_url);
 
     request.send().await.map_err(process_request_error)
 }
@@ -65,13 +65,13 @@ async fn openai_request_stream<F>(
     client: &Client,
     route: &str,
     builder: F,
-    api_key: &str,
-    base_url: &str,
+    api_key: String,
+    base_url: String,
 ) -> Result<EventSource, RequestError>
 where
     F: FnOnce(RequestBuilder) -> RequestBuilder,
 {
-    let request = build_openai_request(method, client, route, builder, api_key, base_url);
+    let request = build_openai_request(method, client, route, builder, &api_key, &base_url);
 
     request
         .eventsource()

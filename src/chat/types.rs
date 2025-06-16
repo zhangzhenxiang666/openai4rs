@@ -69,6 +69,7 @@ pub struct ChoiceDelta {
     pub refusal: Option<String>,
     pub role: Option<String>,
     pub tool_calls: Option<Vec<ChatCompletionMessageToolCall>>,
+    pub reasoning: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -86,6 +87,7 @@ pub struct ChatCompletionMessage {
     pub role: String,
     pub annotations: Option<Vec<Annotation>>,
     pub tool_calls: Option<Vec<ChatCompletionMessageToolCall>>,
+    pub reasoning: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -152,20 +154,26 @@ pub enum ChatCompletionMessageParam {
 #[derive(Debug, Clone, Serialize)]
 pub struct ChatCompletionSystemMessageParam {
     pub content: Content,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ChatCompletionAssistantMessageParam {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<Content>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub refusal: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ChatCompletionMessageToolCallParam>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ChatCompletionUserMessageParam {
     pub content: Content,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 }
 
@@ -184,6 +192,7 @@ pub enum ChatCompletionToolParam {
 pub struct FunctionDefinition {
     pub name: String,
     pub description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub strict: Option<bool>,
     pub parameters: serde_json::Value,
 }

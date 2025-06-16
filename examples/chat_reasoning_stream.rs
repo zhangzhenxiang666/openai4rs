@@ -24,10 +24,7 @@ async fn main() {
 
         let stream = client
             .chat()
-            .create_stream(chat_request(
-                "meta-llama/llama-3.3-8b-instruct:free",
-                &messages,
-            ))
+            .create_stream(chat_request("qwen/qwq-32b:free", &messages))
             .await
             .unwrap();
 
@@ -42,13 +39,21 @@ async fn process_stream(
 ) -> String {
     let mut stream = stream;
     let mut ai_output = String::new();
-
+    let mut first = true;
     println!("\n# ASSISTANT\n");
     while let Some(result) = stream.next().await {
-
         let chunk = result.expect("Error processing stream");
-        
+
         for choice in chunk.choices.iter() {
+            if choice.delta.is_reasoning() && first {
+                first = false;
+                println!("## REASONING\n\n{}", choice.delta.get_reasoning_str())
+            } else if choice.delta.is_reasoning() {
+                print!("{}", choice.delta.get_reasoning_str());
+            } else if !first {
+                println!("\n\n## CONTENT\n\n");
+                first = true;
+            }
             if let Some(data) = choice.delta.content.as_ref() {
                 print!("{}", data);
                 ai_output.push_str(data);

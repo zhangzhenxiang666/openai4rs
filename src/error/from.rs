@@ -1,5 +1,79 @@
+use std::collections::HashMap;
+
 use super::openai::*;
+use reqwest::Response;
 use reqwest_eventsource::Error as EventSourceError;
+use serde_json::Value;
+
+pub(crate) async fn create_status_error_from_response(
+    status_code: u16,
+    response: Option<Response>,
+) -> OpenAIError {
+    let message = if let Some(response) = response {
+        if let Ok(body_map) = response.json::<HashMap<String, Value>>().await {
+            body_map.get("error").and_then(|v| Some(v.to_string()))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let default_message = match status_code {
+        400 => "Bad Request",
+        401 => "Authentication Error",
+        403 => "Permission Denied Error",
+        404 => "Not Found Error",
+        409 => "Conflict Error",
+        422 => "Unprocessable Entity Error",
+        429 => "Rate Limit Error",
+        code if code >= 500 => "Internal Server Error",
+        _ => "API Status Error",
+    };
+
+    let error_message = message.unwrap_or_else(|| default_message.to_string());
+    let code = status_code as i64;
+
+    match status_code {
+        400 => OpenAIError::BadRequest(BadRequestError {
+            message: error_message,
+            code,
+        }),
+        401 => OpenAIError::Authentication(AuthenticationError {
+            message: error_message,
+            code,
+        }),
+        403 => OpenAIError::PermissionDenied(PermissionDeniedError {
+            message: error_message,
+            code,
+        }),
+        404 => OpenAIError::NotFound(NotFoundError {
+            message: error_message,
+            code,
+        }),
+        409 => OpenAIError::Conflict(ConflictError {
+            message: error_message,
+            code,
+        }),
+        422 => OpenAIError::UnprocessableEntity(UnprocessableEntityError {
+            message: error_message,
+            code,
+        }),
+        429 => OpenAIError::RateLimit(RateLimitError {
+            message: error_message,
+            code,
+        }),
+        code if code >= 500 => OpenAIError::InternalServer(InternalServerError {
+            message: error_message,
+            code: code.into(),
+        }),
+        _ => OpenAIError::APIStatus(APIStatusError {
+            message: error_message,
+            code,
+            request_id: None,
+        }),
+    }
+}
 
 impl From<reqwest::Error> for TextReadError {
     fn from(err: reqwest::Error) -> Self {
@@ -50,42 +124,13 @@ impl From<EventSourceError> for OpenAIError {
                     code: 400,
                 })
             }
-            EventSourceError::InvalidStatusCode(status_code, _response) => {
-                let code = status_code.as_u16() as i64;
-                match code {
-                    400 => OpenAIError::BadRequest(BadRequestError {
-                        message: format!("Bad request for event stream: {}", status_code),
-                        code,
-                    }),
-                    401 => OpenAIError::Authentication(AuthenticationError {
-                        message: format!("Authentication error for event stream: {}", status_code),
-                        code,
-                    }),
-                    403 => OpenAIError::PermissionDenied(PermissionDeniedError {
-                        message: format!("Permission denied for event stream: {}", status_code),
-                        code,
-                    }),
-                    404 => OpenAIError::NotFound(NotFoundError {
-                        message: format!("Event stream endpoint not found: {}", status_code),
-                        code,
-                    }),
-                    429 => OpenAIError::RateLimit(RateLimitError {
-                        message: format!("Rate limit exceeded for event stream: {}", status_code),
-                        code,
-                    }),
-                    code if code >= 500 => OpenAIError::InternalServer(InternalServerError {
-                        message: format!("Server error for event stream: {}", status_code),
-                        code,
-                    }),
-                    _ => OpenAIError::APIStatus(APIStatusError {
-                        message: format!(
-                            "Unexpected status code for event stream: {}",
-                            status_code
-                        ),
-                        code,
-                        request_id: None,
-                    }),
-                }
+            EventSourceError::InvalidStatusCode(status_code, response) => {
+                tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(async {
+                        create_status_error_from_response(status_code.as_u16(), Some(response))
+                            .await
+                    })
+                })
             }
             EventSourceError::InvalidLastEventId(event_id) => {
                 OpenAIError::BadRequest(BadRequestError {

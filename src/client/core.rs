@@ -1,10 +1,26 @@
 use crate::chat::Chat;
 use reqwest::Client;
-use std::{cell::OnceCell, sync::Arc};
+use std::{
+    cell::OnceCell,
+    sync::{Arc, RwLock},
+};
 
-pub struct OpenAI {
+pub(crate) struct Config {
     api_key: String,
     base_url: String,
+}
+
+impl Config {
+    pub fn get_api_key(&self) -> String {
+        self.api_key.to_string()
+    }
+    pub fn get_base_url(&self) -> String {
+        self.base_url.to_string()
+    }
+}
+
+pub struct OpenAI {
+    config: Arc<RwLock<Config>>,
     chat: OnceCell<Chat>,
     client: Arc<Client>,
 }
@@ -12,11 +28,14 @@ pub struct OpenAI {
 impl OpenAI {
     pub fn new(api_key: &str, base_url: &str) -> Self {
         let client = Arc::new(Client::new());
-        Self {
+        let config = Arc::new(RwLock::new(Config {
             api_key: api_key.into(),
             base_url: base_url.into(),
+        }));
+        Self {
             chat: OnceCell::new(),
             client,
+            config,
         }
     }
 
@@ -30,13 +49,8 @@ impl OpenAI {
 
 impl OpenAI {
     pub fn chat(&self) -> &Chat {
-        self.chat.get_or_init(|| {
-            Chat::new(
-                self.api_key.clone(),
-                self.base_url.clone(),
-                Arc::clone(&self.client),
-            )
-        })
+        self.chat
+            .get_or_init(|| Chat::new(Arc::clone(&self.config), Arc::clone(&self.client)))
     }
 }
 

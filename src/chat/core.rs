@@ -1,32 +1,27 @@
 use super::params::{IntoRequestParams, RequestParams};
 use super::types::*;
+use crate::client::Config;
+use crate::error::from::create_status_error_from_response;
 use crate::error::*;
 use crate::utils::{openai_post, openai_post_stream};
 use reqwest::{Client, RequestBuilder, Response};
 use reqwest_eventsource::{Event, EventSource};
 use serde::de::DeserializeOwned;
-use serde_json::Value;
 use std::any::type_name;
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::debug;
 
 pub struct Chat {
-    api_key: String,
-    base_url: String,
+    config: Arc<RwLock<Config>>,
     client: Arc<Client>,
 }
 
 impl Chat {
-    pub fn new(api_key: String, base_url: String, client: Arc<Client>) -> Self {
-        Self {
-            api_key,
-            base_url,
-            client,
-        }
+    pub(crate) fn new(config: Arc<RwLock<Config>>, client: Arc<Client>) -> Self {
+        Self { config, client }
     }
 
     pub async fn create<'a, T>(&self, params: T) -> Result<ChatCompletion, OpenAIError>
@@ -86,17 +81,6 @@ enum ProcessEventResult {
     Data(ChatCompletionChunk),
     Done,
     Error(OpenAIError),
-}
-macro_rules! send_request {
-    ($self:expr, $params:expr, $sender:expr) => {
-        $sender(
-            &$self.client,
-            "/chat/completions",
-            |builder| Self::transform_request_params(builder, $params),
-            &$self.api_key,
-            &$self.base_url,
-        )
-    };
 }
 
 impl Chat {
@@ -177,14 +161,28 @@ impl Chat {
         &self,
         params: &RequestParams,
     ) -> impl Future<Output = Result<Response, RequestError>> {
-        send_request!(self, params, openai_post)
+        let config = self.config.read().unwrap();
+        openai_post(
+            &self.client,
+            "/chat/completions",
+            |builder| Self::transform_request_params(builder, params),
+            config.get_api_key(),
+            config.get_base_url(),
+        )
     }
 
     fn send_stream(
         &self,
         params: &RequestParams,
     ) -> impl Future<Output = Result<EventSource, RequestError>> {
-        send_request!(self, params, openai_post_stream)
+        let config = self.config.read().unwrap();
+        openai_post_stream(
+            &self.client,
+            "/chat/completions",
+            |builder| Self::transform_request_params(builder, params),
+            config.get_api_key(),
+            config.get_base_url(),
+        )
     }
 
     fn convert_request_error<T>(error: RequestError) -> Result<T, OpenAIError> {
@@ -218,67 +216,13 @@ impl Chat {
                 })
             })?)
         } else {
-            Self::process_status_error(response).await
+            Err(Self::process_status_error(response).await)
         }
     }
 
-    async fn process_status_error<T>(response: Response) -> Result<T, OpenAIError>
-    where
-        T: DeserializeOwned,
-    {
+    async fn process_status_error(response: Response) -> OpenAIError {
         let status = response.status().as_u16();
-
-        let body_map: HashMap<String, Value> = response
-            .json()
-            .await
-            .map_err(|e| OpenAIError::TextRead(e.into()))?;
-        let message = body_map.get("error").and_then(|v| Some(v.to_string()));
-
-        let err = match status {
-            400 => OpenAIError::BadRequest(BadRequestError {
-                message: message.unwrap_or("Bad Request".to_string()),
-                code: 400,
-            }),
-            401 => OpenAIError::Authentication(AuthenticationError {
-                message: body_map
-                    .get("error")
-                    .and_then(|v| Some(v.to_string()))
-                    .unwrap_or("Authentication Error".to_string()),
-                code: 401,
-            }),
-            403 => OpenAIError::PermissionDenied(PermissionDeniedError {
-                message: message.unwrap_or("PermissionDenied Error".into()),
-                code: 403,
-            }),
-            404 => OpenAIError::NotFound(NotFoundError {
-                message: message.unwrap_or("Not Found Error".into()),
-                code: 404,
-            }),
-            409 => OpenAIError::Conflict(ConflictError {
-                message: message.unwrap_or("Conflict Error".into()),
-                code: 409,
-            }),
-            422 => OpenAIError::UnprocessableEntity(UnprocessableEntityError {
-                message: message.unwrap_or("Unprocessable Entity Error".into()),
-                code: 422,
-            }),
-            429 => OpenAIError::RateLimit(RateLimitError {
-                message: message.unwrap_or("Rate Limit Error".into()),
-                code: 429,
-            }),
-            code if code >= 500 => OpenAIError::InternalServer(InternalServerError {
-                message: message.unwrap_or("Internal Server Error".into()),
-                code: code.into(),
-            }),
-            code => OpenAIError::APIStatus(APIStatusError {
-                message: body_map
-                    .get("error")
-                    .and_then(|v| Some(v.to_string()))
-                    .unwrap_or("ApiStatus Error".into()),
-                code: code.into(),
-                request_id: None,
-            }),
-        };
-        Err(err)
+        let error = create_status_error_from_response(status, Some(response)).await;
+        error
     }
 }

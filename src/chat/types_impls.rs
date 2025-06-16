@@ -7,6 +7,32 @@ impl ChatCompletionMessage {
             .as_ref()
             .map_or(false, |calls| !calls.is_empty())
     }
+    pub fn is_reasoning(&self) -> bool {
+        self.reasoning
+            .as_ref()
+            .map_or(false, |reas| !reas.is_empty())
+    }
+
+    pub fn get_content_str(&self) -> &str {
+        match self.content.as_ref() {
+            Some(content) => content.as_str(),
+            None => "",
+        }
+    }
+
+    pub fn get_reasoning_str(&self) -> &str {
+        match self.reasoning.as_ref() {
+            Some(reasoning) => reasoning.as_str(),
+            None => "",
+        }
+    }
+
+    pub fn get_content(self) -> String {
+        match self.content {
+            Some(content) => content,
+            None => "".into(),
+        }
+    }
 }
 
 impl ChoiceDelta {
@@ -14,6 +40,33 @@ impl ChoiceDelta {
         self.tool_calls
             .as_ref()
             .map_or(false, |calls| !calls.is_empty())
+    }
+
+    pub fn is_reasoning(&self) -> bool {
+        self.reasoning
+            .as_ref()
+            .map_or(false, |reas| !reas.is_empty())
+    }
+
+    pub fn get_content_str(&self) -> &str {
+        match self.content.as_ref() {
+            Some(content) => content.as_str(),
+            None => "",
+        }
+    }
+
+    pub fn get_reasoning_str(&self) -> &str {
+        match self.reasoning.as_ref() {
+            Some(reasoning) => reasoning.as_str(),
+            None => "",
+        }
+    }
+
+    pub fn get_content(self) -> String {
+        match self.content {
+            Some(content) => content,
+            None => "".into(),
+        }
     }
 }
 
@@ -116,6 +169,7 @@ impl From<ChoiceDelta> for ChatCompletionMessage {
             role: value.role.unwrap_or("assistant".into()),
             annotations: None,
             tool_calls: value.tool_calls,
+            reasoning: value.reasoning,
         }
     }
 }
