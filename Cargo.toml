@@ -5,7 +5,7 @@ edition = "2024"
 repository = "https://github.com/zhangzhenxiang666/openai4rs"
 authors = ["Zhang Zhenxiang <zhangzhenxiang@example.com>"]
 description = "A non-official Rust crate for calling the OpenAI service"
-license = "apache-2.0"
+license = "Apache-2.0"
 keywords = ["ai", "openai", "machine-learning", "library"]
 
 [dependencies]
