@@ -65,10 +65,10 @@ macro_rules! tool {
         fn check_tool_call_id<T: AsRef<str>>(tool_call_id: T) -> String {
             tool_call_id.as_ref().to_string()
         }
-        $crate::ChatCompletionToolMessageParam {
+        $crate::ChatCompletionMessageParam::Tool($crate::ChatCompletionToolMessageParam {
             tool_call_id: check_tool_call_id($tool_call_id),
             content: $crate::content!($content),
-        }
+        })
     }};
 }
 
@@ -191,18 +191,24 @@ mod tests {
     #[test]
     fn test_tool_macro() {
         let tool_msg = tool!("call_123", {"result": 42});
+        match tool_msg {
+            ChatCompletionMessageParam::Tool(tool_msg_param) => {
+                assert_eq!(tool_msg_param.tool_call_id, "call_123");
 
-        assert_eq!(tool_msg.tool_call_id, "call_123");
-
-        if let Content::Object(val) = tool_msg.content {
-            assert!(val.is_object());
-            let obj = val.as_object().unwrap();
-            assert_eq!(
-                obj.get("result").and_then(|v| v.as_number()),
-                Some(&serde_json::Number::from(42))
-            );
-        } else {
-            panic!("Expected Content::Object");
+                if let Content::Object(val) = tool_msg_param.content {
+                    assert!(val.is_object());
+                    let obj = val.as_object().unwrap();
+                    assert_eq!(
+                        obj.get("result").and_then(|v| v.as_number()),
+                        Some(&serde_json::Number::from(42))
+                    );
+                } else {
+                    panic!("Expected Content::Object");
+                }
+            }
+            _ => {
+                panic!("Expected ChatCompletionMessageParam::Tool");
+            }
         }
     }
 }

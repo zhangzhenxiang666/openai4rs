@@ -36,7 +36,7 @@ impl Chat {
             attempts += 1;
             match self.send_unstream(&params).await {
                 Ok(response) => return Self::process_response(response).await,
-                Err(error) if attempts >= 5 => return Self::convert_request_error(error),
+                Err(error) if attempts >= 5 => return Err(Self::convert_request_error(error)),
                 Err(error) => {
                     debug!(
                         "Attempt {}: Retrying request after error: {:?}",
@@ -63,7 +63,7 @@ impl Chat {
             attempts += 1;
             match self.send_stream(&params).await {
                 Ok(event_source) => return Self::process_event_stream(event_source).await,
-                Err(error) if attempts >= 5 => return Self::convert_request_error(error),
+                Err(error) if attempts >= 5 => return Err(Self::convert_request_error(error)),
                 Err(error) => {
                     debug!(
                         "Attempt {}: Retrying request after error: {:?}",
@@ -185,17 +185,15 @@ impl Chat {
         )
     }
 
-    fn convert_request_error<T>(error: RequestError) -> Result<T, OpenAIError> {
+    fn convert_request_error(error: RequestError) -> OpenAIError {
         match error {
-            RequestError::Connection(msg) => Err(OpenAIError::APIConnction(APIConnectionError {
-                message: msg,
-            })),
-            RequestError::Timeout(msg) => {
-                Err(OpenAIError::APITimeout(APITimeoutError { message: msg }))
+            RequestError::Connection(msg) => {
+                OpenAIError::APIConnction(APIConnectionError { message: msg })
             }
-            RequestError::Unknown(msg) => Err(OpenAIError::UnknownRequest(UnknownRequestError {
-                message: msg,
-            })),
+            RequestError::Timeout(msg) => OpenAIError::APITimeout(APITimeoutError { message: msg }),
+            RequestError::Unknown(msg) => {
+                OpenAIError::UnknownRequest(UnknownRequestError { message: msg })
+            }
         }
     }
 

@@ -68,7 +68,7 @@ pub struct ChoiceDelta {
     pub content: Option<String>,
     pub refusal: Option<String>,
     pub role: Option<String>,
-    pub tool_calls: Option<Vec<ChatCompletionMessageToolCall>>,
+    pub tool_calls: Option<Vec<ChatCompletionToolCall>>,
     pub reasoning: Option<String>,
 }
 
@@ -86,12 +86,13 @@ pub struct ChatCompletionMessage {
     pub refusal: Option<String>,
     pub role: String,
     pub annotations: Option<Vec<Annotation>>,
-    pub tool_calls: Option<Vec<ChatCompletionMessageToolCall>>,
+    pub tool_calls: Option<Vec<ChatCompletionToolCall>>,
     pub reasoning: Option<String>,
 }
 
 #[derive(Debug, Clone)]
-pub struct ChatCompletionMessageToolCall {
+pub struct ChatCompletionToolCall {
+    pub index: i64,
     pub function: Function,
     pub r#type: String,
 }

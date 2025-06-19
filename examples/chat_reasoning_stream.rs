@@ -8,6 +8,9 @@ use tokio_stream::wrappers::ReceiverStream;
 async fn main() {
     dotenv().ok();
     let client = OpenAI::from_env().unwrap();
+
+    let model = "your model name";
+
     let mut input = String::new();
 
     let mut messages = vec![];
@@ -24,7 +27,7 @@ async fn main() {
 
         let stream = client
             .chat()
-            .create_stream(chat_request("qwen/qwq-32b:free", &messages))
+            .create_stream(chat_request(model, &messages))
             .await
             .unwrap();
 

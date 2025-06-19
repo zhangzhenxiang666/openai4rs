@@ -1,4 +1,4 @@
-use crate::chat::Chat;
+use crate::{chat::Chat, models::core::Models};
 use reqwest::Client;
 use std::{
     cell::OnceCell,
@@ -17,12 +17,20 @@ impl Config {
     pub fn get_base_url(&self) -> String {
         self.base_url.to_string()
     }
+    pub fn set_base_url(&mut self, base_url: String) {
+        self.base_url = base_url;
+    }
+
+    pub fn set_api_key(&mut self, api_key: String) {
+        self.api_key = api_key;
+    }
 }
 
 pub struct OpenAI {
     config: Arc<RwLock<Config>>,
-    chat: OnceCell<Chat>,
     client: Arc<Client>,
+    chat: OnceCell<Chat>,
+    models: OnceCell<Models>,
 }
 
 impl OpenAI {
@@ -34,6 +42,7 @@ impl OpenAI {
         }));
         Self {
             chat: OnceCell::new(),
+            models: OnceCell::new(),
             client,
             config,
         }
@@ -52,12 +61,33 @@ impl OpenAI {
         self.chat
             .get_or_init(|| Chat::new(Arc::clone(&self.config), Arc::clone(&self.client)))
     }
+
+    pub fn models(&self) -> &Models {
+        self.models
+            .get_or_init(|| Models::new(Arc::clone(&self.config), Arc::clone(&self.client)))
+    }
+
+    pub fn get_base_url(&self) -> String {
+        self.config.read().unwrap().get_base_url()
+    }
+
+    pub fn get_api_key(&self) -> String {
+        self.config.read().unwrap().get_api_key()
+    }
+
+    pub fn set_base_url(&self, base_url: String) {
+        self.config.write().unwrap().set_base_url(base_url);
+    }
+
+    pub fn set_api_key(&self, api_key: String) {
+        self.config.write().unwrap().set_api_key(api_key);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{chat::*, error::OpenAIError, user};
+    use crate::{chat::*, error::OpenAIError, models::models_request, user};
     use dotenvy::dotenv;
     use futures::StreamExt;
 
@@ -110,5 +140,13 @@ mod tests {
         if flag {
             panic!("No response received")
         }
+    }
+
+    #[tokio::test]
+    async fn test_models_list() {
+        dotenv().ok();
+        let client = OpenAI::from_env().unwrap();
+        let models = client.models().list(models_request()).await;
+        assert!(models.is_ok())
     }
 }

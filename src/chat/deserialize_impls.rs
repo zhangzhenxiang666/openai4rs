@@ -31,19 +31,31 @@ impl<'de> Deserialize<'de> for Function {
                             if id.is_some() {
                                 return Err(de::Error::duplicate_field("id"));
                             }
-                            id = Some(map.next_value()?);
+                            if let Ok(value) = map.next_value::<Option<String>>() {
+                                id = value;
+                            } else {
+                                let _: serde_json::Value = map.next_value()?;
+                            }
                         }
                         "name" => {
                             if name.is_some() {
                                 return Err(de::Error::duplicate_field("name"));
                             }
-                            name = Some(map.next_value()?);
+                            if let Ok(value) = map.next_value::<Option<String>>() {
+                                name = value;
+                            } else {
+                                let _: serde_json::Value = map.next_value()?;
+                            }
                         }
                         "arguments" => {
                             if arguments.is_some() {
                                 return Err(de::Error::duplicate_field("arguments"));
                             }
-                            arguments = Some(map.next_value()?);
+                            if let Ok(value) = map.next_value::<Option<String>>() {
+                                arguments = value;
+                            } else {
+                                let _: serde_json::Value = map.next_value()?;
+                            }
                         }
                         _ => {
                             let _: serde_json::Value = map.next_value()?;
@@ -52,8 +64,8 @@ impl<'de> Deserialize<'de> for Function {
                 }
 
                 let id = id.unwrap_or_default();
-                let name = name.ok_or_else(|| de::Error::missing_field("name"))?;
-                let arguments = arguments.ok_or_else(|| de::Error::missing_field("arguments"))?;
+                let name = name.unwrap_or_default();
+                let arguments = arguments.unwrap_or_default();
 
                 Ok(Function {
                     id,
@@ -67,7 +79,7 @@ impl<'de> Deserialize<'de> for Function {
     }
 }
 
-impl<'de> Deserialize<'de> for ChatCompletionMessageToolCall {
+impl<'de> Deserialize<'de> for ChatCompletionToolCall {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -75,17 +87,18 @@ impl<'de> Deserialize<'de> for ChatCompletionMessageToolCall {
         struct ChatCompletionMessageToolCallVisitor;
 
         impl<'de> Visitor<'de> for ChatCompletionMessageToolCallVisitor {
-            type Value = ChatCompletionMessageToolCall;
+            type Value = ChatCompletionToolCall;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("a ChatCompletionMessageToolCall object")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<ChatCompletionMessageToolCall, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<ChatCompletionToolCall, V::Error>
             where
                 V: MapAccess<'de>,
             {
                 let mut id: Option<String> = None;
+                let mut index = 0;
                 let mut r#type: Option<String> = None;
                 let mut function_data: Option<serde_json::Value> = None;
 
@@ -95,19 +108,27 @@ impl<'de> Deserialize<'de> for ChatCompletionMessageToolCall {
                             if id.is_some() {
                                 return Err(de::Error::duplicate_field("id"));
                             }
-                            id = Some(map.next_value()?);
+                            id = map.next_value::<Option<String>>()?;
                         }
                         "type" => {
                             if r#type.is_some() {
                                 return Err(de::Error::duplicate_field("type"));
                             }
-                            r#type = Some(map.next_value()?);
+                            r#type = map.next_value::<Option<String>>()?;
                         }
                         "function" => {
                             if function_data.is_some() {
                                 return Err(de::Error::duplicate_field("function"));
                             }
-                            function_data = Some(map.next_value()?);
+                            function_data = map.next_value::<Option<serde_json::Value>>()?;
+                        }
+                        "index" => {
+                            if index != 0 {
+                                return Err(de::Error::duplicate_field("index"));
+                            }
+                            if let Some(idx) = map.next_value::<Option<i64>>()? {
+                                index = idx;
+                            }
                         }
                         _ => {
                             let _: serde_json::Value = map.next_value()?;
@@ -115,25 +136,33 @@ impl<'de> Deserialize<'de> for ChatCompletionMessageToolCall {
                     }
                 }
 
-                let id = id.ok_or_else(|| de::Error::missing_field("id"))?;
+                let id = id.unwrap_or_default();
                 let r#type = r#type.ok_or_else(|| de::Error::missing_field("type"))?;
-                let function_data =
-                    function_data.ok_or_else(|| de::Error::missing_field("function"))?;
+
+                let function_data = function_data.unwrap_or_else(|| {
+                    serde_json::json!({
+                        "id": "",
+                        "name": "",
+                        "arguments": ""
+                    })
+                });
 
                 let mut function: Function = serde_json::from_value(function_data)
                     .map_err(|e| de::Error::custom(format!("Failed to parse function: {}", e)))?;
 
                 function.id = id;
 
-                Ok(ChatCompletionMessageToolCall { function, r#type })
+                Ok(ChatCompletionToolCall {
+                    function,
+                    r#type,
+                    index,
+                })
             }
         }
 
         deserializer.deserialize_map(ChatCompletionMessageToolCallVisitor)
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {

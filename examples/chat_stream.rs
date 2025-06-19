@@ -10,6 +10,8 @@ async fn main() {
     let client = OpenAI::from_env().unwrap();
     let mut input = String::new();
 
+    let model = "your model name";
+
     let mut messages = vec![];
     loop {
         println!("\n# YOU\n");
@@ -24,10 +26,7 @@ async fn main() {
 
         let stream = client
             .chat()
-            .create_stream(chat_request(
-                "meta-llama/llama-3.3-8b-instruct:free",
-                &messages,
-            ))
+            .create_stream(chat_request(model, &messages))
             .await
             .unwrap();
 
@@ -45,9 +44,8 @@ async fn process_stream(
 
     println!("\n# ASSISTANT\n");
     while let Some(result) = stream.next().await {
-
         let chunk = result.expect("Error processing stream");
-        
+
         for choice in chunk.choices.iter() {
             if let Some(data) = choice.delta.content.as_ref() {
                 print!("{}", data);

@@ -15,6 +15,19 @@ where
     openai_request(Method::POST, client, route, builder, api_key, base_url).await
 }
 
+pub(crate) async fn openai_get<F>(
+    client: &Client,
+    route: &str,
+    builder: F,
+    api_key: String,
+    base_url: String,
+) -> Result<Response, RequestError>
+where
+    F: FnOnce(RequestBuilder) -> RequestBuilder,
+{
+    openai_request(Method::GET, client, route, builder, api_key, base_url).await
+}
+
 pub(crate) async fn openai_post_stream<F>(
     client: &Client,
     route: &str,

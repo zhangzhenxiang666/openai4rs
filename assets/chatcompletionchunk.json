@@ -1,15 +1,14 @@
 {
-    "id": "chatcmpl-123",
-    "object": "chat.completion.chunk",
-    "created": 1694268190,
+    "id": "chatcmpl-abc123",
+    "object": "chat.completion",
+    "created": 1699896916,
     "model": "gpt-4o-mini",
-    "system_fingerprint": "fp_44709d6fcb",
     "choices": [
         {
             "index": 0,
             "delta": {
                 "role": "assistant",
-                "content": "",
+                "content": null,
                 "tool_calls": [
                     {
                         "id": "call_abc123",
@@ -22,7 +21,17 @@
                 ]
             },
             "logprobs": null,
-            "finish_reason": null
+            "finish_reason": "tool_calls"
         }
-    ]
+    ],
+    "usage": {
+        "prompt_tokens": 82,
+        "completion_tokens": 17,
+        "total_tokens": 99,
+        "completion_tokens_details": {
+            "reasoning_tokens": 0,
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0
+        }
+    }
 }

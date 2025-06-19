@@ -108,8 +108,8 @@ impl ChatCompletionMessageToolCallParam {
     }
 }
 
-impl From<ChatCompletionMessageToolCall> for ChatCompletionMessageToolCallParam {
-    fn from(value: ChatCompletionMessageToolCall) -> Self {
+impl From<ChatCompletionToolCall> for ChatCompletionMessageToolCallParam {
+    fn from(value: ChatCompletionToolCall) -> Self {
         Self::Function(value.function)
     }
 }
