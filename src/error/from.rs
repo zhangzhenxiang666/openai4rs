@@ -125,12 +125,21 @@ impl From<EventSourceError> for OpenAIError {
                 })
             }
             EventSourceError::InvalidStatusCode(status_code, response) => {
-                tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(async {
+                if tokio::runtime::Handle::try_current().is_ok() {
+                    tokio::task::block_in_place(|| {
+                        let rt = tokio::runtime::Runtime::new().unwrap();
+                        rt.block_on(async {
+                            create_status_error_from_response(status_code.as_u16(), Some(response))
+                                .await
+                        })
+                    })
+                } else {
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    rt.block_on(async {
                         create_status_error_from_response(status_code.as_u16(), Some(response))
                             .await
                     })
-                })
+                }
             }
             EventSourceError::InvalidLastEventId(event_id) => {
                 OpenAIError::BadRequest(BadRequestError {

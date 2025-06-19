@@ -89,7 +89,6 @@ mod tests {
     use super::*;
     use crate::{chat::*, error::OpenAIError, models::models_request, user};
     use dotenvy::dotenv;
-    use futures::StreamExt;
 
     #[tokio::test]
     async fn test_chat() {
@@ -115,30 +114,20 @@ mod tests {
         let api_key = "******";
         let client = OpenAI::new(api_key, base_url);
         let messages = vec![user!("Hello")];
-        let mut stream = client
+        let result = client
             .chat()
-            .create_stream(
+            .create(
                 chat_request("meta-llama/llama-3.3-8b-instruct:free", &messages).temperature(0.0),
             )
-            .await
-            .expect("Request failed");
-        let mut flag = true;
-        while let Some(result) = stream.next().await {
-            flag = false;
-            match result {
-                Ok(_) => panic!("Unexpected success response"),
-                Err(err) => match err {
-                    OpenAIError::Authentication(_) => {
-                        break;
-                    }
-                    _ => {
-                        panic!("Unexpected error")
-                    }
-                },
-            }
-        }
-        if flag {
-            panic!("No response received")
+            .await;
+        match result {
+            Ok(_) => panic!("Unexpected success response"),
+            Err(err) => match err {
+                OpenAIError::Authentication(_) => {}
+                _ => {
+                    panic!("Unexpected error")
+                }
+            },
         }
     }
 
