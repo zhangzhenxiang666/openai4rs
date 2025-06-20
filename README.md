@@ -10,6 +10,9 @@ openai4rs是一个非官方实现的基于`tokio`和`reqwest`的异步与大模�
   - 流式响应 ✅
   - 工具调用 ✅
   - 思考模式 ✅
+- completions
+  - 非流式 ✅
+  - 流式 ✅
 - models
   - 模型列表 ✅
   - 获取单个模型 ✅
@@ -160,7 +163,7 @@ git clone https://github.com/zhangzhenxiang666/openai4rs.git
     - **获取所有模型**
 
     ```rust
-    use openai4rs::{OpenAI, models::models_request};
+    use openai4rs::{OpenAI, models_request};
 
     #[tokio::main]
     async fn main() {
@@ -169,5 +172,50 @@ git clone https://github.com/zhangzhenxiang666/openai4rs.git
         let client = OpenAI::new(api_key, base_url);
         let models = client.models().list(models_request()).await.unwrap();
         println!("{:#?}", models);
+    }
+    ```
+
+3. completions
+    - **非流式**
+
+    ```rust
+    use openai4rs::{OpenAI, comletions_request};
+
+    #[tokio::main]
+    async fn main() {
+        let base_url = "your base_url";
+        let api_key = "your api_key";
+        let client = OpenAI::new(api_key, base_url);
+        let completion = client
+            .completions()
+            .create(comletions_request("your model name", "你好"))
+            .await
+            .unwrap();
+        println!("{:#?}", completion)
+    }
+    ```
+
+    - **流式**
+
+    ```rust
+    use futures::StreamExt;
+    use openai4rs::{OpenAI, comletions_request};
+
+    # [tokio::main]
+    async fn main() {
+        let base_url = "your base_url";
+        let api_key = "your api_key";
+        let client = OpenAI::new(api_key, base_url);
+        let mut stream = client
+            .completions()
+            .create_stream(comletions_request("your model name", "你好"))
+            .await
+            .unwrap();
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(completion) => println!("{:#?}", completion),
+                Err(err) => println!("{}", err),
+            }
+        }
     }
     ```

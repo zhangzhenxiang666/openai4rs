@@ -1,4 +1,5 @@
 use super::types::*;
+use crate::common::types::ServiceTier;
 use derive_builder::Builder;
 use serde::Serialize;
 use std::collections::HashMap;

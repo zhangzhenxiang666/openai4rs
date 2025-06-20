@@ -1,8 +1,12 @@
 pub mod chat;
 pub mod client;
+pub mod common;
+pub mod completions;
 pub mod error;
 pub mod macros;
 pub mod models;
 pub mod utils;
 pub use chat::*;
 pub use client::OpenAI;
+pub use completions::comletions_request;
+pub use models::models_request;

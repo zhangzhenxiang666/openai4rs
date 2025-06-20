@@ -1,4 +1,4 @@
-use crate::{chat::Chat, models::core::Models};
+use crate::{chat::Chat, completions::Completions, models::Models};
 use reqwest::Client;
 use std::{
     cell::OnceCell,
@@ -30,6 +30,7 @@ pub struct OpenAI {
     config: Arc<RwLock<Config>>,
     client: Arc<Client>,
     chat: OnceCell<Chat>,
+    completions: OnceCell<Completions>,
     models: OnceCell<Models>,
 }
 
@@ -43,6 +44,7 @@ impl OpenAI {
         Self {
             chat: OnceCell::new(),
             models: OnceCell::new(),
+            completions: OnceCell::new(),
             client,
             config,
         }
@@ -62,6 +64,10 @@ impl OpenAI {
             .get_or_init(|| Chat::new(Arc::clone(&self.config), Arc::clone(&self.client)))
     }
 
+    pub fn completions(&self) -> &Completions {
+        self.completions
+            .get_or_init(|| Completions::new(Arc::clone(&self.config), Arc::clone(&self.client)))
+    }
     pub fn models(&self) -> &Models {
         self.models
             .get_or_init(|| Models::new(Arc::clone(&self.config), Arc::clone(&self.client)))
@@ -87,7 +93,7 @@ impl OpenAI {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{chat::*, error::OpenAIError, models::models_request, user};
+    use crate::{chat::*, comletions_request, error::OpenAIError, models_request, user};
     use dotenvy::dotenv;
 
     #[tokio::test]
@@ -137,5 +143,19 @@ mod tests {
         let client = OpenAI::from_env().unwrap();
         let models = client.models().list(models_request()).await;
         assert!(models.is_ok())
+    }
+
+    #[tokio::test]
+    async fn test_completions() {
+        dotenv().ok();
+        let client = OpenAI::from_env().unwrap();
+        let res = client
+            .completions()
+            .create(comletions_request(
+                "meta-llama/llama-3.3-8b-instruct:free",
+                "Hello, how are you?",
+            ))
+            .await;
+        assert!(res.is_ok());
     }
 }

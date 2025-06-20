@@ -10,6 +10,9 @@ openai4rs is an unofficial Rust crate implementation based on `tokio` and `reqwe
   - Streaming response ✅
   - Tool calling ✅
   - Reasoning mode ✅
+- completions
+  - Non-streaming ✅
+  - Streaming ✅
 - models
   - List models ✅
   - Retrieve single model ✅
@@ -160,7 +163,7 @@ git clone https://github.com/zhangzhenxiang666/openai4rs.git
     - **Get all models**
 
     ```rust
-    use openai4rs::{OpenAI, models::models_request};
+    use openai4rs::{OpenAI, models_request};
 
     #[tokio::main]
     async fn main() {
@@ -169,5 +172,50 @@ git clone https://github.com/zhangzhenxiang666/openai4rs.git
         let client = OpenAI::new(api_key, base_url);
         let models = client.models().list(models_request()).await.unwrap();
         println!("{:#?}", models);
+    }
+    ```
+
+3. Completions functionality
+    - **Non-streaming**
+
+    ```rust
+    use openai4rs::{OpenAI, comletions_request};
+
+    #[tokio::main]
+    async fn main() {
+        let base_url = "your base_url";
+        let api_key = "your api_key";
+        let client = OpenAI::new(api_key, base_url);
+        let completion = client
+            .completions()
+            .create(comletions_request("your model name", "Hello"))
+            .await
+            .unwrap();
+        println!("{:#?}", completion)
+    }
+    ```
+
+    - **Streaming**
+
+    ```rust
+    use futures::StreamExt;
+    use openai4rs::{OpenAI, comletions_request};
+
+    #[tokio::main]
+    async fn main() {
+        let base_url = "your base_url";
+        let api_key = "your api_key";
+        let client = OpenAI::new(api_key, base_url);
+        let mut stream = client
+            .completions()
+            .create_stream(comletions_request("your model name", "Hello"))
+            .await
+            .unwrap();
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(completion) => println!("{:#?}", completion),
+                Err(err) => println!("{}", err),
+            }
+        }
     }
     ```

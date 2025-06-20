@@ -1,13 +1,11 @@
-use super::params::*;
-use super::types::*;
+use super::params::{IntoRequestParams, RequestParams};
+use super::types::{Model, ModelsData};
 use crate::client::Config;
+use crate::error::OpenAIError;
 use crate::error::RequestError;
-use crate::error::from::create_status_error_from_response;
-use crate::error::*;
 use crate::utils::openai_get;
+use crate::utils::traits::ResponseProcess;
 use reqwest::{Client, RequestBuilder, Response};
-use serde::de::DeserializeOwned;
-use std::any::type_name;
 use std::sync::{Arc, RwLock};
 use tracing::debug;
 
@@ -72,6 +70,8 @@ impl Models {
     }
 }
 
+impl ResponseProcess for Models {}
+
 impl Models {
     fn send_request(
         &self,
@@ -88,33 +88,6 @@ impl Models {
         )
     }
 
-    async fn process_response<T>(response: Response) -> Result<T, OpenAIError>
-    where
-        T: DeserializeOwned,
-    {
-        if response.status().is_success() {
-            let raw = response
-                .text()
-                .await
-                .map_err(|e| OpenAIError::TextRead(e.into()))?;
-            Ok(serde_json::from_str(&raw).map_err(|_| {
-                let target_type = type_name::<T>();
-                OpenAIError::Convert(ConvertError {
-                    raw,
-                    target_type: target_type.to_string(),
-                })
-            })?)
-        } else {
-            Err(Self::process_status_error(response).await)
-        }
-    }
-
-    async fn process_status_error(response: Response) -> OpenAIError {
-        let status = response.status().as_u16();
-        let error = create_status_error_from_response(status, Some(response)).await;
-        error
-    }
-
     fn transform_request_params(builder: RequestBuilder, params: &RequestParams) -> RequestBuilder {
         let mut builder = builder;
         if let Some(headers) = &params.extra_headers {
@@ -129,17 +102,5 @@ impl Models {
             builder = builder.query(query);
         }
         builder.json(params)
-    }
-
-    fn convert_request_error(error: RequestError) -> OpenAIError {
-        match error {
-            RequestError::Connection(msg) => {
-                OpenAIError::APIConnction(APIConnectionError { message: msg })
-            }
-            RequestError::Timeout(msg) => OpenAIError::APITimeout(APITimeoutError { message: msg }),
-            RequestError::Unknown(msg) => {
-                OpenAIError::UnknownRequest(UnknownRequestError { message: msg })
-            }
-        }
     }
 }

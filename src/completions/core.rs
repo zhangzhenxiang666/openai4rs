@@ -1,26 +1,28 @@
 use super::params::{IntoRequestParams, RequestParams};
-use super::types::{ChatCompletion, ChatCompletionChunk};
+use super::types::Completion;
 use crate::client::Config;
 use crate::error::{OpenAIError, RequestError};
+use crate::utils::request::{openai_post, openai_post_stream};
 use crate::utils::traits::{ResponseProcess, StreamProcess};
-use crate::utils::{openai_post, openai_post_stream};
 use reqwest::{Client, RequestBuilder, Response};
 use reqwest_eventsource::EventSource;
 use std::sync::{Arc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::debug;
 
-pub struct Chat {
+pub struct Completions {
     config: Arc<RwLock<Config>>,
     client: Arc<Client>,
 }
 
-impl Chat {
+impl Completions {
     pub(crate) fn new(config: Arc<RwLock<Config>>, client: Arc<Client>) -> Self {
         Self { config, client }
     }
+}
 
-    pub async fn create<'a, T>(&self, params: T) -> Result<ChatCompletion, OpenAIError>
+impl Completions {
+    pub async fn create<'a, T>(&self, params: T) -> Result<Completion, OpenAIError>
     where
         T: IntoRequestParams<'a>,
     {
@@ -47,7 +49,7 @@ impl Chat {
     pub async fn create_stream<'a, T>(
         &self,
         params: T,
-    ) -> Result<ReceiverStream<Result<ChatCompletionChunk, OpenAIError>>, OpenAIError>
+    ) -> Result<ReceiverStream<Result<Completion, OpenAIError>>, OpenAIError>
     where
         T: IntoRequestParams<'a>,
     {
@@ -72,10 +74,11 @@ impl Chat {
     }
 }
 
-impl ResponseProcess for Chat {}
-impl StreamProcess<ChatCompletionChunk> for Chat {}
+impl ResponseProcess for Completions {}
 
-impl Chat {
+impl StreamProcess<Completion> for Completions {}
+
+impl Completions {
     fn transform_request_params(builder: RequestBuilder, params: &RequestParams) -> RequestBuilder {
         let mut builder = builder;
         if let Some(headers) = &params.extra_headers {
@@ -99,7 +102,7 @@ impl Chat {
         let config = self.config.read().unwrap();
         openai_post(
             &self.client,
-            "/chat/completions",
+            "/completions",
             |builder| Self::transform_request_params(builder, params),
             config.get_api_key(),
             config.get_base_url(),
@@ -113,7 +116,7 @@ impl Chat {
         let config = self.config.read().unwrap();
         openai_post_stream(
             &self.client,
-            "/chat/completions",
+            "/completions",
             |builder| Self::transform_request_params(builder, params),
             config.get_api_key(),
             config.get_base_url(),

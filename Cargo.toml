@@ -1,6 +1,6 @@
 [package]
 name = "openai4rs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 repository = "https://github.com/zhangzhenxiang666/openai4rs"
 authors = ["Zhang Zhenxiang <zhangzhenxiang@example.com>"]
@@ -19,7 +19,7 @@ tracing = "0.1.41"
 tokio = { version = "1.45.1", features = ["full"] }
 reqwest-eventsource = "0.6"
 tokio-stream = "0.1.17"
-
+async-trait = "0.1.88"
 
 [dev-dependencies]
 dotenvy = "0.15.7"
