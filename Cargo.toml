@@ -1,8 +1,9 @@
 [package]
 name = "openai4rs"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 repository = "https://github.com/zhangzhenxiang666/openai4rs"
+documentation = "https://docs.rs/openai4rs"
 authors = ["Zhang Zhenxiang <zhangzhenxiang@example.com>"]
 description = "A non-official Rust crate for calling the OpenAI service"
 license = "Apache-2.0"
