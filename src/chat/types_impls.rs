@@ -5,12 +5,10 @@ impl ChatCompletionMessage {
     pub fn is_tool_calls(&self) -> bool {
         self.tool_calls
             .as_ref()
-            .map_or(false, |calls| !calls.is_empty())
+            .is_some_and(|calls| !calls.is_empty())
     }
     pub fn is_reasoning(&self) -> bool {
-        self.reasoning
-            .as_ref()
-            .map_or(false, |reas| !reas.is_empty())
+        self.reasoning.as_ref().is_some_and(|reas| !reas.is_empty())
     }
 
     pub fn get_content_str(&self) -> &str {
@@ -39,13 +37,11 @@ impl ChoiceDelta {
     pub fn is_tool_calls(&self) -> bool {
         self.tool_calls
             .as_ref()
-            .map_or(false, |calls| !calls.is_empty())
+            .is_some_and(|calls| !calls.is_empty())
     }
 
     pub fn is_reasoning(&self) -> bool {
-        self.reasoning
-            .as_ref()
-            .map_or(false, |reas| !reas.is_empty())
+        self.reasoning.as_ref().is_some_and(|reas| !reas.is_empty())
     }
 
     pub fn get_content_str(&self) -> &str {
@@ -80,7 +76,7 @@ impl FunctionDefinition {
         Self {
             name: name.into(),
             description: description.into(),
-            parameters: parameters,
+            parameters,
             strict,
         }
     }
@@ -129,15 +125,13 @@ impl From<ChatCompletionMessage> for ChatCompletionMessageParam {
     fn from(value: ChatCompletionMessage) -> Self {
         Self::Assistant(ChatCompletionAssistantMessageParam {
             name: None,
-            content: value.content.and_then(|content| Some(content!(content))),
+            content: value.content.map(|content| content!(content)),
             refusal: value.refusal,
-            tool_calls: value.tool_calls.and_then(|tool_calls| {
-                Some(
-                    tool_calls
-                        .into_iter()
-                        .map(|tool_call| tool_call.into())
-                        .collect(),
-                )
+            tool_calls: value.tool_calls.map(|tool_calls| {
+                tool_calls
+                    .into_iter()
+                    .map(|tool_call| tool_call.into())
+                    .collect()
             }),
         })
     }
@@ -147,15 +141,13 @@ impl From<ChoiceDelta> for ChatCompletionMessageParam {
     fn from(value: ChoiceDelta) -> Self {
         Self::Assistant(ChatCompletionAssistantMessageParam {
             name: None,
-            content: value.content.and_then(|content| Some(content!(content))),
+            content: value.content.map(|content| content!(content)),
             refusal: value.refusal,
-            tool_calls: value.tool_calls.and_then(|tool_calls| {
-                Some(
-                    tool_calls
-                        .into_iter()
-                        .map(|tool_call| tool_call.into())
-                        .collect(),
-                )
+            tool_calls: value.tool_calls.map(|tool_calls| {
+                tool_calls
+                    .into_iter()
+                    .map(|tool_call| tool_call.into())
+                    .collect()
             }),
         })
     }

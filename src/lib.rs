@@ -7,6 +7,7 @@ pub mod macros;
 pub mod models;
 pub mod utils;
 pub use chat::*;
-pub use client::OpenAI;
+pub use client::{Config, OpenAI};
 pub use completions::comletions_request;
 pub use models::models_request;
+pub use utils::Apply;

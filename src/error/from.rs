@@ -11,7 +11,7 @@ pub(crate) async fn create_status_error_from_response(
 ) -> OpenAIError {
     let message = if let Some(response) = response {
         if let Ok(body_map) = response.json::<HashMap<String, Value>>().await {
-            body_map.get("error").and_then(|v| Some(v.to_string()))
+            body_map.get("error").map(|v| v.to_string())
         } else {
             None
         }
@@ -125,20 +125,20 @@ impl From<EventSourceError> for OpenAIError {
                 })
             }
             EventSourceError::InvalidStatusCode(status_code, response) => {
-                if tokio::runtime::Handle::try_current().is_ok() {
-                    tokio::task::block_in_place(|| {
-                        let rt = tokio::runtime::Runtime::new().unwrap();
-                        rt.block_on(async {
+                match tokio::runtime::Handle::try_current() {
+                    Ok(handle) => tokio::task::block_in_place(|| {
+                        handle.block_on(async move {
                             create_status_error_from_response(status_code.as_u16(), Some(response))
                                 .await
                         })
-                    })
-                } else {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        create_status_error_from_response(status_code.as_u16(), Some(response))
-                            .await
-                    })
+                    }),
+                    Err(_) => {
+                        let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+                        rt.block_on(async move {
+                            create_status_error_from_response(status_code.as_u16(), Some(response))
+                                .await
+                        })
+                    }
                 }
             }
             EventSourceError::InvalidLastEventId(event_id) => {

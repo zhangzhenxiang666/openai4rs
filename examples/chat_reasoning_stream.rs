@@ -1,6 +1,8 @@
 use dotenvy::dotenv;
-use futures::StreamExt;
-use openai4rs::{error::OpenAIError, *};
+use openai4rs::error::OpenAIError;
+use openai4rs::{
+    Apply, ChatCompletionChunk, ChatCompletionMessageParam, OpenAI, chat_request, user,
+};
 use std::io;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -32,19 +34,17 @@ async fn main() {
             .unwrap();
 
         messages.push(ChatCompletionMessageParam::assistant_from_str(
-            process_stream(stream).await.as_str(),
+            process_stream(stream).as_str(),
         ))
     }
 }
 
-async fn process_stream(
-    stream: ReceiverStream<Result<ChatCompletionChunk, OpenAIError>>,
-) -> String {
-    let mut stream = stream;
+fn process_stream(stream: ReceiverStream<Result<ChatCompletionChunk, OpenAIError>>) -> String {
+    let stream = stream;
     let mut ai_output = String::new();
     let mut first = true;
     println!("\n# ASSISTANT\n");
-    while let Some(result) = stream.next().await {
+    stream.apply(|result| {
         let chunk = result.expect("Error processing stream");
 
         for choice in chunk.choices.iter() {
@@ -62,7 +62,7 @@ async fn process_stream(
                 ai_output.push_str(data);
             }
         }
-    }
+    });
     println!("\n");
     ai_output
 }

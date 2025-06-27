@@ -16,7 +16,7 @@ pub struct Completions {
 }
 
 impl Completions {
-    pub(crate) fn new(config: Arc<RwLock<Config>>, client: Arc<Client>) -> Self {
+    pub fn new(config: Arc<RwLock<Config>>, client: Arc<Client>) -> Self {
         Self { config, client }
     }
 }
@@ -40,7 +40,6 @@ impl Completions {
                         "Attempt {}: Retrying request after error: {:?}",
                         attempts, error
                     );
-                    continue;
                 }
             }
         }
@@ -67,7 +66,6 @@ impl Completions {
                         "Attempt {}: Retrying request after error: {:?}",
                         attempts, error
                     );
-                    continue;
                 }
             }
         }

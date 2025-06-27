@@ -1,10 +1,10 @@
 use crate::error::{from::create_status_error_from_response, *};
+use futures::{StreamExt, future::BoxFuture};
 use reqwest::Response;
 use reqwest_eventsource::{Event, EventSource};
 use serde::de::DeserializeOwned;
 use std::any::type_name;
 use tokio::sync::mpsc;
-use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 
 #[async_trait::async_trait]
@@ -32,8 +32,7 @@ pub trait ResponseProcess {
 
     async fn process_status_error(response: Response) -> OpenAIError {
         let status = response.status().as_u16();
-        let error = create_status_error_from_response(status, Some(response)).await;
-        error
+        create_status_error_from_response(status, Some(response)).await
     }
 
     fn convert_request_error(error: RequestError) -> OpenAIError {
@@ -121,5 +120,105 @@ where
             }
             Err(event_error) => ProcessEventResult::Error(OpenAIError::from(event_error)),
         }
+    }
+}
+
+pub trait Apply<T> {
+    fn apply<F: FnMut(T)>(self, call: F);
+
+    fn apply_async<F, Fut>(self, call: F) -> impl Future<Output = ()>
+    where
+        F: Fn(T) -> Fut,
+        Fut: Future<Output = ()>;
+
+    fn apply_with_capture<F, C>(self, capture: C, call: F) -> C
+    where
+        F: Fn(&mut C, T);
+
+    fn apply_with_capture_async<C, F>(self, capture: C, call: F) -> impl Future<Output = C>
+    where
+        F: for<'a> Fn(&'a mut C, T) -> BoxFuture<'a, ()>;
+
+    fn fold_async<F, Fut, C>(self, capture: C, call: F) -> impl Future<Output = C>
+    where
+        F: Fn(C, T) -> Fut,
+        Fut: Future<Output = C>;
+}
+
+impl<T> Apply<T> for ReceiverStream<T> {
+    fn apply<F: FnMut(T)>(mut self, mut call: F) {
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => tokio::task::block_in_place(|| {
+                handle.block_on(async move {
+                    while let Some(item) = self.next().await {
+                        call(item);
+                    }
+                })
+            }),
+            Err(_) => {
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+                rt.block_on(async move {
+                    while let Some(item) = self.next().await {
+                        call(item);
+                    }
+                })
+            }
+        }
+    }
+
+    async fn apply_async<F, Fut>(mut self, call: F)
+    where
+        F: Fn(T) -> Fut,
+        Fut: Future<Output = ()>,
+    {
+        while let Some(result) = self.next().await {
+            call(result).await;
+        }
+    }
+
+    fn apply_with_capture<F, C>(mut self, mut capture: C, call: F) -> C
+    where
+        F: Fn(&mut C, T),
+    {
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => tokio::task::block_in_place(|| {
+                handle.block_on(async move {
+                    while let Some(item) = self.next().await {
+                        call(&mut capture, item);
+                    }
+                    capture
+                })
+            }),
+            Err(_) => {
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+                rt.block_on(async move {
+                    while let Some(item) = self.next().await {
+                        call(&mut capture, item);
+                    }
+                    capture
+                })
+            }
+        }
+    }
+
+    async fn apply_with_capture_async<C, F>(mut self, mut capture: C, call: F) -> C
+    where
+        F: for<'a> Fn(&'a mut C, T) -> BoxFuture<'a, ()>,
+    {
+        while let Some(result) = self.next().await {
+            call(&mut capture, result).await;
+        }
+        capture
+    }
+
+    async fn fold_async<F, Fut, C>(mut self, mut capture: C, call: F) -> C
+    where
+        F: Fn(C, T) -> Fut,
+        Fut: Future<Output = C>,
+    {
+        while let Some(result) = self.next().await {
+            capture = call(capture, result).await;
+        }
+        capture
     }
 }

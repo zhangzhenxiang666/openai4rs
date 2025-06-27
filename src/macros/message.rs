@@ -138,7 +138,7 @@ mod tests {
     fn test_system_macro() {
         let msg = system!("system message");
         if let ChatCompletionMessageParam::System(sys_msg) = msg {
-            assert!(matches!(sys_msg.name, None));
+            assert!(sys_msg.name.is_none());
             if let Content::Text(content) = sys_msg.content {
                 assert_eq!(content, "system message");
             } else {
@@ -165,7 +165,7 @@ mod tests {
     fn test_user_macro() {
         let msg = user!("user message");
         if let ChatCompletionMessageParam::User(user_msg) = msg {
-            assert!(matches!(user_msg.name, None));
+            assert!(user_msg.name.is_none());
             if let Content::Text(content) = user_msg.content {
                 assert_eq!(content, "user message");
             } else {

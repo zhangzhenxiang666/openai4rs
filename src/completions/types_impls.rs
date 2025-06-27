@@ -2,9 +2,7 @@ use super::types::CompletionChoice;
 
 impl CompletionChoice {
     pub fn is_reasoning(&self) -> bool {
-        self.reasoning
-            .as_ref()
-            .map_or(false, |reas| !reas.is_empty())
+        self.reasoning.as_ref().is_some_and(|reas| !reas.is_empty())
     }
 
     pub fn get_reasoning_str(&self) -> &str {

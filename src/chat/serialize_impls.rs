@@ -89,7 +89,7 @@ impl Serialize for ChatCompletionMessageParam {
                 if let Some(content) = &inner.content {
                     map.insert(
                         "content".into(),
-                        serde_json::to_value(&content)
+                        serde_json::to_value(content)
                             .map_err(|e| serde::ser::Error::custom(e.to_string()))?,
                     );
                 }

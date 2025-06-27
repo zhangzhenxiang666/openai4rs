@@ -10,16 +10,33 @@ use std::sync::{Arc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::debug;
 
+/// A chat client for interacting with OpenAI-compatible APIs.
+///
+/// The `Chat` struct provides methods for creating both streaming and non-streaming
+/// chat completions with automatic retry logic and error handling.
 pub struct Chat {
     config: Arc<RwLock<Config>>,
     client: Arc<Client>,
 }
 
 impl Chat {
-    pub(crate) fn new(config: Arc<RwLock<Config>>, client: Arc<Client>) -> Self {
+    pub fn new(config: Arc<RwLock<Config>>, client: Arc<Client>) -> Self {
         Self { config, client }
     }
 
+    /// Creates a non-streaming chat completion request.
+    ///
+    /// This method sends a chat completion request and waits for the complete response.
+    /// It automatically retries up to 5 times on failure and handles rate limiting.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - Request parameters that can be converted into `RequestParams`
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing either a `ChatCompletion` on success or an `OpenAIError` on failure.
+    ///
     pub async fn create<'a, T>(&self, params: T) -> Result<ChatCompletion, OpenAIError>
     where
         T: IntoRequestParams<'a>,
@@ -38,12 +55,25 @@ impl Chat {
                         "Attempt {}: Retrying request after error: {:?}",
                         attempts, error
                     );
-                    continue;
                 }
             }
         }
     }
 
+    /// Creates a streaming chat completion request.
+    ///
+    /// This method sends a chat completion request and returns a stream of response chunks.
+    /// It's useful for real-time applications where you want to display the response as it's generated.
+    /// The method automatically retries up to 5 times on connection failures.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - Request parameters that can be converted into `RequestParams`
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing either a `ReceiverStream` of `ChatCompletionChunk` items
+    /// on success or an `OpenAIError` on failure.
     pub async fn create_stream<'a, T>(
         &self,
         params: T,
@@ -65,7 +95,6 @@ impl Chat {
                         "Attempt {}: Retrying request after error: {:?}",
                         attempts, error
                     );
-                    continue;
                 }
             }
         }

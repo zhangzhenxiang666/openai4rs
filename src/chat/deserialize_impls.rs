@@ -174,7 +174,7 @@ mod tests {
     fn test_deserialize_chatcompletion() {
         let json = fs::read_to_string("./assets/chatcompletion.json").unwrap();
         let chatcompletion: Result<ChatCompletion, _> = serde_json::from_str(json.as_str());
-        assert!(!chatcompletion.is_err());
+        assert!(chatcompletion.is_ok());
     }
 
     #[test]
@@ -182,6 +182,6 @@ mod tests {
         let json = fs::read_to_string("./assets/chatcompletionchunk.json").unwrap();
         let chatcompletion_chunk: Result<ChatCompletionChunk, _> =
             serde_json::from_str(json.as_str());
-        assert!(!chatcompletion_chunk.is_err())
+        assert!(chatcompletion_chunk.is_ok())
     }
 }

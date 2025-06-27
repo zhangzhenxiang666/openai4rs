@@ -163,3 +163,40 @@ impl Error for TextReadError {
         Some(&self.source)
     }
 }
+
+impl OpenAIError {
+    pub fn get_message(&self) -> String {
+        match self {
+            Self::APIConnction(e) => e.message.clone(),
+            Self::APIResponseValidation(e) => e.message.clone(),
+            Self::APIStatus(e) => e.message.clone(),
+            Self::Authentication(e) => e.message.clone(),
+            Self::BadRequest(e) => e.message.clone(),
+            Self::PermissionDenied(e) => e.message.clone(),
+            Self::NotFound(e) => e.message.clone(),
+            Self::Conflict(e) => e.message.clone(),
+            Self::UnprocessableEntity(e) => e.message.clone(),
+            Self::RateLimit(e) => e.message.clone(),
+            Self::InternalServer(e) => e.message.clone(),
+            Self::APITimeout(e) => e.message.clone(),
+            Self::UnknownRequest(e) => e.message.clone(),
+            Self::Convert(e) => format!("Convert Error: {}, Target Type: {}", e.raw, e.target_type),
+            Self::TextRead(e) => e.message.clone(),
+        }
+    }
+
+    pub fn is_authhentication_error(&self) -> bool {
+        matches!(self, Self::Authentication(_))
+    }
+
+    pub fn is_timeout_error(&self) -> bool {
+        matches!(self, Self::APITimeout(_))
+    }
+
+    pub fn is_connection_error(&self) -> bool {
+        matches!(self, Self::APIConnction(_))
+    }
+    pub fn is_not_found_error(&self) -> bool {
+        matches!(self, Self::NotFound(_))
+    }
+}
