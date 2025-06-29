@@ -1,5 +1,6 @@
 use crate::common::types::CompletionGeneric;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 pub type ChatCompletion = CompletionGeneric<UnStreamChoice>;
 pub type ChatCompletionChunk = CompletionGeneric<StreamChoice>;
@@ -20,13 +21,14 @@ pub struct StreamChoice {
     pub delta: ChoiceDelta,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ChoiceDelta {
     pub content: Option<String>,
     pub refusal: Option<String>,
     pub role: Option<String>,
     pub tool_calls: Option<Vec<ChatCompletionToolCall>>,
     pub reasoning: Option<String>,
+    pub extra_metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -37,7 +39,7 @@ pub enum ToolChoice {
     Required,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ChatCompletionMessage {
     pub content: Option<String>,
     pub refusal: Option<String>,
@@ -45,6 +47,7 @@ pub struct ChatCompletionMessage {
     pub annotations: Option<Vec<Annotation>>,
     pub tool_calls: Option<Vec<ChatCompletionToolCall>>,
     pub reasoning: Option<String>,
+    pub extra_metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone)]

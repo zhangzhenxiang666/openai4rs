@@ -1,6 +1,8 @@
 use super::types::*;
+use crate::common::types::{extract_optional, try_deserialize_or_skip};
 use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
+use std::collections::HashMap;
 use std::fmt;
 
 impl<'de> Deserialize<'de> for Function {
@@ -31,31 +33,19 @@ impl<'de> Deserialize<'de> for Function {
                             if id.is_some() {
                                 return Err(de::Error::duplicate_field("id"));
                             }
-                            if let Ok(value) = map.next_value::<Option<String>>() {
-                                id = value;
-                            } else {
-                                let _: serde_json::Value = map.next_value()?;
-                            }
+                            id = try_deserialize_or_skip(&mut map)?;
                         }
                         "name" => {
                             if name.is_some() {
                                 return Err(de::Error::duplicate_field("name"));
                             }
-                            if let Ok(value) = map.next_value::<Option<String>>() {
-                                name = value;
-                            } else {
-                                let _: serde_json::Value = map.next_value()?;
-                            }
+                            name = try_deserialize_or_skip(&mut map)?;
                         }
                         "arguments" => {
                             if arguments.is_some() {
                                 return Err(de::Error::duplicate_field("arguments"));
                             }
-                            if let Ok(value) = map.next_value::<Option<String>>() {
-                                arguments = value;
-                            } else {
-                                let _: serde_json::Value = map.next_value()?;
-                            }
+                            arguments = try_deserialize_or_skip(&mut map)?;
                         }
                         _ => {
                             let _: serde_json::Value = map.next_value()?;
@@ -63,14 +53,10 @@ impl<'de> Deserialize<'de> for Function {
                     }
                 }
 
-                let id = id.unwrap_or_default();
-                let name = name.unwrap_or_default();
-                let arguments = arguments.unwrap_or_default();
-
                 Ok(Function {
-                    id,
-                    name,
-                    arguments,
+                    id: id.unwrap_or_default(),
+                    name: name.unwrap_or_default(),
+                    arguments: arguments.unwrap_or_default(),
                 })
             }
         }
@@ -84,13 +70,13 @@ impl<'de> Deserialize<'de> for ChatCompletionToolCall {
     where
         D: Deserializer<'de>,
     {
-        struct ChatCompletionMessageToolCallVisitor;
+        struct ChatCompletionToolCallVisitor;
 
-        impl<'de> Visitor<'de> for ChatCompletionMessageToolCallVisitor {
+        impl<'de> Visitor<'de> for ChatCompletionToolCallVisitor {
             type Value = ChatCompletionToolCall;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a ChatCompletionMessageToolCall object")
+                formatter.write_str("a ChatCompletionToolCall object")
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<ChatCompletionToolCall, V::Error>
@@ -98,9 +84,9 @@ impl<'de> Deserialize<'de> for ChatCompletionToolCall {
                 V: MapAccess<'de>,
             {
                 let mut id: Option<String> = None;
-                let mut index = 0;
                 let mut r#type: Option<String> = None;
                 let mut function_data: Option<serde_json::Value> = None;
+                let mut index: Option<i64> = None;
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
@@ -108,27 +94,25 @@ impl<'de> Deserialize<'de> for ChatCompletionToolCall {
                             if id.is_some() {
                                 return Err(de::Error::duplicate_field("id"));
                             }
-                            id = map.next_value::<Option<String>>()?;
+                            id = try_deserialize_or_skip(&mut map)?;
                         }
                         "type" => {
                             if r#type.is_some() {
                                 return Err(de::Error::duplicate_field("type"));
                             }
-                            r#type = map.next_value::<Option<String>>()?;
+                            r#type = try_deserialize_or_skip(&mut map)?;
                         }
                         "function" => {
                             if function_data.is_some() {
                                 return Err(de::Error::duplicate_field("function"));
                             }
-                            function_data = map.next_value::<Option<serde_json::Value>>()?;
+                            function_data = try_deserialize_or_skip(&mut map)?;
                         }
                         "index" => {
-                            if index != 0 {
+                            if index.is_some() {
                                 return Err(de::Error::duplicate_field("index"));
                             }
-                            if let Some(idx) = map.next_value::<Option<i64>>()? {
-                                index = idx;
-                            }
+                            index = try_deserialize_or_skip(&mut map)?;
                         }
                         _ => {
                             let _: serde_json::Value = map.next_value()?;
@@ -138,19 +122,22 @@ impl<'de> Deserialize<'de> for ChatCompletionToolCall {
 
                 let id = id.unwrap_or_default();
                 let r#type = r#type.ok_or_else(|| de::Error::missing_field("type"))?;
+                let index = index.unwrap_or(0);
 
-                let function_data = function_data.unwrap_or_else(|| {
-                    serde_json::json!({
-                        "id": "",
-                        "name": "",
-                        "arguments": ""
-                    })
+                let default_function_data = serde_json::json!({
+                    "id": "",
+                    "name": "",
+                    "arguments": ""
                 });
+
+                let function_data = function_data.unwrap_or(default_function_data);
 
                 let mut function: Function = serde_json::from_value(function_data)
                     .map_err(|e| de::Error::custom(format!("Failed to parse function: {}", e)))?;
 
-                function.id = id;
+                if function.id.is_empty() {
+                    function.id = id.clone();
+                }
 
                 Ok(ChatCompletionToolCall {
                     function,
@@ -160,7 +147,84 @@ impl<'de> Deserialize<'de> for ChatCompletionToolCall {
             }
         }
 
-        deserializer.deserialize_map(ChatCompletionMessageToolCallVisitor)
+        deserializer.deserialize_map(ChatCompletionToolCallVisitor)
+    }
+}
+
+impl<'de> Deserialize<'de> for ChoiceDelta {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut map = HashMap::<String, serde_json::Value>::deserialize(deserializer)?;
+
+        let content = extract_optional(&mut map, "content")?;
+        let refusal = extract_optional(&mut map, "refusal")?;
+        let role = extract_optional(&mut map, "role")?;
+        let tool_calls = extract_optional(&mut map, "tool_calls")?;
+
+        let reasoning = match (map.remove("reasoning"), map.remove("reasoning_content")) {
+            (Some(serde_json::Value::Null), Some(serde_json::Value::Null)) => None,
+            (Some(value), _) if !value.is_null() => {
+                Some(serde_json::from_value(value).map_err(serde::de::Error::custom)?)
+            }
+            (_, Some(value)) if !value.is_null() => {
+                Some(serde_json::from_value(value).map_err(serde::de::Error::custom)?)
+            }
+            _ => None,
+        };
+
+        let extra_metadata = if map.is_empty() { None } else { Some(map) };
+
+        Ok(ChoiceDelta {
+            content,
+            refusal,
+            role,
+            tool_calls,
+            reasoning,
+            extra_metadata,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for ChatCompletionMessage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut map = HashMap::<String, serde_json::Value>::deserialize(deserializer)?;
+
+        let content = extract_optional(&mut map, "content")?;
+        let refusal = extract_optional(&mut map, "refusal")?;
+
+        let role: Option<String> = extract_optional(&mut map, "role")?;
+        let role = role.unwrap_or("assistant".into());
+
+        let tool_calls = extract_optional(&mut map, "tool_calls")?;
+        let annotations = extract_optional(&mut map, "annotations")?;
+
+        let reasoning = match (map.remove("reasoning"), map.remove("reasoning_content")) {
+            (Some(serde_json::Value::Null), Some(serde_json::Value::Null)) => None,
+            (Some(value), _) if !value.is_null() => {
+                Some(serde_json::from_value(value).map_err(serde::de::Error::custom)?)
+            }
+            (_, Some(value)) if !value.is_null() => {
+                Some(serde_json::from_value(value).map_err(serde::de::Error::custom)?)
+            }
+            _ => None,
+        };
+
+        let extra_metadata = if map.is_empty() { None } else { Some(map) };
+
+        Ok(ChatCompletionMessage {
+            content,
+            refusal,
+            role,
+            tool_calls,
+            annotations,
+            reasoning,
+            extra_metadata,
+        })
     }
 }
 
@@ -180,8 +244,9 @@ mod tests {
     #[test]
     fn test_deserialize_chatcompletion_stream() {
         let json = fs::read_to_string("./assets/chatcompletionchunk.json").unwrap();
+
         let chatcompletion_chunk: Result<ChatCompletionChunk, _> =
             serde_json::from_str(json.as_str());
-        assert!(chatcompletion_chunk.is_ok())
+        assert!(chatcompletion_chunk.is_ok());
     }
 }

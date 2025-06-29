@@ -4,9 +4,9 @@
 [![Documentation](https://docs.rs/openai4rs/badge.svg)](https://docs.rs/openai4rs)
 [![License](https://img.shields.io/crates/l/openai4rs)](LICENSE)
 
-English | [简体中文](README.md)
+[简体中文](README.md) | English
 
-An asynchronous Rust crate based on `tokio` and `reqwest` for interacting with large model providers that follow the OpenAI specification.
+An asynchronous Rust crate based on `tokio` and `reqwest` for interacting with large model providers that adhere to the OpenAI specification.
 
 ## ✨ Features
 
@@ -23,23 +23,23 @@ An asynchronous Rust crate based on `tokio` and `reqwest` for interacting with l
 
 ### 🤖 Models
 
-- ✅ Get model list
-- ✅ Get single model information
+- ✅ List models
+- ✅ Retrieve a single model
 
 ## 🚀 Quick Start
 
 ### Installation
 
-Add the dependency to your `Cargo.toml`:
+Add the dependencies to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-openai4rs = "0.1.1"
+openai4rs = "0.1.3"
 tokio = { version = "1.45.1", features = ["full"] }
 futures = "0.3.31"
 ```
 
-Or use cargo command:
+Or use the cargo command:
 
 ```bash
 cargo add openai4rs
@@ -71,7 +71,7 @@ async fn main() {
 
 #### Non-streaming Chat
 
-The simplest way to chat, getting complete responses at once:
+The simplest way to chat, getting the complete response at once:
 
 ```rust
 use openai4rs::{OpenAI, chat_request, user};
@@ -93,7 +93,7 @@ async fn main() {
 
 #### Streaming Chat
 
-Receive response content in real-time, suitable for scenarios requiring progressive display:
+Receive response content in real-time, suitable for scenarios that require progressive display:
 
 ```rust
 use futures::StreamExt;
@@ -124,7 +124,7 @@ async fn main() {
 
 #### 🔧 Tool Calling
 
-Enable models to call external tools to enhance functionality:
+Allow the model to call external tools to enhance its functionality:
 
 ```rust
 use futures::StreamExt;
@@ -134,10 +134,10 @@ use openai4rs::{ChatCompletionToolParam, OpenAI, chat_request, user, ToolChoice}
 async fn main() {
     let client = OpenAI::new("your_api_key", "your_base_url");
     
-    // Define tools
+    // Define the tool
     let tools = vec![ChatCompletionToolParam::function(
         "get_current_time",
-        "Get current time",
+        "Get the current time",
         serde_json::json!({
             "type": "object",
             "properties": {},
@@ -160,7 +160,7 @@ async fn main() {
     while let Some(result) = stream.next().await {
         match result {
             Ok(chunk) => {
-                println!("Received response: {:#?}", chunk);
+                println!("Received chunk: {:#?}", chunk);
             }
             Err(err) => {
                 eprintln!("Error: {:#?}", err);
@@ -172,7 +172,7 @@ async fn main() {
 
 #### 🧠 Reasoning Mode
 
-Suitable for models that support reasoning functionality (such as qwen's qwq-32b):
+Fields returned by the provider as `reasoning` or `reasoning_content` will be mapped to the `reasoning` field. Applicable to models that support reasoning functionality (e.g., qwen's qwq-32b):
 
 ```rust
 use futures::StreamExt;
@@ -181,7 +181,7 @@ use openai4rs::{OpenAI, chat_request, user};
 #[tokio::main]
 async fn main() {
     let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("Please solve this math problem: If a triangle has two sides of 3 and 4, and the third side is 5, what type of triangle is this?")];
+    let messages = vec![user!("Please solve this math problem: If two sides of a triangle are 3 and 4, and the third side is 5, what type of triangle is it?")];
     
     let mut stream = client
         .chat()
@@ -194,7 +194,7 @@ async fn main() {
         for choice in chunk.choices.iter() {
             // Display the model's reasoning process
             if choice.delta.is_reasoning() {
-                println!("🤔 Reasoning process:\n{}", choice.delta.get_reasoning_str());
+                println!("🤔 Reasoning Process:\n{}", choice.delta.get_reasoning_str());
             }
             // Display the final answer
             if let Some(content) = &choice.delta.content {
@@ -211,7 +211,7 @@ async fn main() {
 
 #### Apply - Synchronous Iteration
 
-Use the `Apply` trait to handle stream data more conveniently:
+Using the `Apply` trait makes it more convenient to process stream data:
 
 ```rust
 use openai4rs::{Apply, OpenAI, chat_request, user};
@@ -230,7 +230,7 @@ async fn main() {
     // Synchronously process each response chunk
     stream.apply(|result| {
         let chunk = result.unwrap();
-        println!("Processing response chunk: {:#?}", chunk);
+        println!("Processing chunk: {:#?}", chunk);
     });
 }
 ```
@@ -256,7 +256,7 @@ async fn main() {
     stream
         .apply_async(|result| async move {
             let chunk = result.unwrap();
-            // Can perform asynchronous operations here
+            // You can perform asynchronous operations here
             tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
             println!("Async processing: {:#?}", chunk);
         })
@@ -264,7 +264,7 @@ async fn main() {
 }
 ```
 
-##### Asynchronous Processing with External State Capture
+##### Asynchronous Processing with State Capture
 
 ```rust
 use openai4rs::{Apply, OpenAI, chat_request, user};
@@ -280,22 +280,97 @@ async fn main() {
         .await
         .unwrap();
 
-    // Collect complete AI output
+    // Collect the complete AI output
     let complete_response = stream
-        .apply_with_capture_async(String::new(), |accumulated, result| {
+        .apply_with_capture_async(String::new(), |mut accumulated, result| {
             Box::pin(async move {
                 let chunk = result.expect("Error processing stream");
                 for choice in chunk.choices.iter() {
                     if let Some(content) = choice.delta.content.as_ref() {
-                        print!("{}", content); // Real-time display
+                        print!("{}", content); // Display in real-time
                         accumulated.push_str(content); // Accumulate content
                     }
                 }
+                accumulated
             })
         })
         .await;
 
-    println!("\n\nComplete response:\n{}", complete_response);
+    println!("\n\nComplete Response:\n{}", complete_response);
+}
+```
+
+### 🔗 Response Merging and Message Mapping
+
+#### Merge Streaming Response Output (using the overloaded `+` operator)
+
+Merge the streaming response into a complete reply:
+
+```rust
+use futures::stream::StreamExt;
+use openai4rs::{OpenAI, StreamChoice, chat_request, user};
+
+#[tokio::main]
+async fn main() {
+    let client = OpenAI::new("your_api_key", "your_base_url");
+    let messages = vec![user!("Please explain Rust's ownership system in detail")];
+
+    let mut stream = client
+        .chat()
+        .create_stream(chat_request("your_model_name", &messages))
+        .await
+        .unwrap();
+
+    let mut merged_choice: Option<StreamChoice> = None;
+    while let Some(result) = stream.next().await {
+        let chat_completion_chunk = result.unwrap();
+        let choice = chat_completion_chunk.choices[0].clone();
+        merged_choice = Some(match merged_choice {
+            Some(l) => l + choice,
+            None => choice,
+        })
+    }
+    println!("{:#?}", merged_choice.unwrap());
+}
+```
+
+#### Map Response to Message Chain
+
+```rust
+use futures::stream::StreamExt;
+use openai4rs::{OpenAI, StreamChoice, chat_request, user};
+
+#[tokio::main]
+async fn main() {
+    let client = OpenAI::new("your_api_key", "your_base_url");
+    let mut messages = vec![user!("Please explain Rust's ownership system in detail")];
+
+    let mut stream = client
+        .chat()
+        .create_stream(chat_request("your_model_name", &messages))
+        .await
+        .unwrap();
+
+    let mut merged_choice: Option<StreamChoice> = None;
+    while let Some(result) = stream.next().await {
+        let chat_completion_chunk = result.unwrap();
+        let choice = chat_completion_chunk.choices[0].clone();
+        merged_choice = Some(match merged_choice {
+            Some(l) => l + choice,
+            None => choice,
+        })
+    }
+    messages.push(merged_choice.unwrap().delta.into());
+
+    messages.push(user!("Okay, thank you"));
+
+    let chat_completion = client
+        .chat()
+        .create(chat_request("your_model_name", &messages))
+        .await
+        .unwrap();
+
+    messages.push(chat_completion.choices[0].message.clone().into())
 }
 ```
 
@@ -312,7 +387,7 @@ async fn main() {
     
     let completion = client
         .completions()
-        .create(comletions_request("your_model_name", "Please complete this sentence: The future of artificial intelligence"))
+        .create(comletions_request("your_model_name", "Complete this sentence: The future of artificial intelligence is"))
         .await
         .unwrap();
         
@@ -349,7 +424,7 @@ async fn main() {
 }
 ```
 
-### **🤖 Models**
+### **🤖 Models Management**
 
 #### Get All Available Models
 
@@ -393,25 +468,25 @@ use openai4rs::{chat_request, user};
 let messages = vec![user!("Hello")];
 
 let request = chat_request("gpt-3.5-turbo", &messages)
-    .temperature(0.7)             // Control randomness
-    .max_completion_tokens(1000)  // Maximum token count
-    .top_p(0.9)                   // Nucleus sampling
-    .frequency_penalty(0.1)       // Frequency penalty
-    .presence_penalty(0.1);       // Presence penalty
+    .temperature(0.7)          // Controls randomness
+    .max_completion_tokens(1000)   // Maximum number of tokens
+    .top_p(0.9)                  // Nucleus sampling
+    .frequency_penalty(0.1)      // Frequency penalty
+    .presence_penalty(0.1);      // Presence penalty
 ```
 
 ## 📖 More Examples
 
-Check the [examples](examples/) directory for more usage examples:
+Check the [examples](https://www.google.com/search?q=examples/) directory for more usage examples:
 
-- [Basic Chat](examples/chat.rs)
-- [Streaming Response](examples/chat_stream.rs)
-- [Tool Calling](examples/tool.rs)
-- [Reasoning Mode](examples/chat_reasoning_stream.rs)
+- [Basic Chat](https://www.google.com/search?q=examples/chat.rs)
+- [Streaming Response](https://www.google.com/search?q=examples/chat_stream.rs)
+- [Tool Calling](https://www.google.com/search?q=examples/tool.rs)
+- [Reasoning Mode](https://www.google.com/search?q=examples/chat_reasoning_stream.rs)
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [Apache-2.0 License](https://www.google.com/search?q=LICENSE).
 
 ## 🔗 Related Links
 

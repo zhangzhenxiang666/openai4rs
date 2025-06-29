@@ -1,19 +1,17 @@
-use std::collections::HashMap;
-
-use serde::Deserialize;
-
 use crate::common::types::CompletionGeneric;
+use serde::Deserialize;
+use std::collections::HashMap;
 
 pub type Completion = CompletionGeneric<CompletionChoice>;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct CompletionChoice {
-    #[serde(default)]
     pub index: i64,
     pub text: String,
     pub finish_reason: Option<FinishReason>,
     pub logprobs: Option<Logprobs>,
     pub reasoning: Option<String>,
+    pub extra_metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

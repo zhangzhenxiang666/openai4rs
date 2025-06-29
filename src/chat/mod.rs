@@ -1,7 +1,7 @@
 pub mod core;
-pub mod deserialize_impls;
+mod deserialize_impls;
 pub mod params;
-pub mod serialize_impls;
+mod serialize_impls;
 pub mod types;
 pub mod types_impls;
 

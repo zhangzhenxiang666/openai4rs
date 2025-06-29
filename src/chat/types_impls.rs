@@ -1,5 +1,6 @@
 use super::types::*;
 use crate::content;
+use crate::utils::methods::merge_extra_metadata;
 
 impl ChatCompletionMessage {
     pub fn is_tool_calls(&self) -> bool {
@@ -162,6 +163,7 @@ impl From<ChoiceDelta> for ChatCompletionMessage {
             annotations: None,
             tool_calls: value.tool_calls,
             reasoning: value.reasoning,
+            extra_metadata: value.extra_metadata,
         }
     }
 }
@@ -174,5 +176,84 @@ impl From<StreamChoice> for UnStreamChoice {
             logprobs: value.logprobs,
             message: value.delta.into(),
         }
+    }
+}
+
+impl std::ops::Add for StreamChoice {
+    type Output = Self;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        if self.index == 0 {
+            self.index = rhs.index;
+        }
+        if rhs.finish_reason.is_some() {
+            self.finish_reason = rhs.finish_reason;
+        }
+        if rhs.logprobs.is_some() {
+            self.logprobs = rhs.logprobs;
+        }
+        self.delta = self.delta + rhs.delta;
+        self
+    }
+}
+
+impl std::ops::Add for ChoiceDelta {
+    type Output = Self;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self.content = match (self.content, rhs.content) {
+            (Some(left), Some(right)) => Some(left + &right),
+            (Some(left), None) => Some(left),
+            (None, Some(right)) => Some(right),
+            (None, None) => None,
+        };
+
+        if rhs.refusal.is_some() {
+            self.refusal = rhs.refusal;
+        }
+
+        if rhs.role.is_some() {
+            self.role = rhs.role;
+        }
+
+        self.tool_calls = match (self.tool_calls, rhs.tool_calls) {
+            (Some(mut left), Some(right)) => {
+                left = left.into_iter().zip(right).map(|(l, r)| l + r).collect();
+                Some(left)
+            }
+            (Some(left), None) => Some(left),
+            (None, Some(right)) => Some(right),
+            (None, None) => None,
+        };
+
+        self.reasoning = match (self.reasoning, rhs.reasoning) {
+            (Some(left), Some(right)) => Some(left + &right),
+            (Some(left), None) => Some(left),
+            (None, Some(right)) => Some(right),
+            (None, None) => None,
+        };
+
+        self.extra_metadata = merge_extra_metadata(self.extra_metadata, rhs.extra_metadata);
+
+        self
+    }
+}
+
+impl std::ops::Add for ChatCompletionToolCall {
+    type Output = Self;
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self.index = rhs.index;
+        self.function = self.function + rhs.function;
+        self
+    }
+}
+
+impl std::ops::Add for Function {
+    type Output = Self;
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self.id.push_str(&rhs.id);
+        self.name.push_str(&rhs.name);
+        self.arguments.push_str(&rhs.arguments);
+        self
     }
 }

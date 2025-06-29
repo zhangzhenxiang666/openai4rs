@@ -6,6 +6,7 @@ use crate::utils::traits::{ResponseProcess, StreamProcess};
 use crate::utils::{openai_post, openai_post_stream};
 use reqwest::{Client, RequestBuilder, Response};
 use reqwest_eventsource::EventSource;
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::debug;
@@ -107,18 +108,30 @@ impl StreamProcess<ChatCompletionChunk> for Chat {}
 impl Chat {
     fn transform_request_params(builder: RequestBuilder, params: &RequestParams) -> RequestBuilder {
         let mut builder = builder;
+
         if let Some(headers) = &params.extra_headers {
             for (k, v) in headers {
                 builder = builder.header(k, v.to_string());
             }
         }
-        if let Some(body) = &params.extra_body {
-            builder = builder.json(body);
-        }
+
         if let Some(query) = &params.extra_query {
             builder = builder.query(query);
         }
-        builder.json(&params)
+
+        let mut body_map = HashMap::new();
+
+        if let Ok(params_value) = serde_json::to_value(params) {
+            if let Some(params_obj) = params_value.as_object() {
+                body_map.extend(params_obj.iter().map(|(k, v)| (k.clone(), v.clone())));
+            }
+        }
+
+        if let Some(extra_body) = &params.extra_body {
+            body_map.extend(extra_body.iter().map(|(k, v)| (k.clone(), v.clone())));
+        }
+
+        builder.json(&body_map)
     }
 
     fn send_unstream(

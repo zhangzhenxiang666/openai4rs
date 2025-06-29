@@ -34,7 +34,7 @@
 
 ```toml
 [dependencies]
-openai4rs = "0.1.1"
+openai4rs = "0.1.3"
 tokio = { version = "1.45.1", features = ["full"] }
 futures = "0.3.31"
 ```
@@ -172,6 +172,7 @@ async fn main() {
 
 #### 🧠 思考模式
 
+供应商返回字段为reasoning或reasoning_content都会映射到reasoning字段。
 适用于支持思考功能的模型（如 qwen 的 qwq-32b）：
 
 ```rust
@@ -299,6 +300,80 @@ async fn main() {
 }
 ```
 
+### 🔗 响应合并与消息映射
+
+#### 合并流式响应输出(使用重载的 `+` 运行符)
+
+将流式响应合并为完整的回复内容：
+
+```rust
+use futures::stream::StreamExt;
+use openai4rs::{OpenAI, StreamChoice, chat_request, user};
+
+#[tokio::main]
+async fn main() {
+    let client = OpenAI::new("your_api_key", "your_base_url");
+    let messages = vec![user!("请详细介绍一下 Rust 的所有权机制")];
+
+    let mut stream = client
+        .chat()
+        .create_stream(chat_request("your_model_name", &messages))
+        .await
+        .unwrap();
+
+    let mut merged_choice: Option<StreamChoice> = None;
+    while let Some(result) = stream.next().await {
+        let chat_completion_chunk = result.unwrap();
+        let choice = chat_completion_chunk.choices[0].clone();
+        merged_choice = Some(match merged_choice {
+            Some(l) => l + choice,
+            None => choice,
+        })
+    }
+    println!("{:#?}", merged_choice.unwrap());
+}
+```
+
+#### 将响应映射到消息链
+
+```rust
+use futures::stream::StreamExt;
+use openai4rs::{OpenAI, StreamChoice, chat_request, user};
+
+#[tokio::main]
+async fn main() {
+    let client = OpenAI::new("your_api_key", "your_base_url");
+    let mut messages = vec![user!("请详细介绍一下 Rust 的所有权机制")];
+
+    let mut stream = client
+        .chat()
+        .create_stream(chat_request("your_model_name", &messages))
+        .await
+        .unwrap();
+
+    let mut merged_choice: Option<StreamChoice> = None;
+    while let Some(result) = stream.next().await {
+        let chat_completion_chunk = result.unwrap();
+        let choice = chat_completion_chunk.choices[0].clone();
+        merged_choice = Some(match merged_choice {
+            Some(l) => l + choice,
+            None => choice,
+        })
+    }
+    messages.push(merged_choice.unwrap().delta.into());
+
+    messages.push(user!("好的, 谢谢你"));
+
+    let chat_completion = client
+        .chat()
+        .create(chat_request("your_model_name", &messages))
+        .await
+        .unwrap();
+
+    messages.push(chat_completion.choices[0].message.clone().into())
+}
+```
+
 ### **📝 Completions 文本补全**
 
 #### 非流式补全
@@ -411,7 +486,7 @@ let request = chat_request("gpt-3.5-turbo", &messages)
 
 ## 📄 许可证
 
-本项目采用 [MIT 许可证](LICENSE)。
+本项目采用 [Apache-2.0 许可证](LICENSE)。
 
 ## 🔗 相关链接
 

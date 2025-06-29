@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::MapAccess};
 
 fn default_id() -> String {
     "0".into()
@@ -49,4 +49,33 @@ pub struct PromptTokensDetails {
 pub enum ServiceTier {
     Auto,
     Default,
+}
+
+pub(crate) fn extract_optional<T, E>(
+    map: &mut HashMap<String, serde_json::Value>,
+    key: &str,
+) -> Result<Option<T>, E>
+where
+    T: serde::de::DeserializeOwned,
+    E: serde::de::Error,
+{
+    match map.remove(key) {
+        Some(serde_json::Value::Null) => Ok(None),
+        Some(value) => serde_json::from_value(value).map_err(serde::de::Error::custom),
+        None => Ok(None),
+    }
+}
+
+pub(crate) fn try_deserialize_or_skip<'de, T, V>(map: &mut V) -> Result<Option<T>, V::Error>
+where
+    T: serde::de::DeserializeOwned,
+    V: MapAccess<'de>,
+{
+    match map.next_value::<Option<T>>() {
+        Ok(value) => Ok(value),
+        Err(e) => match map.next_value::<serde_json::Value>() {
+            Ok(_) => Ok(None),
+            Err(_) => Err(e),
+        },
+    }
 }

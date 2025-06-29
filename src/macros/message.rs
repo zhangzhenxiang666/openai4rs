@@ -1,14 +1,14 @@
 #[macro_export]
 macro_rules! content {
     ($input:tt) => {{
-        let value = serde_json::json!($input);
+        let value = $crate::serde_json::json!($input);
         match value {
-            serde_json::Value::Object(_) => $crate::Content::Object(value),
-            serde_json::Value::String(s) => $crate::Content::Text(s),
-            serde_json::Value::Array(_) => $crate::Content::Object(value),
-            serde_json::Value::Number(n) => $crate::Content::Text(n.to_string()),
-            serde_json::Value::Bool(b) => $crate::Content::Text(b.to_string()),
-            serde_json::Value::Null => $crate::Content::Text("null".to_string()),
+            $crate::serde_json::Value::Object(_) => $crate::Content::Object(value),
+            $crate::serde_json::Value::String(s) => $crate::Content::Text(s),
+            $crate::serde_json::Value::Array(_) => $crate::Content::Object(value),
+            $crate::serde_json::Value::Number(n) => $crate::Content::Text(n.to_string()),
+            $crate::serde_json::Value::Bool(b) => $crate::Content::Text(b.to_string()),
+            $crate::serde_json::Value::Null => $crate::Content::Text("null".to_string()),
         }
     }};
 }
