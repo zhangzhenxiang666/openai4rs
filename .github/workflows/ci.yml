@@ -38,7 +38,7 @@ jobs:
       run: cargo build --verbose --all-features
      
     - name: Run tests
-      run: cargo test --verbose --all-features
+      run: cargo test --verbose --all-features --lib
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
