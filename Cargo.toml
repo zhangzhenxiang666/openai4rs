@@ -8,6 +8,7 @@ authors = ["Zhang Zhenxiang <zhangzhenxiang@example.com>"]
 description = "A non-official Rust crate for calling the OpenAI service"
 license = "Apache-2.0"
 keywords = ["ai", "openai", "machine-learning", "library"]
+exclude = [".vscode/", "docs/", ".git/", ".github/", "*.log", ".env*"]
 
 [dependencies]
 derive_builder = "0.20.2"

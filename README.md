@@ -26,6 +26,14 @@
 - ✅ 获取模型列表
 - ✅ 获取单个模型信息
 
+### 🔄 HTTP 请求控制
+
+- ✅ 可配置的重试次数
+- ✅ 可配置的请求超时
+- ✅ 可配置的连接超时
+- ✅ HTTP 代理支持
+- ✅ 自定义 User-Agent
+
 ## 🚀 快速开始
 
 ### 安装
@@ -379,7 +387,7 @@ async fn main() {
 #### 非流式补全
 
 ```rust
-use openai4rs::{OpenAI, comletions_request};
+use openai4rs::{OpenAI, completions_request};
 
 #[tokio::main]
 async fn main() {
@@ -387,7 +395,7 @@ async fn main() {
     
     let completion = client
         .completions()
-        .create(comletions_request("your_model_name", "请补全这句话：人工智能的未来"))
+        .create(completions_request("your_model_name", "请补全这句话：人工智能的未来"))
         .await
         .unwrap();
         
@@ -399,7 +407,7 @@ async fn main() {
 
 ```rust
 use futures::StreamExt;
-use openai4rs::{OpenAI, comletions_request};
+use openai4rs::{OpenAI, completions_request};
 
 #[tokio::main]
 async fn main() {
@@ -407,7 +415,7 @@ async fn main() {
     
     let mut stream = client
         .completions()
-        .create_stream(comletions_request("your_model_name", "编写一个快速排序算法："))
+        .create_stream(completions_request("your_model_name", "编写一个快速排序算法："))
         .await
         .unwrap();
         
@@ -453,11 +461,44 @@ async fn main() {
 ### 客户端配置
 
 ```rust
-use openai4rs::{OpenAI};
+use openai4rs::{OpenAI, Config};
 
 // 基础配置
 let client = OpenAI::new("your_api_key", "https://api.openai.com/v1");
 
+// 使用环境变量创建客户端
+// 环境变量: OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_TIMEOUT, OPENAI_CONNECT_TIMEOUT, OPENAI_RETRY_COUNT, OPENAI_PROXY, OPENAI_USER_AGENT
+let client = OpenAI::from_env().unwrap();
+
+// 使用自定义配置创建客户端
+let mut config = Config::new("your_api_key".to_string(), "https://api.openai.com/v1".to_string());
+config.set_retry_count(3)                                   // 设置最大重试次数为3
+      .set_timeout_seconds(120)                             // 设置请求超时为120秒
+      .set_connect_timeout_seconds(5)                       // 设置连接超时为5秒
+      .set_proxy(Some("http://localhost:8080".to_string())) // 设置HTTP代理
+      .set_user_agent(Some("MyApp/1.0".to_string()));       // 设置自定义User-Agent
+
+let client = OpenAI::with_config(config);
+
+// 动态更新客户端配置
+client.update_config(|config| {
+    config.set_timeout_seconds(180)
+          .set_retry_count(2);
+}).await;
+
+// 异步获取和设置 API 配置
+#[tokio::main]
+async fn main() {
+    let client = OpenAI::new("your_api_key", "https://api.openai.com/v1");
+    
+    // 获取配置信息
+    let base_url = client.get_base_url().await;
+    let api_key = client.get_api_key().await;
+    
+    // 更新配置信息
+    client.set_base_url("https://api.custom-provider.com/v1".to_string()).await;
+    client.set_api_key("new-api-key".to_string()).await;
+}
 ```
 
 ### 请求参数配置
@@ -483,6 +524,8 @@ let request = chat_request("gpt-3.5-turbo", &messages)
 - [流式响应](examples/chat_stream.rs)
 - [工具调用](examples/tool.rs)
 - [思考模式](examples/chat_reasoning_stream.rs)
+- [HTTP请求配置](examples/http_config.rs)
+- [自定义配置](examples/custom_config.rs)
 
 ## 📄 许可证
 

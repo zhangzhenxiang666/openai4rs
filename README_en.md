@@ -26,6 +26,14 @@ An asynchronous Rust crate based on `tokio` and `reqwest` for interacting with l
 - ✅ List models
 - ✅ Retrieve a single model
 
+### 🔄 HTTP Request Control
+
+- ✅ Configurable retry attempts
+- ✅ Configurable request timeout
+- ✅ Configurable connection timeout
+- ✅ HTTP proxy support
+- ✅ Custom User-Agent
+
 ## 🚀 Quick Start
 
 ### Installation
@@ -379,7 +387,7 @@ async fn main() {
 #### Non-streaming Completion
 
 ```rust
-use openai4rs::{OpenAI, comletions_request};
+use openai4rs::{OpenAI, completions_request};
 
 #[tokio::main]
 async fn main() {
@@ -387,7 +395,7 @@ async fn main() {
     
     let completion = client
         .completions()
-        .create(comletions_request("your_model_name", "Complete this sentence: The future of artificial intelligence is"))
+        .create(completions_request("your_model_name", "Complete this sentence: The future of artificial intelligence is"))
         .await
         .unwrap();
         
@@ -399,7 +407,7 @@ async fn main() {
 
 ```rust
 use futures::StreamExt;
-use openai4rs::{OpenAI, comletions_request};
+use openai4rs::{OpenAI, completions_request};
 
 #[tokio::main]
 async fn main() {
@@ -407,7 +415,7 @@ async fn main() {
     
     let mut stream = client
         .completions()
-        .create_stream(comletions_request("your_model_name", "Write a quicksort algorithm:"))
+        .create_stream(completions_request("your_model_name", "Write a quicksort algorithm:"))
         .await
         .unwrap();
         
@@ -453,11 +461,44 @@ async fn main() {
 ### Client Configuration
 
 ```rust
-use openai4rs::{OpenAI};
+use openai4rs::{OpenAI, Config};
 
 // Basic configuration
 let client = OpenAI::new("your_api_key", "https://api.openai.com/v1");
 
+// Create client from environment variables
+// Environment variables: OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_TIMEOUT, OPENAI_CONNECT_TIMEOUT, OPENAI_RETRY_COUNT, OPENAI_PROXY, OPENAI_USER_AGENT
+let client = OpenAI::from_env().unwrap();
+
+// Create client with custom configuration
+let mut config = Config::new("your_api_key".to_string(), "https://api.openai.com/v1".to_string());
+config.set_retry_count(3)                                   // Set max retry attempts to 3
+      .set_timeout_seconds(120)                             // Set request timeout to 120 seconds
+      .set_connect_timeout_seconds(5)                       // Set connection timeout to 5 seconds
+      .set_proxy(Some("http://localhost:8080".to_string())) // Set HTTP proxy
+      .set_user_agent(Some("MyApp/1.0".to_string()));       // Set custom User-Agent
+
+let client = OpenAI::with_config(config);
+
+// Dynamically update client configuration
+client.update_config(|config| {
+    config.set_timeout_seconds(180)
+          .set_retry_count(2);
+}).await;
+
+// Async API configuration access and updates
+#[tokio::main]
+async fn main() {
+    let client = OpenAI::new("your_api_key", "https://api.openai.com/v1");
+    
+    // Get configuration information
+    let base_url = client.get_base_url().await;
+    let api_key = client.get_api_key().await;
+    
+    // Update configuration information
+    client.set_base_url("https://api.custom-provider.com/v1".to_string()).await;
+    client.set_api_key("new-api-key".to_string()).await;
+}
 ```
 
 ### Request Parameter Configuration
@@ -477,12 +518,14 @@ let request = chat_request("gpt-3.5-turbo", &messages)
 
 ## 📖 More Examples
 
-Check the [examples](https://www.google.com/search?q=examples/) directory for more usage examples:
+Check the [examples](examples/) directory for more usage examples:
 
-- [Basic Chat](https://www.google.com/search?q=examples/chat.rs)
-- [Streaming Response](https://www.google.com/search?q=examples/chat_stream.rs)
-- [Tool Calling](https://www.google.com/search?q=examples/tool.rs)
-- [Reasoning Mode](https://www.google.com/search?q=examples/chat_reasoning_stream.rs)
+- [Basic Chat](examples/chat.rs)
+- [Streaming Response](examples/chat_stream.rs)
+- [Tool Calling](examples/tool.rs)
+- [Reasoning Mode](examples/chat_reasoning_stream.rs)
+- [HTTP Request Configuration](examples/http_config.rs)
+- [Custom Configuration](examples/custom_config.rs)
 
 ## 📄 License
 

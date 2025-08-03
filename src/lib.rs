@@ -8,7 +8,7 @@ pub mod models;
 pub mod utils;
 pub use chat::*;
 pub use client::{Config, OpenAI};
-pub use completions::comletions_request;
+pub use completions::completions_request;
 pub use models::models_request;
 pub use serde_json;
 pub use utils::Apply;

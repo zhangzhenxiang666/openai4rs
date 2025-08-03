@@ -224,6 +224,27 @@ pub struct RequestParams<'a> {
     #[builder(default)]
     #[serde(skip_serializing)]
     pub extra_body: Option<HashMap<String, serde_json::Value>>,
+
+    /// HTTP request retry count, overrides the client's global setting.
+    ///
+    /// This field is not serialized in the request body.
+    #[builder(default)]
+    #[serde(skip_serializing)]
+    pub retry_count: Option<u32>,
+
+    /// HTTP request timeout in seconds, overrides the client's global setting.
+    ///
+    /// This field is not serialized in the request body.
+    #[builder(default)]
+    #[serde(skip_serializing)]
+    pub timeout_seconds: Option<u64>,
+
+    /// HTTP request User-Agent, overrides the client's global setting.
+    ///
+    /// This field is not serialized in the request body.
+    #[builder(default)]
+    #[serde(skip_serializing)]
+    pub user_agent: Option<String>,
 }
 
 pub fn chat_request<'a>(

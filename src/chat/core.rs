@@ -3,13 +3,14 @@ use super::types::{ChatCompletion, ChatCompletionChunk};
 use crate::client::Config;
 use crate::error::{OpenAIError, RequestError};
 use crate::utils::traits::{ResponseProcess, StreamProcess};
-use crate::utils::{openai_post, openai_post_stream};
+use crate::utils::{openai_post_stream_with_lock, openai_post_with_lock};
 use reqwest::{Client, RequestBuilder, Response};
 use reqwest_eventsource::EventSource;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::debug;
 
 /// A chat client for interacting with OpenAI-compatible APIs.
 ///
@@ -17,18 +18,18 @@ use tracing::debug;
 /// chat completions with automatic retry logic and error handling.
 pub struct Chat {
     config: Arc<RwLock<Config>>,
-    client: Arc<Client>,
+    client: Arc<RwLock<Client>>,
 }
 
 impl Chat {
-    pub fn new(config: Arc<RwLock<Config>>, client: Arc<Client>) -> Self {
+    pub fn new(config: Arc<RwLock<Config>>, client: Arc<RwLock<Client>>) -> Self {
         Self { config, client }
     }
 
     /// Creates a non-streaming chat completion request.
     ///
     /// This method sends a chat completion request and waits for the complete response.
-    /// It automatically retries up to 5 times on failure and handles rate limiting.
+    /// It automatically retries on failure based on the configured retry count and handles rate limiting.
     ///
     /// # Arguments
     ///
@@ -44,20 +45,10 @@ impl Chat {
     {
         let mut params = params.into_request_params();
         params.stream = Some(false);
-        let mut attempts = 0;
 
-        loop {
-            attempts += 1;
-            match self.send_unstream(&params).await {
-                Ok(response) => return Self::process_response(response).await,
-                Err(error) if attempts >= 5 => return Err(Self::convert_request_error(error)),
-                Err(error) => {
-                    debug!(
-                        "Attempt {}: Retrying request after error: {:?}",
-                        attempts, error
-                    );
-                }
-            }
+        match self.send_unstream(&params).await {
+            Ok(response) => Self::process_response(response).await,
+            Err(error) => Err(Self::convert_request_error(error)),
         }
     }
 
@@ -65,7 +56,7 @@ impl Chat {
     ///
     /// This method sends a chat completion request and returns a stream of response chunks.
     /// It's useful for real-time applications where you want to display the response as it's generated.
-    /// The method automatically retries up to 5 times on connection failures.
+    /// The method automatically retries on connection failures based on the configured retry count.
     ///
     /// # Arguments
     ///
@@ -84,20 +75,10 @@ impl Chat {
     {
         let mut params = params.into_request_params();
         params.stream = Some(true);
-        let mut attempts = 0;
 
-        loop {
-            attempts += 1;
-            match self.send_stream(&params).await {
-                Ok(event_source) => return Self::process_event_stream(event_source).await,
-                Err(error) if attempts >= 5 => return Err(Self::convert_request_error(error)),
-                Err(error) => {
-                    debug!(
-                        "Attempt {}: Retrying request after error: {:?}",
-                        attempts, error
-                    );
-                }
-            }
+        match self.send_stream(&params).await {
+            Ok(event_source) => Self::process_event_stream(event_source).await,
+            Err(error) => Err(Self::convert_request_error(error)),
         }
     }
 }
@@ -134,31 +115,54 @@ impl Chat {
         builder.json(&body_map)
     }
 
-    fn send_unstream(
-        &self,
-        params: &RequestParams,
-    ) -> impl Future<Output = Result<Response, RequestError>> {
-        let config = self.config.read().unwrap();
-        openai_post(
-            &self.client,
-            "/chat/completions",
-            |builder| Self::transform_request_params(builder, params),
-            config.get_api_key(),
-            config.get_base_url(),
-        )
+    // Apply request-level settings to the request builder
+    fn apply_request_settings(builder: RequestBuilder, params: &RequestParams) -> RequestBuilder {
+        let mut builder = Self::transform_request_params(builder, params);
+
+        // Apply request-level timeout setting
+        if let Some(timeout_seconds) = params.timeout_seconds {
+            builder = builder.timeout(Duration::from_secs(timeout_seconds));
+        }
+
+        // Apply request-level User-Agent setting
+        if let Some(user_agent) = &params.user_agent {
+            builder = builder.header(reqwest::header::USER_AGENT, user_agent);
+        }
+
+        builder
     }
 
-    fn send_stream(
-        &self,
-        params: &RequestParams,
-    ) -> impl Future<Output = Result<EventSource, RequestError>> {
-        let config = self.config.read().unwrap();
-        openai_post_stream(
+    async fn send_unstream(&self, params: &RequestParams<'_>) -> Result<Response, RequestError> {
+        let config = self.config.read().await;
+        let retry_count = params
+            .retry_count
+            .unwrap_or_else(|| config.get_retry_count());
+
+        openai_post_with_lock(
             &self.client,
             "/chat/completions",
-            |builder| Self::transform_request_params(builder, params),
+            |builder| Self::apply_request_settings(builder, params),
             config.get_api_key(),
             config.get_base_url(),
+            retry_count,
         )
+        .await
+    }
+
+    async fn send_stream(&self, params: &RequestParams<'_>) -> Result<EventSource, RequestError> {
+        let config = self.config.read().await;
+        let retry_count = params
+            .retry_count
+            .unwrap_or_else(|| config.get_retry_count());
+
+        openai_post_stream_with_lock(
+            &self.client,
+            "/chat/completions",
+            |builder| Self::apply_request_settings(builder, params),
+            config.get_api_key(),
+            config.get_base_url(),
+            retry_count,
+        )
+        .await
     }
 }

@@ -1,0 +1,1940 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI4RS API Reference</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            line-height: 1.5;
+            color: #1a1a1a;
+            background: #ffffff;
+        }
+
+        .header {
+            background: #000;
+            color: white;
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid #333;
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .lang-switch a {
+            color: #888;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+
+        .lang-switch a:hover {
+            color: white;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 0;
+            min-height: calc(100vh - 60px);
+        }
+
+        .sidebar {
+            background: #fafafa;
+            border-right: 1px solid #e1e5e9;
+            padding: 2rem 0;
+            position: sticky;
+            top: 60px;
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+        }
+
+        .sidebar nav {
+            padding: 0 1.5rem;
+        }
+
+        .sidebar ul {
+            list-style: none;
+        }
+
+        .sidebar>nav>ul>li {
+            margin-bottom: 1.5rem;
+        }
+
+        .sidebar>nav>ul>li>a {
+            font-weight: 600;
+            color: #1a1a1a;
+            text-decoration: none;
+            font-size: 0.95rem;
+            display: block;
+            padding: 0.5rem 0;
+        }
+
+        .sidebar ul ul {
+            margin-top: 0.5rem;
+            margin-left: 1rem;
+        }
+
+        .sidebar ul ul li {
+            margin-bottom: 0.25rem;
+        }
+
+        .sidebar ul ul a {
+            color: #666;
+            text-decoration: none;
+            font-size: 0.9rem;
+            display: block;
+            padding: 0.25rem 0;
+            transition: color 0.2s;
+        }
+
+        .sidebar ul ul a:hover {
+            color: #0066cc;
+        }
+
+        .main-content {
+            padding: 2rem;
+            background: white;
+        }
+
+        .api-section {
+            margin-bottom: 3rem;
+        }
+
+        .api-section h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .api-method {
+            background: #fafafa;
+            border: 1px solid #e1e5e9;
+            border-radius: 6px;
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+
+        .method-header {
+            background: white;
+            padding: 1.5rem;
+            border-bottom: 1px solid #e1e5e9;
+        }
+
+        .method-signature {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            font-size: 0.9rem;
+            background: #f8f8f8;
+            padding: 1rem;
+            border-radius: 4px;
+            border-left: 3px solid #0066cc;
+            margin-bottom: 1rem;
+            overflow-x: auto;
+            color: #1a1a1a;
+        }
+
+        .method-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 0.5rem;
+        }
+
+        .method-description {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .method-body {
+            padding: 1.5rem;
+        }
+
+        .params-section,
+        .returns-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 0.75rem;
+        }
+
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .param-table th {
+            background: #f8f8f8;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            color: #1a1a1a;
+            border-bottom: 1px solid #e1e5e9;
+        }
+
+        .param-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f0f0f0;
+            vertical-align: top;
+        }
+
+        .param-name {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            font-weight: 600;
+            color: #d73a49;
+        }
+
+        .param-type {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            color: #6f42c1;
+            font-size: 0.85rem;
+        }
+
+        .param-required {
+            color: #d73a49;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .param-optional {
+            color: #666;
+            font-size: 0.8rem;
+        }
+
+        .code-example {
+            background: #f6f8fa;
+            border: 1px solid #e1e5e9;
+            border-radius: 6px;
+            margin: 1rem 0;
+        }
+
+        .code-header {
+            background: #f1f3f4;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e1e5e9;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #666;
+        }
+
+        .code-content {
+            padding: 1rem;
+        }
+
+        .code-content pre {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.45;
+            color: #1a1a1a;
+            overflow-x: auto;
+        }
+
+        .response-example {
+            background: #f8f9fa;
+            border-left: 3px solid #28a745;
+        }
+
+        .request-example {
+            background: #fff5f5;
+            border-left: 3px solid #dc3545;
+        }
+
+        .overview-section {
+            background: #f8f9fa;
+            padding: 2rem;
+            border-radius: 6px;
+            margin-bottom: 2rem;
+        }
+
+        .overview-section h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #1a1a1a;
+        }
+
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .feature-item {
+            background: white;
+            padding: 1rem;
+            border-radius: 4px;
+            border-left: 3px solid #0066cc;
+        }
+
+        .feature-item h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #1a1a1a;
+        }
+
+        .feature-item p {
+            font-size: 0.85rem;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1>OpenAI4RS API Reference</h1>
+            <div class="lang-switch">
+                <a href="index_en.html">English</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <aside class="sidebar">
+            <nav>
+                <ul>
+                    <li><a href="#overview">概览</a></li>
+                    <li>
+                        <a href="#client">客户端</a>
+                        <ul>
+                            <li><a href="#client-new">new</a></li>
+                            <li><a href="#client-with-config">with_config</a></li>
+                            <li><a href="#client-from-env">from_env</a></li>
+                            <li><a href="#client-update-config">update_config</a></li>
+                            <li><a href="#client-chat">chat</a></li>
+                            <li><a href="#client-completions">completions</a></li>
+                            <li><a href="#client-models">models</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="#config">配置</a>
+                        <ul>
+                            <li><a href="#config-new">new</a></li>
+                            <li><a href="#config-builder">builder</a></li>
+                            <li><a href="#config-build-openai">build_openai</a></li>
+                            <li><a href="#config-getters-setters">getter/setter</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="#request-builders">请求构建器</a>
+                        <ul>
+                            <li><a href="#chat-request">chat_request</a></li>
+                            <li><a href="#completions-request">completions_request</a></li>
+                            <li><a href="#models-request">models_request</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="#chat">聊天完成</a>
+                        <ul>
+                            <li><a href="#chat-create">create</a></li>
+                            <li><a href="#chat-create-stream">create_stream</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="#completions">文本完成</a>
+                        <ul>
+                            <li><a href="#completions-create">create</a></li>
+                            <li><a href="#completions-create-stream">create_stream</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="#models">模型</a>
+                        <ul>
+                            <li><a href="#models-list">list</a></li>
+                            <li><a href="#models-retrieve">retrieve</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="#macros">宏</a>
+                        <ul>
+                            <li><a href="#macro-user">user!</a></li>
+                            <li><a href="#macro-system">system!</a></li>
+                            <li><a href="#macro-tool">tool!</a></li>
+                            <li><a href="#macro-content">content!</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <section id="overview" class="api-section">
+                <div class="overview-section">
+                    <h3>OpenAI4RS</h3>
+                    <p>一个功能完整的 Rust 客户端库，用于与 OpenAI 兼容的 API 进行交互。提供类型安全的异步接口，支持聊天完成、文本完成、模型管理和工具调用。</p>
+
+                    <div class="feature-list">
+                        <div class="feature-item">
+                            <h4>聊天完成</h4>
+                            <p>支持流式和非流式聊天完成，包含工具调用和推理模式</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>文本完成</h4>
+                            <p>传统文本完成 API 支持，兼容旧版模型</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>模型管理</h4>
+                            <p>列出可用模型并获取详细模型信息</p>
+                        </div>
+                        <div class="feature-item">
+                            <h4>类型安全</h4>
+                            <p>完全类型化的 API，编译时错误检查</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="client" class="api-section">
+                <h2>客户端 (OpenAI)</h2>
+
+                <div id="client-new" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">OpenAI::new</div>
+                        <div class="method-signature">pub fn new(api_key: &str, base_url: &str) -> Self</div>
+                        <div class="method-description">创建新的 OpenAI 客户端实例</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">参数</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>名称</th>
+                                        <th>类型</th>
+                                        <th>必需</th>
+                                        <th>描述</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">api_key</span></td>
+                                        <td><span class="param-type">&str</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>OpenAI API 密钥</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">base_url</span></td>
+                                        <td><span class="param-type">&str</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>API 基础 URL</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::OpenAI;
+
+let client = OpenAI::new(
+    "sk-your-api-key",
+    "https://api.openai.com/v1"
+);</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="client-with-config" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">OpenAI::with_config</div>
+                        <div class="method-signature">pub fn with_config(config: Config) -> Self</div>
+                        <div class="method-description">使用自定义配置创建客户端</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">参数</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>名称</th>
+                                        <th>类型</th>
+                                        <th>必需</th>
+                                        <th>描述</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">config</span></td>
+                                        <td><span class="param-type">Config</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>配置实例</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::{Config, OpenAI};
+
+let config = Config::new(
+    "sk-your-api-key".to_string(),
+    "https://api.openai.com/v1".to_string()
+)
+.set_retry_count(3)
+.set_timeout_seconds(120);
+
+let client = OpenAI::with_config(config);</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="client-from-env" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">OpenAI::from_env</div>
+                        <div class="method-signature">pub fn from_env() -> Result&lt;Self, OpenAIError&gt;</div>
+                        <div class="method-description">从环境变量创建客户端</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">环境变量</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>变量名</th>
+                                        <th>必需</th>
+                                        <th>默认值</th>
+                                        <th>描述</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">OPENAI_API_KEY</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>-</td>
+                                        <td>API 密钥</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">OPENAI_BASE_URL</span></td>
+                                        <td><span class="param-optional">可选</span></td>
+                                        <td>https://api.openai.com/v1</td>
+                                        <td>基础 URL</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">OPENAI_TIMEOUT</span></td>
+                                        <td><span class="param-optional">可选</span></td>
+                                        <td>60</td>
+                                        <td>请求超时（秒）</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="returns-section">
+                            <div class="section-title">返回值</div>
+                            <table class="param-table">
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-type">Result&lt;OpenAI, OpenAIError&gt;</span></td>
+                                        <td>客户端实例或错误</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::OpenAI;
+
+let client = OpenAI::from_env()?;</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="client-update-config" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">update_config</div>
+                        <div class="method-signature">pub async fn update_config&lt;F&gt;(&self, update_fn: F)
+                            where F: FnOnce(&mut Config)</div>
+                        <div class="method-description">更新客户端配置</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">参数</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>名称</th>
+                                        <th>类型</th>
+                                        <th>必需</th>
+                                        <th>描述</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">update_fn</span></td>
+                                        <td><span class="param-type">F</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>配置更新函数</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>client.update_config(|config| {
+    config.set_timeout_seconds(120)
+          .set_retry_count(3);
+}).await;</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="client-chat" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">chat</div>
+                        <div class="method-signature">pub fn chat(&self) -> &Chat</div>
+                        <div class="method-description">获取聊天完成客户端实例</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="returns-section">
+                            <div class="section-title">返回值</div>
+                            <table class="param-table">
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-type">&Chat</span></td>
+                                        <td>聊天完成客户端引用</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>let chat_client = client.chat();</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="client-completions" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">completions</div>
+                        <div class="method-signature">pub fn completions(&self) -> &Completions</div>
+                        <div class="method-description">获取文本完成客户端实例</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="returns-section">
+                            <div class="section-title">返回值</div>
+                            <table class="param-table">
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-type">&Completions</span></td>
+                                        <td>文本完成客户端引用</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>let completions_client = client.completions();</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="client-models" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">models</div>
+                        <div class="method-signature">pub fn models(&self) -> &Models</div>
+                        <div class="method-description">获取模型管理客户端实例</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="returns-section">
+                            <div class="section-title">返回值</div>
+                            <table class="param-table">
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-type">&Models</span></td>
+                                        <td>模型管理客户端引用</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>let models_client = client.models();</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="config" class="api-section">
+                <h2>配置 (Config)</h2>
+
+                <div id="config-new" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">Config::new</div>
+                        <div class="method-signature">pub fn new(api_key: String, base_url: String) -> Self</div>
+                        <div class="method-description">创建新的配置实例</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">参数</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>名称</th>
+                                        <th>类型</th>
+                                        <th>必需</th>
+                                        <th>描述</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">api_key</span></td>
+                                        <td><span class="param-type">String</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>API 密钥</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">base_url</span></td>
+                                        <td><span class="param-type">String</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>基础 URL</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::Config;
+
+let config = Config::new(
+    "sk-your-api-key".to_string(),
+    "https://api.openai.com/v1".to_string()
+);</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="config-builder" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">Config::builder</div>
+                        <div class="method-signature">pub fn builder() -> OpenAIConfigBuilder</div>
+                        <div class="method-description">创建配置构建器</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="returns-section">
+                            <div class="section-title">返回值</div>
+                            <table class="param-table">
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-type">OpenAIConfigBuilder</span></td>
+                                        <td>配置构建器实例</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::Config;
+
+let config = Config::builder()
+    .api_key("sk-your-api-key".to_string())
+    .base_url("https://api.openai.com/v1".to_string())
+    .retry_count(3)
+    .timeout_seconds(120)
+    .connect_timeout_seconds(15)
+    .proxy("http://proxy.example.com:8080".to_string())
+    .user_agent("MyApp/1.0".to_string())
+    .build()
+    .unwrap();</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="config-build-openai" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">OpenAIConfigBuilder::build_openai</div>
+                        <div class="method-signature">pub fn build_openai(self) -> Result&lt;OpenAI,
+                            derive_builder::UninitializedFieldError&gt;</div>
+                        <div class="method-description">构建配置并直接创建 OpenAI 客户端</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="returns-section">
+                            <div class="section-title">返回值</div>
+                            <table class="param-table">
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-type">Result&lt;OpenAI, Error&gt;</span></td>
+                                        <td>OpenAI 客户端实例或错误</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::Config;
+
+let client = Config::builder()
+    .api_key("sk-your-api-key".to_string())
+    .base_url("https://api.openai.com/v1".to_string())
+    .retry_count(3)
+    .timeout_seconds(120)
+    .build_openai()
+    .unwrap();</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="config-getters-setters" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">配置 Getter/Setter 方法</div>
+                        <div class="method-description">用于获取和设置配置参数的方法</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">可用方法</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>方法</th>
+                                        <th>类型</th>
+                                        <th>描述</th>
+                                        <th>默认值</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">get_api_key() / set_api_key()</span></td>
+                                        <td><span class="param-type">String</span></td>
+                                        <td>API 密钥</td>
+                                        <td>-</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">get_base_url() / set_base_url()</span></td>
+                                        <td><span class="param-type">String</span></td>
+                                        <td>基础 URL</td>
+                                        <td>-</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">get_retry_count() / set_retry_count()</span></td>
+                                        <td><span class="param-type">u32</span></td>
+                                        <td>重试次数</td>
+                                        <td>5</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">get_timeout_seconds() /
+                                                set_timeout_seconds()</span></td>
+                                        <td><span class="param-type">u64</span></td>
+                                        <td>请求超时（秒）</td>
+                                        <td>60</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">get_connect_timeout_seconds() /
+                                                set_connect_timeout_seconds()</span></td>
+                                        <td><span class="param-type">u64</span></td>
+                                        <td>连接超时（秒）</td>
+                                        <td>10</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">get_proxy() / set_proxy()</span></td>
+                                        <td><span class="param-type">Option&lt;String&gt;</span></td>
+                                        <td>HTTP 代理 URL</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">get_user_agent() / set_user_agent()</span></td>
+                                        <td><span class="param-type">Option&lt;String&gt;</span></td>
+                                        <td>用户代理字符串</td>
+                                        <td>None</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::Config;
+
+let mut config = Config::new(
+    "sk-key".to_string(),
+    "https://api.openai.com/v1".to_string()
+);
+
+// 链式设置
+config.set_retry_count(3)
+      .set_timeout_seconds(120)
+      .set_proxy(Some("http://proxy:8080".to_string()));
+
+// 获取值
+println!("Retry count: {}", config.get_retry_count());
+println!("Timeout: {}", config.get_timeout_seconds());</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="request-builders" class="api-section">
+                <h2>请求构建器</h2>
+
+                <div id="chat-request" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">chat_request</div>
+                        <div class="method-signature">pub fn chat_request&lt;'a&gt;(model: &'a str, messages: &'a
+                            Vec&lt;ChatCompletionMessageParam&gt;) -> RequestParamsBuilder&lt;'a&gt;</div>
+                        <div class="method-description">创建聊天完成请求构建器</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">参数</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>名称</th>
+                                        <th>类型</th>
+                                        <th>必需</th>
+                                        <th>描述</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">model</span></td>
+                                        <td><span class="param-type">&str</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>模型 ID，如 "gpt-4" 或 "o1"</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">messages</span></td>
+                                        <td><span class="param-type">&Vec&lt;ChatCompletionMessageParam&gt;</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>对话消息列表</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="params-section">
+                            <div class="section-title">可链式调用的方法</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>方法</th>
+                                        <th>类型</th>
+                                        <th>描述</th>
+                                        <th>默认值</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">frequency_penalty()</span></td>
+                                        <td><span class="param-type">Option&lt;f32&gt;</span></td>
+                                        <td>频率惩罚，范围 -2.0 到 2.0</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">logit_bias()</span></td>
+                                        <td><span class="param-type">Option&lt;HashMap&lt;String, i32&gt;&gt;</span>
+                                        </td>
+                                        <td>修改指定标记出现的可能性</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">logprobs()</span></td>
+                                        <td><span class="param-type">Option&lt;bool&gt;</span></td>
+                                        <td>是否返回输出标记的对数概率</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">max_completion_tokens()</span></td>
+                                        <td><span class="param-type">Option&lt;i32&gt;</span></td>
+                                        <td>可生成的最大标记数</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">temperature()</span></td>
+                                        <td><span class="param-type">Option&lt;f32&gt;</span></td>
+                                        <td>采样温度，范围 0 到 2</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">top_p()</span></td>
+                                        <td><span class="param-type">Option&lt;f32&gt;</span></td>
+                                        <td>核采样参数</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">tools()</span></td>
+                                        <td><span
+                                                class="param-type">Option&lt;Vec&lt;ChatCompletionToolParam&gt;&gt;</span>
+                                        </td>
+                                        <td>模型可调用的工具列表</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">tool_choice()</span></td>
+                                        <td><span class="param-type">Option&lt;ToolChoice&gt;</span></td>
+                                        <td>控制工具调用行为</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">reasoning_effort()</span></td>
+                                        <td><span class="param-type">Option&lt;ReasoningEffort&gt;</span></td>
+                                        <td>推理模型的努力程度（o系列专用）</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">stream()</span></td>
+                                        <td><span class="param-type">Option&lt;bool&gt;</span></td>
+                                        <td>是否启用流式响应</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">retry_count()</span></td>
+                                        <td><span class="param-type">Option&lt;u32&gt;</span></td>
+                                        <td>重试次数</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">timeout_seconds()</span></td>
+                                        <td><span class="param-type">Option&lt;u64&gt;</span></td>
+                                        <td>请求超时（秒）</td>
+                                        <td>None</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::{chat_request, user, system};
+
+let messages = vec![
+    system!("You are a helpful assistant."),
+    user!("Hello, world!")
+];
+
+let request = chat_request("gpt-4", &messages)
+    .temperature(0.7)
+    .max_completion_tokens(100)
+    .frequency_penalty(0.5);</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="completions-request" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">completions_request</div>
+                        <div class="method-signature">pub fn completions_request&lt;'a&gt;(model: &'a str, prompt: &'a
+                            str) -> RequestParamsBuilder&lt;'a&gt;</div>
+                        <div class="method-description">创建文本完成请求构建器</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">参数</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>名称</th>
+                                        <th>类型</th>
+                                        <th>必需</th>
+                                        <th>描述</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">model</span></td>
+                                        <td><span class="param-type">&str</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>模型 ID</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">prompt</span></td>
+                                        <td><span class="param-type">&str</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>生成完成的提示</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="params-section">
+                            <div class="section-title">可链式调用的方法</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>方法</th>
+                                        <th>类型</th>
+                                        <th>描述</th>
+                                        <th>默认值</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">max_tokens()</span></td>
+                                        <td><span class="param-type">Option&lt;i32&gt;</span></td>
+                                        <td>生成的最大标记数</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">temperature()</span></td>
+                                        <td><span class="param-type">Option&lt;f32&gt;</span></td>
+                                        <td>采样温度，范围 0 到 2</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">top_p()</span></td>
+                                        <td><span class="param-type">Option&lt;f32&gt;</span></td>
+                                        <td>核采样参数</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">frequency_penalty()</span></td>
+                                        <td><span class="param-type">Option&lt;f32&gt;</span></td>
+                                        <td>频率惩罚</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">presence_penalty()</span></td>
+                                        <td><span class="param-type">Option&lt;f32&gt;</span></td>
+                                        <td>存在惩罚</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">n()</span></td>
+                                        <td><span class="param-type">Option&lt;i32&gt;</span></td>
+                                        <td>生成的完成数量</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">stream()</span></td>
+                                        <td><span class="param-type">Option&lt;bool&gt;</span></td>
+                                        <td>是否启用流式响应</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">retry_count()</span></td>
+                                        <td><span class="param-type">Option&lt;u32&gt;</span></td>
+                                        <td>重试次数</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">timeout_seconds()</span></td>
+                                        <td><span class="param-type">Option&lt;u64&gt;</span></td>
+                                        <td>请求超时（秒）</td>
+                                        <td>None</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::completions_request;
+
+let request = completions_request("gpt-3.5-turbo-instruct", "Write a poem about Rust")
+    .max_tokens(100)
+    .temperature(0.8)
+    .frequency_penalty(0.2);</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="models-request" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">models_request</div>
+                        <div class="method-signature">pub fn models_request() -> RequestParamsBuilder</div>
+                        <div class="method-description">创建模型列表请求构建器</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">可链式调用的方法</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>方法</th>
+                                        <th>类型</th>
+                                        <th>描述</th>
+                                        <th>默认值</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">extra_headers()</span></td>
+                                        <td><span class="param-type">Option&lt;HashMap&lt;String,
+                                                serde_json::Value&gt;&gt;</span></td>
+                                        <td>额外的请求头</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">extra_query()</span></td>
+                                        <td><span class="param-type">Option&lt;HashMap&lt;String,
+                                                serde_json::Value&gt;&gt;</span></td>
+                                        <td>额外的查询参数</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">retry_count()</span></td>
+                                        <td><span class="param-type">Option&lt;u32&gt;</span></td>
+                                        <td>重试次数</td>
+                                        <td>None</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">timeout_seconds()</span></td>
+                                        <td><span class="param-type">Option&lt;u64&gt;</span></td>
+                                        <td>请求超时（秒）</td>
+                                        <td>None</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::models_request;
+
+let request = models_request()
+    .retry_count(3)
+    .timeout_seconds(30);</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="chat" class="api-section">
+                <h2>聊天完成 (Chat)</h2>
+
+                <div id="chat-create" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">create</div>
+                        <div class="method-signature">pub async fn create&lt;'a, T&gt;(&self, params: T) ->
+                            Result&lt;ChatCompletion, OpenAIError&gt;
+                            where T: IntoRequestParams&lt;'a&gt;</div>
+                        <div class="method-description">创建聊天完成请求</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">参数</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>名称</th>
+                                        <th>类型</th>
+                                        <th>必需</th>
+                                        <th>描述</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">params</span></td>
+                                        <td><span class="param-type">T</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>请求参数</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="returns-section">
+                            <div class="section-title">返回值</div>
+                            <table class="param-table">
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-type">Result&lt;ChatCompletion, OpenAIError&gt;</span>
+                                        </td>
+                                        <td>聊天完成响应或错误</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">请求示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::{OpenAI, chat_request, user};
+
+let client = OpenAI::from_env()?;
+let messages = vec![user!("Hello, world!")];
+
+let response = client
+    .chat()
+    .create(chat_request("gpt-4", &messages))
+    .await?;</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="chat-create-stream" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">create_stream</div>
+                        <div class="method-signature">pub async fn create_stream&lt;'a, T&gt;(&self, params: T) ->
+                            Result&lt;ReceiverStream&lt;Result&lt;ChatCompletionChunk, OpenAIError&gt;&gt;,
+                            OpenAIError&gt;
+                            where T: IntoRequestParams&lt;'a&gt;</div>
+                        <div class="method-description">创建流式聊天完成请求</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">参数</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>名称</th>
+                                        <th>类型</th>
+                                        <th>必需</th>
+                                        <th>描述</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">params</span></td>
+                                        <td><span class="param-type">T</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>请求参数</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="returns-section">
+                            <div class="section-title">返回值</div>
+                            <table class="param-table">
+                                <tbody>
+                                    <tr>
+                                        <td><span
+                                                class="param-type">Result&lt;ReceiverStream&lt;Result&lt;ChatCompletionChunk,
+                                                OpenAIError&gt;&gt;, OpenAIError&gt;</span></td>
+                                        <td>聊天完成块流或错误</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">请求示例</div>
+                            <div class="code-content">
+                                <pre>use futures::StreamExt;
+use openai4rs::{OpenAI, chat_request, user};
+
+let client = OpenAI::from_env()?;
+let messages = vec![user!("Tell me a story")];
+
+let mut stream = client
+    .chat()
+    .create_stream(chat_request("gpt-4", &messages))
+    .await?;
+
+while let Some(chunk) = stream.next().await {
+    let chunk = chunk?;
+    // 处理响应块
+}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="completions" class="api-section">
+                <h2>文本完成 (Completions)</h2>
+
+                <div id="completions-create" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">create</div>
+                        <div class="method-signature">pub async fn create&lt;'a, T&gt;(&self, params: T) ->
+                            Result&lt;Completion, OpenAIError&gt;
+                            where T: IntoRequestParams&lt;'a&gt;</div>
+                        <div class="method-description">创建文本完成请求</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">参数</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>名称</th>
+                                        <th>类型</th>
+                                        <th>必需</th>
+                                        <th>描述</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">params</span></td>
+                                        <td><span class="param-type">T</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>请求参数</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">请求示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::{OpenAI, completions_request};
+
+let client = OpenAI::from_env()?;
+
+let response = client
+    .completions()
+    .create(completions_request("gpt-3.5-turbo-instruct", "Hello"))
+    .await?;</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="completions-create-stream" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">create_stream</div>
+                        <div class="method-signature">pub async fn create_stream&lt;'a, T&gt;(&self, params: T) ->
+                            Result&lt;ReceiverStream&lt;Result&lt;Completion, OpenAIError&gt;&gt;, OpenAIError&gt;
+                            where T: IntoRequestParams&lt;'a&gt;</div>
+                        <div class="method-description">创建流式文本完成请求</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">参数</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>名称</th>
+                                        <th>类型</th>
+                                        <th>必需</th>
+                                        <th>描述</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">params</span></td>
+                                        <td><span class="param-type">T</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>请求参数</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">请求示例</div>
+                            <div class="code-content">
+                                <pre>use futures::StreamExt;
+use openai4rs::{OpenAI, completions_request};
+
+let client = OpenAI::from_env()?;
+
+let mut stream = client
+    .completions()
+    .create_stream(completions_request("gpt-3.5-turbo-instruct", "Hello"))
+    .await?;</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="models" class="api-section">
+                <h2>模型 (Models)</h2>
+
+                <div id="models-list" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">list</div>
+                        <div class="method-signature">pub async fn list&lt;T&gt;(&self, params: T) ->
+                            Result&lt;ModelsData, OpenAIError&gt;
+                            where T: IntoRequestParams</div>
+                        <div class="method-description">列出可用模型</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">参数</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>名称</th>
+                                        <th>类型</th>
+                                        <th>必需</th>
+                                        <th>描述</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">params</span></td>
+                                        <td><span class="param-type">T</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>请求参数</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">请求示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::{OpenAI, models_request};
+
+let client = OpenAI::from_env()?;
+let models = client.models().list(models_request()).await?;</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="models-retrieve" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">retrieve</div>
+                        <div class="method-signature">pub async fn retrieve&lt;T&gt;(&self, model: &str, params: T) ->
+                            Result&lt;Model, OpenAIError&gt;
+                            where T: IntoRequestParams</div>
+                        <div class="method-description">获取特定模型信息</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="params-section">
+                            <div class="section-title">参数</div>
+                            <table class="param-table">
+                                <thead>
+                                    <tr>
+                                        <th>名称</th>
+                                        <th>类型</th>
+                                        <th>必需</th>
+                                        <th>描述</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="param-name">model</span></td>
+                                        <td><span class="param-type">&str</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>模型 ID</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="param-name">params</span></td>
+                                        <td><span class="param-type">T</span></td>
+                                        <td><span class="param-required">必需</span></td>
+                                        <td>请求参数</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="code-example request-example">
+                            <div class="code-header">请求示例</div>
+                            <div class="code-content">
+                                <pre>use openai4rs::{OpenAI, models_request};
+
+let client = OpenAI::from_env()?;
+let model = client.models().retrieve("gpt-4", models_request()).await?;</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="macros" class="api-section">
+                <h2>宏</h2>
+
+                <div id="macro-user" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">user!</div>
+                        <div class="method-signature">user!(content) -> ChatCompletionMessageParam
+                            user!(content, name) -> ChatCompletionMessageParam</div>
+                        <div class="method-description">创建用户消息</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="code-example request-example">
+                            <div class="code-header">使用示例</div>
+                            <div class="code-content">
+                                <pre>let msg = user!("Hello");
+let msg_with_name = user!("Hello", "Alice");</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="macro-system" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">system!</div>
+                        <div class="method-signature">system!(content) -> ChatCompletionMessageParam
+                            system!(content, name) -> ChatCompletionMessageParam</div>
+                        <div class="method-description">创建系统消息</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="code-example request-example">
+                            <div class="code-header">使用示例</div>
+                            <div class="code-content">
+                                <pre>let msg = system!("You are a helpful assistant.");
+let msg_with_name = system!("You are a helpful assistant.", "assistant");</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="macro-tool" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">tool!</div>
+                        <div class="method-signature">tool!(tool_call_id, content) -> ChatCompletionMessageParam</div>
+                        <div class="method-description">创建工具消息</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="code-example request-example">
+                            <div class="code-header">使用示例</div>
+                            <div class="code-content">
+                                <pre>let tool_msg = tool!("call_123", {"result": 42});</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="macro-content" class="api-method">
+                    <div class="method-header">
+                        <div class="method-title">content!</div>
+                        <div class="method-signature">content!(input) -> Content</div>
+                        <div class="method-description">创建内容对象</div>
+                    </div>
+                    <div class="method-body">
+                        <div class="code-example request-example">
+                            <div class="code-header">使用示例</div>
+                            <div class="code-content">
+                                <pre>let text = content!("Hello world");
+let object = content!({"type": "text", "text": "Hello"});
+let array = content!([1, 2, 3]);</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // 侧边栏高亮功能
+        document.addEventListener('DOMContentLoaded', function () {
+            const sections = document.querySelectorAll('.api-section');
+            const methods = document.querySelectorAll('.api-method');
+            const navLinks = document.querySelectorAll('.sidebar nav a');
+
+            // 获取所有可观察的元素（sections + methods）
+            const observableElements = [...sections, ...methods];
+
+            // 创建交叉观察器
+            const observer = new IntersectionObserver((entries) => {
+                let mostVisible = null;
+                let maxRatio = 0;
+
+                // 找到最可见的元素
+                entries.forEach(entry => {
+                    if (entry.isIntersecting && entry.intersectionRatio > maxRatio) {
+                        maxRatio = entry.intersectionRatio;
+                        mostVisible = entry.target;
+                    }
+                });
+
+                if (mostVisible) {
+                    const id = mostVisible.id;
+
+                    // 移除所有活跃状态
+                    navLinks.forEach(link => {
+                        link.classList.remove('active');
+                        link.parentElement.classList.remove('active');
+                    });
+
+                    // 添加当前活跃状态
+                    const activeLink = document.querySelector(`.sidebar nav a[href="#${id}"]`);
+                    if (activeLink) {
+                        activeLink.classList.add('active');
+                        activeLink.parentElement.classList.add('active');
+
+                        // 如果是子链接，也高亮父级
+                        const parentUl = activeLink.closest('ul');
+                        if (parentUl && parentUl.parentElement.tagName === 'LI') {
+                            const parentLi = parentUl.parentElement;
+                            const parentLink = parentLi.querySelector('a');
+                            if (parentLink) {
+                                parentLink.classList.add('active');
+                                parentLi.classList.add('active');
+                            }
+                        }
+                    }
+                }
+            }, {
+                rootMargin: '-10% 0px -80% 0px',
+                threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+            });
+
+            // 观察所有可观察的元素
+            observableElements.forEach(element => {
+                observer.observe(element);
+            });
+
+            navLinks.forEach(link => {
+                link.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href').substring(1);
+                    const targetElement = document.getElementById(targetId);
+
+                    if (targetElement) {
+                        navLinks.forEach(l => {
+                            l.classList.remove('active');
+                            l.parentElement.classList.remove('active');
+                        });
+
+                        this.classList.add('active');
+                        this.parentElement.classList.add('active');
+
+                        const parentUl = this.closest('ul');
+                        if (parentUl && parentUl.parentElement.tagName === 'LI') {
+                            const parentLi = parentUl.parentElement;
+                            const parentLink = parentLi.querySelector('a');
+                            if (parentLink) {
+                                parentLink.classList.add('active');
+                                parentLi.classList.add('active');
+                            }
+                        }
+
+                        targetElement.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+                });
+            });
+
+            // 滚动时更新高亮
+            let scrollTimeout;
+            window.addEventListener('scroll', function () {
+                clearTimeout(scrollTimeout);
+                scrollTimeout = setTimeout(function () {
+                    // 获取当前可见的元素
+                    const viewportTop = window.scrollY;
+                    const viewportBottom = viewportTop + window.innerHeight;
+
+                    let currentElement = null;
+                    let minDistance = Infinity;
+
+                    observableElements.forEach(element => {
+                        const rect = element.getBoundingClientRect();
+                        const elementTop = rect.top + window.scrollY;
+                        const distance = Math.abs(elementTop - viewportTop - 100); // 100px offset
+
+                        if (rect.top <= 200 && rect.bottom >= 0 && distance < minDistance) {
+                            minDistance = distance;
+                            currentElement = element;
+                        }
+                    });
+
+                    if (currentElement) {
+                        const id = currentElement.id;
+
+                        // 移除所有活跃状态
+                        navLinks.forEach(link => {
+                            link.classList.remove('active');
+                            link.parentElement.classList.remove('active');
+                        });
+
+                        // 添加当前活跃状态
+                        const activeLink = document.querySelector(`.sidebar nav a[href="#${id}"]`);
+                        if (activeLink) {
+                            activeLink.classList.add('active');
+                            activeLink.parentElement.classList.add('active');
+
+                            // 如果是子链接，也高亮父级
+                            const parentUl = activeLink.closest('ul');
+                            if (parentUl && parentUl.parentElement.tagName === 'LI') {
+                                const parentLi = parentUl.parentElement;
+                                const parentLink = parentLi.querySelector('a');
+                                if (parentLink) {
+                                    parentLink.classList.add('active');
+                                    parentLi.classList.add('active');
+                                }
+                            }
+                        }
+                    }
+                }, 100);
+            });
+        });
+
+        // 语言切换功能
+        function switchLanguage(lang) {
+            if (lang === 'en') {
+                window.location.href = 'index_en.html';
+            } else {
+                window.location.href = 'index.html';
+            }
+        }
+    </script>
+
+    <style>
+        /* 侧边栏基础样式改进 */
+        .sidebar nav a {
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            border-radius: 8px;
+            margin: 2px 8px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 8px 16px;
+            background-color: transparent;
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        /* 活跃状态样式 */
+        .sidebar nav a.active {
+            background: linear-gradient(135deg, #007acc 0%, #0056b3 100%) !important;
+            color: white !important;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0, 122, 204, 0.3);
+            transform: translateX(3px) scale(1.02);
+        }
+
+        /* 父级链接活跃状态 */
+        .sidebar nav>ul>li.active>a {
+            background: linear-gradient(135deg, #005999 0%, #003d7a 100%) !important;
+            color: white !important;
+            font-weight: 600;
+            box-shadow: 0 2px 12px rgba(0, 89, 153, 0.4);
+            transform: translateX(2px) scale(1.01);
+        }
+
+        /* 子级链接活跃状态 */
+        .sidebar nav ul li.active>a {
+            background: linear-gradient(135deg, #007acc 0%, #0056b3 100%) !important;
+            color: white !important;
+            box-shadow: 0 1px 6px rgba(0, 122, 204, 0.25);
+            transform: translateX(2px) scale(1.01);
+        }
+
+        /* 悬停效果 */
+        .sidebar nav a:hover {
+            background-color: rgba(0, 122, 204, 0.08);
+            color: #007acc;
+            transform: translateX(1px) scale(1.01);
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 活跃链接的悬停效果 */
+        .sidebar nav a.active:hover {
+            background: linear-gradient(135deg, #0056b3 0%, #003d7a 100%) !important;
+            color: white !important;
+            transform: translateX(4px) scale(1.03);
+            box-shadow: 0 3px 12px rgba(0, 122, 204, 0.4);
+        }
+
+        /* 淡出动画 - 当失去活跃状态时 */
+        .sidebar nav a:not(.active) {
+            transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        /* 添加微妙的动画效果 */
+        .sidebar nav a::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .sidebar nav a.active::before {
+            left: 100%;
+        }
+
+        /* 平滑滚动 */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* 改进侧边栏整体样式 */
+        .sidebar nav ul {
+            padding: 8px 0;
+        }
+
+        .sidebar nav ul ul {
+            padding: 4px 0;
+            margin-left: 12px;
+            border-left: 2px solid rgba(0, 122, 204, 0.1);
+        }
+
+        /* 响应式改进 */
+        @media (max-width: 768px) {
+            .sidebar nav a {
+                margin: 1px 4px;
+                border-radius: 6px;
+            }
+        }
+    </style>
+</body>
+
+</html>

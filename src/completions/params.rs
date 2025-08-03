@@ -1,14 +1,12 @@
-use std::collections::HashMap;
-
 use derive_builder::Builder;
 use serde::Serialize;
+use std::collections::HashMap;
 
-/// Parameters for creating a completion for the provided prompt.
+/// Parameters for creating a completion.
 ///
-/// This struct represents the request parameters for OpenAI's Completions API,
-/// which generates text completions based on a given prompt. Note that this is
-/// the legacy completions endpoint - for most use cases, the Chat Completions API
-/// is recommended instead.
+/// This struct represents the request parameters for OpenAI's Completions API.
+/// Note that the Completions API is legacy and primarily used for older models.
+/// For newer models, the Chat Completions API is recommended.
 #[derive(Debug, Clone, Serialize, Builder)]
 #[builder(name = "RequestParamsBuilder")]
 #[builder(derive(Debug))]
@@ -17,45 +15,33 @@ use serde::Serialize;
 pub struct RequestParams<'a> {
     /// ID of the model to use.
     ///
-    /// You can use the List models API to see all of your available models,
-    /// or see the Model overview for descriptions of them.
+    /// You can use the List Models API to see all of your available models,
+    /// or see our Model overview for descriptions of them.
     pub model: &'a str,
 
-    /// The prompt(s) to generate completions for, encoded as a string, array of
-    /// strings, array of tokens, or array of token arrays.
+    /// The prompt(s) to generate completions for.
     ///
-    /// Note that <|endoftext|> is the document separator that the model sees during
-    /// training, so if a prompt is not specified the model will generate as if from
-    /// the beginning of a new document.
+    /// Note that the API works best when you provide clear instructions
+    /// that define the task and desired output.
     pub prompt: &'a str,
 
-    /// Include the log probabilities on the `logprobs` most likely output tokens,
-    /// as well the chosen tokens.
+    /// The maximum number of tokens to generate in the completion.
     ///
-    /// For example, if `logprobs` is 5, the API will return a list of the 5 most
-    /// likely tokens. The API will always return the `logprob` of the sampled token,
-    /// so there may be up to `logprobs+1` elements in the response.
-    /// The maximum value for `logprobs` is 5.
+    /// The token count of your prompt plus `max_tokens` cannot exceed the
+    /// model's context length. Most models have a context length of 2048 tokens
+    /// (except for the newest models, which support 4096).
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub logprobs: Option<i64>,
-
-    /// The maximum number of tokens that can be generated in the completion.
-    ///
-    /// The token count of your prompt plus `max_tokens` cannot exceed the model's
-    /// context length. See documentation for counting tokens.
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<i64>,
+    pub max_tokens: Option<i32>,
 
     /// What sampling temperature to use, between 0 and 2.
     ///
-    /// Higher values like 0.8 will make the output more random, while lower values
-    /// like 0.2 will make it more focused and deterministic.
+    /// Higher values like 0.8 will make the output more random, while lower
+    /// values like 0.2 will make it more focused and deterministic.
     /// We generally recommend altering this or `top_p` but not both.
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f64>,
+    pub temperature: Option<f32>,
 
     /// An alternative to sampling with temperature, called nucleus sampling.
     ///
@@ -64,63 +50,85 @@ pub struct RequestParams<'a> {
     /// We generally recommend altering this or `temperature` but not both.
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_p: Option<f64>,
+    pub top_p: Option<f32>,
 
     /// How many completions to generate for each prompt.
     ///
-    /// **Note:** Because this parameter generates many completions, it can quickly
-    /// consume your token quota. Use carefully and ensure that you have reasonable
-    /// settings for `max_tokens` and `stop`.
+    /// Note that you will be charged based on the number of generated tokens
+    /// across all of the completions. Keep `n` as `1` to minimize costs.
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub n: Option<i64>,
+    pub n: Option<i32>,
 
     /// Whether to stream back partial progress.
     ///
-    /// If set, tokens will be sent as data-only server-sent events as they become
-    /// available, with the stream terminated by a `data: [DONE]` message.
+    /// If set, tokens will be sent as data-only server-sent events as they
+    /// become available, with the stream terminated by a `data: [DONE]` message.
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream: Option<bool>,
 
-    /// Number between -2.0 and 2.0. Positive values penalize new tokens based on
-    /// whether they appear in the text so far, increasing the model's likelihood
-    /// to talk about new topics.
+    /// Include the log probabilities on the `logprobs` most likely tokens.
     ///
-    /// See more information about frequency and presence penalties in the documentation.
+    /// Set to 0 to disable returning any log probabilities.
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub presence_penalty: Option<f64>,
+    pub logprobs: Option<i32>,
 
-    /// Number between -2.0 and 2.0. Positive values penalize new tokens based on their
-    /// existing frequency in the text so far, decreasing the model's likelihood to
-    /// repeat the same line verbatim.
+    /// Echo back the prompt in addition to the completion.
     ///
-    /// See more information about frequency and presence penalties in the documentation.
+    /// This is useful for debugging and understanding the model's behavior.
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub frequency_penalty: Option<f64>,
+    pub echo: Option<bool>,
 
     /// Up to 4 sequences where the API will stop generating further tokens.
     ///
     /// The returned text will not contain the stop sequence.
-    /// **Note**: This field name appears to be `send` in your struct but should likely be `stop`.
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub send: Option<i64>,
+    pub stop: Option<Vec<String>>,
+
+    /// Number between -2.0 and 2.0. Positive values penalize new tokens based on
+    /// whether they appear in the text so far, increasing the model's likelihood
+    /// to talk about new topics.
+    #[builder(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub presence_penalty: Option<f32>,
+
+    /// Number between -2.0 and 2.0. Positive values penalize new tokens based on their
+    /// existing frequency in the text so far, decreasing the model's likelihood to
+    /// repeat the same line verbatim.
+    #[builder(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frequency_penalty: Option<f32>,
+
+    /// Generates `best_of` completions server-side and returns the "best"
+    /// (the one with the highest log probability per token).
+    ///
+    /// Results cannot be streamed. When used with `n`, `best_of` controls the
+    /// number of candidate completions and `n` specifies how many to return.
+    /// `best_of` must be greater than or equal to `n`.
+    /// Note: Because this parameter generates many completions, it can quickly
+    /// consume your token quota. Use carefully and ensure that you have reasonable
+    /// settings for `max_tokens` and `stop`.
+    #[builder(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub best_of: Option<i32>,
 
     /// Modify the likelihood of specified tokens appearing in the completion.
     ///
-    /// Accepts a JSON object that maps tokens (specified by their token ID in the GPT
-    /// tokenizer) to an associated bias value from -100 to 100. You can use the
-    /// tokenizer tool to convert text to token IDs. Mathematically, the bias is added
-    /// to the logits generated by the model prior to sampling.
-    ///
-    /// As an example, you can pass `{"50256": -100}` to prevent the <|endoftext|> token
-    /// from being generated.
+    /// Accepts a JSON object that maps tokens (specified by their token ID in the
+    /// tokenizer) to an associated bias value from -100 to 100.
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub logit_bias: Option<HashMap<String, serde_json::Value>>,
+    pub logit_bias: Option<HashMap<String, i32>>,
+
+    /// A unique identifier representing your end-user, which can help OpenAI
+    /// to monitor and detect abuse.
+    #[builder(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
 
     /// Send extra headers with the request.
     ///
@@ -142,9 +150,30 @@ pub struct RequestParams<'a> {
     #[builder(default)]
     #[serde(skip_serializing)]
     pub extra_body: Option<HashMap<String, serde_json::Value>>,
+
+    /// HTTP request retry count, overrides the client's global setting.
+    ///
+    /// This field is not serialized in the request body.
+    #[builder(default)]
+    #[serde(skip_serializing)]
+    pub retry_count: Option<u32>,
+
+    /// HTTP request timeout in seconds, overrides the client's global setting.
+    ///
+    /// This field is not serialized in the request body.
+    #[builder(default)]
+    #[serde(skip_serializing)]
+    pub timeout_seconds: Option<u64>,
+
+    /// HTTP request User-Agent, overrides the client's global setting.
+    ///
+    /// This field is not serialized in the request body.
+    #[builder(default)]
+    #[serde(skip_serializing)]
+    pub user_agent: Option<String>,
 }
 
-pub fn comletions_request<'a>(model: &'a str, prompt: &'a str) -> RequestParamsBuilder<'a> {
+pub fn completions_request<'a>(model: &'a str, prompt: &'a str) -> RequestParamsBuilder<'a> {
     RequestParamsBuilder::create_empty()
         .model(model)
         .prompt(prompt)
