@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use serde_json::Value;
+use std::collections::HashMap;
 
 pub fn merge_extra_metadata(
     left: Option<HashMap<String, Value>>,

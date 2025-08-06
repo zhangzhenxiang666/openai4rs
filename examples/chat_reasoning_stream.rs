@@ -1,7 +1,7 @@
 use dotenvy::dotenv;
-use openai4rs::error::OpenAIError;
 use openai4rs::{
-    Apply, ChatCompletionChunk, ChatCompletionMessageParam, OpenAI, chat_request, user,
+    Apply, ChatCompletionChunk, ChatCompletionMessageParam, OpenAI, chat_request,
+    error::OpenAIError, user,
 };
 use std::io;
 use tokio_stream::wrappers::ReceiverStream;
@@ -34,35 +34,39 @@ async fn main() {
             .unwrap();
 
         messages.push(ChatCompletionMessageParam::assistant_from_str(
-            process_stream(stream).as_str(),
+            process_stream(stream).await.as_str(),
         ))
     }
 }
 
-fn process_stream(stream: ReceiverStream<Result<ChatCompletionChunk, OpenAIError>>) -> String {
-    let stream = stream;
-    let mut ai_output = String::new();
-    let mut first = true;
+async fn process_stream(
+    stream: ReceiverStream<Result<ChatCompletionChunk, OpenAIError>>,
+) -> String {
     println!("\n# ASSISTANT\n");
-    stream.apply(|result| {
-        let chunk = result.expect("Error processing stream");
-
-        for choice in chunk.choices.iter() {
-            if choice.delta.is_reasoning() && first {
-                first = false;
-                println!("## REASONING\n\n{}", choice.delta.get_reasoning_str())
-            } else if choice.delta.is_reasoning() {
-                print!("{}", choice.delta.get_reasoning_str());
-            } else if !first {
-                println!("\n\n## CONTENT\n\n");
-                first = true;
-            }
-            if let Some(data) = choice.delta.content.as_ref() {
-                print!("{}", data);
-                ai_output.push_str(data);
-            }
-        }
-    });
+    let (ai_output, ..) = stream
+        .fold_async((String::new(), true), |capture, result| {
+            Box::pin(async move {
+                let chunk = result.expect("Error processing stream");
+                let (mut ai_output, mut first) = capture;
+                for choice in chunk.choices.iter() {
+                    if choice.delta.is_reasoning() && first {
+                        first = false;
+                        println!("## REASONING\n\n{}", choice.delta.get_reasoning_str())
+                    } else if choice.delta.is_reasoning() {
+                        print!("{}", choice.delta.get_reasoning_str());
+                    } else if !first {
+                        println!("\n\n## CONTENT\n\n");
+                        first = true;
+                    }
+                    if let Some(data) = choice.delta.content.as_ref() {
+                        print!("{}", data);
+                        ai_output.push_str(data);
+                    }
+                }
+                (ai_output, first)
+            })
+        })
+        .await;
     println!("\n");
     ai_output
 }

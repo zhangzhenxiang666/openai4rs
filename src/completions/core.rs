@@ -1,11 +1,10 @@
 use super::params::{IntoRequestParams, RequestParams};
 use super::types::Completion;
 use crate::client::Config;
-use crate::error::{OpenAIError, RequestError};
-use crate::utils::traits::{ResponseProcess, StreamProcess};
-use crate::utils::{openai_post_stream_with_lock, openai_post_with_lock};
-use reqwest::{Client, RequestBuilder, Response};
-use reqwest_eventsource::EventSource;
+use crate::client::http::{openai_post_stream_with_lock, openai_post_with_lock};
+use crate::error::OpenAIError;
+use crate::utils::traits::ResponseHandler;
+use reqwest::{Client, RequestBuilder};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -29,10 +28,22 @@ impl Completions {
         let mut params = params.into_request_params();
         params.stream = Some(false);
 
-        match self.send_unstream(&params).await {
-            Ok(response) => Self::process_response(response).await,
-            Err(error) => Err(Self::convert_request_error(error)),
-        }
+        let config = self.config.read().await;
+        let retry_count = params
+            .retry_count
+            .unwrap_or_else(|| config.get_retry_count());
+
+        let response = openai_post_with_lock(
+            &self.client,
+            "/completions",
+            |builder| Self::apply_request_settings(builder, &params),
+            config.get_api_key(),
+            config.get_base_url(),
+            retry_count,
+        )
+        .await?;
+
+        Self::process_unary(response).await
     }
 
     pub async fn create_stream<'a, T>(
@@ -45,18 +56,32 @@ impl Completions {
         let mut params = params.into_request_params();
         params.stream = Some(true);
 
-        match self.send_stream(&params).await {
-            Ok(event_source) => Self::process_event_stream(event_source).await,
-            Err(error) => Err(Self::convert_request_error(error)),
-        }
+        let config = self.config.read().await;
+        let retry_count = params
+            .retry_count
+            .unwrap_or_else(|| config.get_retry_count());
+
+        let event_source = openai_post_stream_with_lock(
+            &self.client,
+            "/completions",
+            |builder| Self::apply_request_settings(builder, &params),
+            config.get_api_key(),
+            config.get_base_url(),
+            retry_count,
+        )
+        .await?;
+
+        Ok(Self::process_stream(event_source).await)
     }
 }
 
-impl ResponseProcess for Completions {}
-impl StreamProcess<Completion> for Completions {}
+impl ResponseHandler for Completions {}
 
 impl Completions {
-    fn transform_request_params(builder: RequestBuilder, params: &RequestParams) -> RequestBuilder {
+    fn apply_request_settings(
+        builder: RequestBuilder,
+        params: &RequestParams<'_>,
+    ) -> RequestBuilder {
         let mut builder = builder;
 
         if let Some(headers) = &params.extra_headers {
@@ -81,57 +106,16 @@ impl Completions {
             body_map.extend(extra_body.iter().map(|(k, v)| (k.clone(), v.clone())));
         }
 
-        builder.json(&body_map)
-    }
+        builder = builder.json(&body_map);
 
-    // Apply request-level settings to the request builder
-    fn apply_request_settings(builder: RequestBuilder, params: &RequestParams) -> RequestBuilder {
-        let mut builder = Self::transform_request_params(builder, params);
-
-        // Apply request-level timeout setting
         if let Some(timeout_seconds) = params.timeout_seconds {
             builder = builder.timeout(Duration::from_secs(timeout_seconds));
         }
 
-        // Apply request-level User-Agent setting
         if let Some(user_agent) = &params.user_agent {
             builder = builder.header(reqwest::header::USER_AGENT, user_agent);
         }
 
         builder
-    }
-
-    async fn send_unstream(&self, params: &RequestParams<'_>) -> Result<Response, RequestError> {
-        let config = self.config.read().await;
-        let retry_count = params
-            .retry_count
-            .unwrap_or_else(|| config.get_retry_count());
-
-        openai_post_with_lock(
-            &self.client,
-            "/completions",
-            |builder| Self::apply_request_settings(builder, params),
-            config.get_api_key(),
-            config.get_base_url(),
-            retry_count,
-        )
-        .await
-    }
-
-    async fn send_stream(&self, params: &RequestParams<'_>) -> Result<EventSource, RequestError> {
-        let config = self.config.read().await;
-        let retry_count = params
-            .retry_count
-            .unwrap_or_else(|| config.get_retry_count());
-
-        openai_post_stream_with_lock(
-            &self.client,
-            "/completions",
-            |builder| Self::apply_request_settings(builder, params),
-            config.get_api_key(),
-            config.get_base_url(),
-            retry_count,
-        )
-        .await
     }
 }

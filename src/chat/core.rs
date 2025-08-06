@@ -1,21 +1,17 @@
 use super::params::{IntoRequestParams, RequestParams};
 use super::types::{ChatCompletion, ChatCompletionChunk};
 use crate::client::Config;
-use crate::error::{OpenAIError, RequestError};
-use crate::utils::traits::{ResponseProcess, StreamProcess};
-use crate::utils::{openai_post_stream_with_lock, openai_post_with_lock};
-use reqwest::{Client, RequestBuilder, Response};
-use reqwest_eventsource::EventSource;
+use crate::client::http::{openai_post_stream_with_lock, openai_post_with_lock};
+use crate::error::OpenAIError;
+use crate::utils::traits::ResponseHandler;
+use reqwest::{Client, RequestBuilder};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
 
-/// A chat client for interacting with OpenAI-compatible APIs.
-///
-/// The `Chat` struct provides methods for creating both streaming and non-streaming
-/// chat completions with automatic retry logic and error handling.
+/// 处理聊天补全请求，包括流式和非流式模式。
 pub struct Chat {
     config: Arc<RwLock<Config>>,
     client: Arc<RwLock<Client>>,
@@ -26,19 +22,30 @@ impl Chat {
         Self { config, client }
     }
 
-    /// Creates a non-streaming chat completion request.
+    /// 创建一个聊天补全。
     ///
-    /// This method sends a chat completion request and waits for the complete response.
-    /// It automatically retries on failure based on the configured retry count and handles rate limiting.
+    /// 此方法向 API 发送一个请求，并在单个响应中返回完整的补全。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `params` - Request parameters that can be converted into `RequestParams`
+    /// * `params` - 聊天补全的一组参数，例如模型和消息。可以使用 `chat_request` 创建。
     ///
-    /// # Returns
+    /// # 示例
     ///
-    /// Returns a `Result` containing either a `ChatCompletion` on success or an `OpenAIError` on failure.
-    ///
+    /// ```rust,no_run
+    /// use openai4rs::{OpenAI, chat_request, user};
+    /// use dotenvy::dotenv;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     dotenv().ok();
+    ///     let client = OpenAI::from_env()?;
+    ///     let messages = vec![user!("什么是 Rust？")];
+    ///     let request = chat_request("deepseek/deepseek-chat-v3-0324:free", &messages);
+    ///     let response = client.chat().create(request).await?;
+    ///     println!("{:#?}", response);
+    ///     Ok(())
+    /// }
+    /// ```
     pub async fn create<'a, T>(&self, params: T) -> Result<ChatCompletion, OpenAIError>
     where
         T: IntoRequestParams<'a>,
@@ -46,26 +53,57 @@ impl Chat {
         let mut params = params.into_request_params();
         params.stream = Some(false);
 
-        match self.send_unstream(&params).await {
-            Ok(response) => Self::process_response(response).await,
-            Err(error) => Err(Self::convert_request_error(error)),
-        }
+        let config = self.config.read().await;
+        let retry_count = params
+            .retry_count
+            .unwrap_or_else(|| config.get_retry_count());
+
+        let response = openai_post_with_lock(
+            &self.client,
+            "/chat/completions",
+            |builder| Self::apply_request_settings(builder, &params),
+            config.get_api_key(),
+            config.get_base_url(),
+            retry_count,
+        )
+        .await?;
+
+        Self::process_unary(response).await
     }
 
-    /// Creates a streaming chat completion request.
+    /// 创建一个流式聊天补全。
     ///
-    /// This method sends a chat completion request and returns a stream of response chunks.
-    /// It's useful for real-time applications where you want to display the response as it's generated.
-    /// The method automatically retries on connection failures based on the configured retry count.
+    /// 此方法返回一个 `ChatCompletionChunk` 事件流。这对于在生成补全时实时显示非常有用。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `params` - Request parameters that can be converted into `RequestParams`
+    /// * `params` - 聊天补全的一组参数，例如模型和消息。可以使用 `chat_request` 创建。
     ///
-    /// # Returns
+    /// # 示例
     ///
-    /// Returns a `Result` containing either a `ReceiverStream` of `ChatCompletionChunk` items
-    /// on success or an `OpenAIError` on failure.
+    /// ```rust,no_run
+    /// use openai4rs::{OpenAI, chat_request, user};
+    /// use futures::StreamExt;
+    /// use dotenvy::dotenv;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     dotenv().ok();
+    ///     let client = OpenAI::from_env()?;
+    ///     let messages = vec![user!("给我讲一个短篇故事。")];
+    ///     let request = chat_request("deepseek/deepseek-chat-v3-0324:free", &messages);
+    ///     let mut stream = client.chat().create_stream(request).await?;
+    ///
+    ///     while let Some(chunk) = stream.next().await {
+    ///         let chunk = chunk?;
+    ///         if let Some(choice) = chunk.choices.first() {
+    ///             if let Some(content) = &choice.delta.content {
+    ///                 print!("{}", content);
+    ///             }
+    ///         }
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
     pub async fn create_stream<'a, T>(
         &self,
         params: T,
@@ -76,18 +114,32 @@ impl Chat {
         let mut params = params.into_request_params();
         params.stream = Some(true);
 
-        match self.send_stream(&params).await {
-            Ok(event_source) => Self::process_event_stream(event_source).await,
-            Err(error) => Err(Self::convert_request_error(error)),
-        }
+        let config = self.config.read().await;
+        let retry_count = params
+            .retry_count
+            .unwrap_or_else(|| config.get_retry_count());
+
+        let event_source = openai_post_stream_with_lock(
+            &self.client,
+            "/chat/completions",
+            |builder| Self::apply_request_settings(builder, &params),
+            config.get_api_key(),
+            config.get_base_url(),
+            retry_count,
+        )
+        .await?;
+
+        Ok(Self::process_stream(event_source).await)
     }
 }
 
-impl ResponseProcess for Chat {}
-impl StreamProcess<ChatCompletionChunk> for Chat {}
+impl ResponseHandler for Chat {}
 
 impl Chat {
-    fn transform_request_params(builder: RequestBuilder, params: &RequestParams) -> RequestBuilder {
+    fn apply_request_settings(
+        builder: RequestBuilder,
+        params: &RequestParams<'_>,
+    ) -> RequestBuilder {
         let mut builder = builder;
 
         if let Some(headers) = &params.extra_headers {
@@ -112,57 +164,16 @@ impl Chat {
             body_map.extend(extra_body.iter().map(|(k, v)| (k.clone(), v.clone())));
         }
 
-        builder.json(&body_map)
-    }
+        builder = builder.json(&body_map);
 
-    // Apply request-level settings to the request builder
-    fn apply_request_settings(builder: RequestBuilder, params: &RequestParams) -> RequestBuilder {
-        let mut builder = Self::transform_request_params(builder, params);
-
-        // Apply request-level timeout setting
         if let Some(timeout_seconds) = params.timeout_seconds {
             builder = builder.timeout(Duration::from_secs(timeout_seconds));
         }
 
-        // Apply request-level User-Agent setting
         if let Some(user_agent) = &params.user_agent {
             builder = builder.header(reqwest::header::USER_AGENT, user_agent);
         }
 
         builder
-    }
-
-    async fn send_unstream(&self, params: &RequestParams<'_>) -> Result<Response, RequestError> {
-        let config = self.config.read().await;
-        let retry_count = params
-            .retry_count
-            .unwrap_or_else(|| config.get_retry_count());
-
-        openai_post_with_lock(
-            &self.client,
-            "/chat/completions",
-            |builder| Self::apply_request_settings(builder, params),
-            config.get_api_key(),
-            config.get_base_url(),
-            retry_count,
-        )
-        .await
-    }
-
-    async fn send_stream(&self, params: &RequestParams<'_>) -> Result<EventSource, RequestError> {
-        let config = self.config.read().await;
-        let retry_count = params
-            .retry_count
-            .unwrap_or_else(|| config.get_retry_count());
-
-        openai_post_stream_with_lock(
-            &self.client,
-            "/chat/completions",
-            |builder| Self::apply_request_settings(builder, params),
-            config.get_api_key(),
-            config.get_base_url(),
-            retry_count,
-        )
-        .await
     }
 }

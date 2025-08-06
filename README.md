@@ -42,7 +42,7 @@
 
 ```toml
 [dependencies]
-openai4rs = "0.1.3"
+openai4rs = "0.1.4"
 tokio = { version = "1.45.1", features = ["full"] }
 futures = "0.3.31"
 ```
@@ -213,98 +213,6 @@ async fn main() {
             }
         }
     }
-}
-```
-
-### 🔄 流处理工具
-
-#### Apply - 同步遍历
-
-使用 `Apply` trait 可以更方便地处理流数据：
-
-```rust
-use openai4rs::{Apply, OpenAI, chat_request, user};
-
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("请介绍一下 Rust 编程语言")];
-
-    let stream = client
-        .chat()
-        .create_stream(chat_request("your_model_name", &messages))
-        .await
-        .unwrap();
-
-    // 同步处理每个响应块
-    stream.apply(|result| {
-        let chunk = result.unwrap();
-        println!("处理响应块: {:#?}", chunk);
-    });
-}
-```
-
-#### Apply - 异步遍历
-
-##### 简单异步处理
-
-```rust
-use openai4rs::{Apply, OpenAI, chat_request, user};
-
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("解释一下什么是机器学习")];
-    
-    let stream = client
-        .chat()
-        .create_stream(chat_request("your_model_name", &messages))
-        .await
-        .unwrap();
-        
-    stream
-        .apply_async(|result| async move {
-            let chunk = result.unwrap();
-            // 可以在这里执行异步操作
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-            println!("异步处理: {:#?}", chunk);
-        })
-        .await;
-}
-```
-
-##### 捕获外部状态的异步处理
-
-```rust
-use openai4rs::{Apply, OpenAI, chat_request, user};
-
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("请写一首关于编程的诗")];
-
-    let stream = client
-        .chat()
-        .create_stream(chat_request("your_model_name", &messages))
-        .await
-        .unwrap();
-
-    // 收集完整的AI输出
-    let complete_response = stream
-        .apply_with_capture_async(String::new(), |accumulated, result| {
-            Box::pin(async move {
-                let chunk = result.expect("处理流时出错");
-                for choice in chunk.choices.iter() {
-                    if let Some(content) = choice.delta.content.as_ref() {
-                        print!("{}", content); // 实时显示
-                        accumulated.push_str(content); // 累积内容
-                    }
-                }
-            })
-        })
-        .await;
-
-    println!("\n\n完整响应:\n{}", complete_response);
 }
 ```
 
