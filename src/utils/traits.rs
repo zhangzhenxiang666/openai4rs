@@ -22,7 +22,7 @@ where
 pub trait ResponseHandler {
     async fn process_unary<T>(response: Response) -> Result<T, OpenAIError>
     where
-        T: DeserializeOwned + Send + 'static,
+        T: DeserializeOwned,
     {
         if response.status().is_success() {
             let raw = response.text().await.map_err(ProcessingError::TextRead)?;

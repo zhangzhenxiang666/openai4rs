@@ -29,16 +29,14 @@ impl Completions {
         params.stream = Some(false);
 
         let config = self.config.read().await;
-        let retry_count = params
-            .retry_count
-            .unwrap_or_else(|| config.get_retry_count());
+        let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
 
         let response = openai_post_with_lock(
             &self.client,
             "/completions",
             |builder| Self::apply_request_settings(builder, &params),
-            config.get_api_key(),
-            config.get_base_url(),
+            config.api_key(),
+            config.base_url(),
             retry_count,
         )
         .await?;
@@ -57,16 +55,14 @@ impl Completions {
         params.stream = Some(true);
 
         let config = self.config.read().await;
-        let retry_count = params
-            .retry_count
-            .unwrap_or_else(|| config.get_retry_count());
+        let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
 
         let event_source = openai_post_stream_with_lock(
             &self.client,
             "/completions",
             |builder| Self::apply_request_settings(builder, &params),
-            config.get_api_key(),
-            config.get_base_url(),
+            config.api_key(),
+            config.base_url(),
             retry_count,
         )
         .await?;
@@ -96,10 +92,8 @@ impl Completions {
 
         let mut body_map = HashMap::new();
 
-        if let Ok(params_value) = serde_json::to_value(params) {
-            if let Some(params_obj) = params_value.as_object() {
-                body_map.extend(params_obj.iter().map(|(k, v)| (k.clone(), v.clone())));
-            }
+        if let Ok(serde_json::Value::Object(obj)) = serde_json::to_value(params) {
+            body_map.extend(obj);
         }
 
         if let Some(extra_body) = &params.extra_body {

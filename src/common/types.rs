@@ -8,12 +8,12 @@ fn default_id() -> String {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CompletionGeneric<T> {
+    pub created: i64,
     #[serde(default = "default_id")]
     pub id: String,
-    pub choices: Vec<T>,
-    pub created: i64,
     pub model: String,
     pub object: String,
+    pub choices: Vec<T>,
     pub service_tier: Option<ServiceTier>,
     pub system_fingerprint: Option<String>,
     pub usage: Option<CompletionUsage>,

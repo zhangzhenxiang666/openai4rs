@@ -14,9 +14,10 @@
 
 - ✅ 流式响应
 - ✅ 工具调用
-- ✅ 思考模式
+- ✅ 多轮对话
+- ✅ 视觉（Vision）API（如果模型支持）
 
-### 📝 Completions 文本补全
+### 📝 Completions 文本补全 (Legacy)
 
 - ✅ 非流式响应
 - ✅ 流式响应
@@ -33,6 +34,7 @@
 - ✅ 可配置的连接超时
 - ✅ HTTP 代理支持
 - ✅ 自定义 User-Agent
+- ✅ 自定义 Headers
 
 ## 🚀 快速开始
 
@@ -42,9 +44,10 @@
 
 ```toml
 [dependencies]
-openai4rs = "0.1.4"
+openai4rs = "0.1.5"
 tokio = { version = "1.45.1", features = ["full"] }
 futures = "0.3.31"
+dotenvy = "0.15"
 ```
 
 或使用 cargo 命令：
@@ -56,77 +59,90 @@ cargo add openai4rs
 ### 基础使用
 
 ```rust
-use openai4rs::{OpenAI, chat_request, user};
+use dotenvy::dotenv;
+use openai4rs::*;
 
 #[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("Hello, world!")];
-    
-    let response = client
-        .chat()
-        .create(chat_request("gpt-3.5-turbo", &messages))
-        .await
-        .unwrap();
-        
-    println!("{:#?}", response);
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv().ok();
+    let client = OpenAI::from_env()?;
+
+    let model = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
+    let messages = vec![
+        system!(content: "You are a helpful assistant."),
+        user!(content: "Introduce the Rust programming language in one sentence."),
+    ];
+
+    let request = chat_request(model, &messages);
+
+    let response = client.chat().create(request).await?;
+
+    if let Some(content) = response.content() {
+        println!("\nResponse:\n{}", content);
+    } else {
+        println!("\nNo content in response.");
+    }
+
+    Ok(())
 }
 ```
 
-## 📚 详细使用指南
+## 📚 核心用法
 
 ### **🗨️ Chat 聊天**
-
-#### 非流式聊天
-
-最简单的聊天方式，一次性获取完整响应：
-
-```rust
-use openai4rs::{OpenAI, chat_request, user};
-
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("你好，请介绍一下你自己")];
-    
-    let chat_completion = client
-        .chat()
-        .create(chat_request("your_model_name", &messages))
-        .await
-        .unwrap();
-        
-    println!("{:#?}", chat_completion);
-}
-```
 
 #### 流式聊天
 
 实时接收响应内容，适合需要逐步显示的场景：
 
 ```rust
+use std::io::{self, Write};
+
+use dotenvy::dotenv;
 use futures::StreamExt;
-use openai4rs::{OpenAI, chat_request, user};
+use openai4rs::*;
 
 #[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("请写一个关于人工智能的故事")];
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv().ok();
+    let client = OpenAI::from_env()?;
+
+    let model = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
+    let messages = vec![
+        system!(content: "You are a helpful assistant."),
+        user!(content: "Introduce the Rust programming language in one sentence."),
+    ];
+
+    let request = chat_request(model, &messages).build()?;
+
+    println!("Sending request to model: {}...", model);
     
-    let mut stream = client
-        .chat()
-        .create_stream(chat_request("your_model_name", &messages))
-        .await
-        .unwrap();
-        
-    while let Some(result) = stream.next().await {
-        let chunk = result.unwrap();
-        // 处理每个响应块
-        for choice in chunk.choices.iter() {
-            if let Some(content) = &choice.delta.content {
-                print!("{}", content);
+    let mut stream = client.chat().create_stream(request).await?;
+    let mut first_content = true;
+
+    while let Some(chunk_result) = stream.next().await {
+        match chunk_result {
+            Ok(chunk) => {
+                if chunk.has_content() {
+                    if first_content {
+                        println!("\n========Response========");
+                        first_content = false;
+                    }
+                    if let Some(content) = chunk.content() {
+                        print!("{}", content);
+                        io::stdout().flush()?;
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("\nAn error occurred during streaming: {}", e);
+                break;
             }
         }
     }
+    println!();
+
+    Ok(())
 }
 ```
 
@@ -135,305 +151,230 @@ async fn main() {
 让模型能够调用外部工具来增强功能：
 
 ```rust
-use futures::StreamExt;
-use openai4rs::{ChatCompletionToolParam, OpenAI, chat_request, user, ToolChoice};
+use dotenvy::dotenv;
+use openai4rs::*;
+use serde_json::json;
 
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    
-    // 定义工具
-    let tools = vec![ChatCompletionToolParam::function(
-        "get_current_time",
-        "获取当前时间",
-        serde_json::json!({
-            "type": "object",
-            "properties": {},
-            "description": "获取当前的日期和时间"
-        }),
-    )];
-
-    let messages = vec![user!("现在几点了？")];
-    
-    let mut stream = client
-        .chat()
-        .create_stream(
-            chat_request("your_model_name", &messages)
-                .tools(tools)
-                .tool_choice(ToolChoice::Auto)
-        )
-        .await
-        .unwrap();
-        
-    while let Some(result) = stream.next().await {
-        match result {
-            Ok(chunk) => {
-                println!("收到响应: {:#?}", chunk);
-            }
-            Err(err) => {
-                eprintln!("错误: {:#?}", err);
-            }
-        }
-    }
+// Mock function to get weather data
+fn get_current_weather(location: &str, unit: Option<&str>) -> String {
+    let unit = unit.unwrap_or("celsius");
+    format!(
+        "The current weather in {} is 22 degrees {}.",
+        location, unit
+    )
 }
-```
-
-#### 🧠 思考模式
-
-供应商返回字段为reasoning或reasoning_content都会映射到reasoning字段。
-适用于支持思考功能的模型（如 qwen 的 qwq-32b）：
-
-```rust
-use futures::StreamExt;
-use openai4rs::{OpenAI, chat_request, user};
 
 #[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("请解决这个数学问题：如果一个三角形的两边分别是3和4，第三边是5，这是什么类型的三角形？")];
-    
-    let mut stream = client
-        .chat()
-        .create_stream(chat_request("qwq-32b", &messages))
-        .await
-        .unwrap();
-        
-    while let Some(result) = stream.next().await {
-        let chunk = result.unwrap();
-        for choice in chunk.choices.iter() {
-            // 显示模型的思考过程
-            if choice.delta.is_reasoning() {
-                println!("🤔 思考过程:\n{}", choice.delta.get_reasoning_str());
-            }
-            // 显示最终回答
-            if let Some(content) = &choice.delta.content {
-                if !content.is_empty() {
-                    println!("💡 回答:\n{}", content);
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv().ok();
+    let client = OpenAI::from_env()?;
+
+    let model = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
+
+    // 1. Define the tool (function)
+    let weather_tool_params = Parameters::object()
+        .property(
+            "location",
+            Parameters::string()
+                .description("The city and state, e.g. San Francisco, CA")
+                .build(),
+        )
+        .property(
+            "unit",
+            Parameters::string()
+                .description("The unit of temperature, e.g. celsius or fahrenheit")
+                .build(),
+        )
+        .require("location")
+        .build()?;
+
+    let weather_tool = ChatCompletionToolParam::function(
+        "get_current_weather",
+        "Get the current weather in a given location",
+        weather_tool_params,
+    );
+
+    // 2. Create the initial message and request
+    let messages = vec![
+        system!(content: "You are a helpful assistant."),
+        user!(content: "What's the weather like in Boston today?"),
+    ];
+
+    let request = chat_request(model, &messages)
+        .tools(vec![weather_tool])
+        .tool_choice(ToolChoice::Auto)
+        .build()?;
+
+    let response = client.chat().create(request).await?;
+
+    // 3. Check if the model wants to call a tool
+    if response.has_tool_calls() {
+        let tool_calls = response.tool_calls().unwrap();
+
+        // For simplicity, we'll only handle the first tool call
+        if let Some(tool_call) = tool_calls.first() {
+            let function_name = &tool_call.function.name;
+            let arguments_str = &tool_call.function.arguments;
+
+            if function_name == "get_current_weather" {
+                let args: serde_json::Value = serde_json::from_str(arguments_str)?;
+                let location = args["location"].as_str().unwrap_or("Unknown");
+                let unit = args["unit"].as_str();
+
+                // 4. Call the function and get the result
+                let function_result = get_current_weather(location, unit);
+
+                // 5. Send the function result back to the model
+                let mut new_messages = messages.clone();
+                new_messages.push(response.first_choice_message().unwrap().clone().into());
+                new_messages.push(tool!(
+                    tool_call_id = tool_call.function.id.clone(),
+                    content = function_result
+                ));
+
+                let follow_up_request = chat_request(model, &new_messages).build()?;
+
+                let final_response = client.chat().create(follow_up_request).await?;
+                if let Some(content) = final_response.content() {
+                    println!("\nFinal Assistant Response:\n{}", content);
                 }
             }
         }
-    }
-}
-```
-
-### 🔗 响应合并与消息映射
-
-#### 合并流式响应输出(使用重载的 `+` 运行符)
-
-将流式响应合并为完整的回复内容：
-
-```rust
-use futures::stream::StreamExt;
-use openai4rs::{OpenAI, StreamChoice, chat_request, user};
-
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("请详细介绍一下 Rust 的所有权机制")];
-
-    let mut stream = client
-        .chat()
-        .create_stream(chat_request("your_model_name", &messages))
-        .await
-        .unwrap();
-
-    let mut merged_choice: Option<StreamChoice> = None;
-    while let Some(result) = stream.next().await {
-        let chat_completion_chunk = result.unwrap();
-        let choice = chat_completion_chunk.choices[0].clone();
-        merged_choice = Some(match merged_choice {
-            Some(l) => l + choice,
-            None => choice,
-        })
-    }
-    println!("{:#?}", merged_choice.unwrap());
-}
-```
-
-#### 将响应映射到消息链
-
-```rust
-use futures::stream::StreamExt;
-use openai4rs::{OpenAI, StreamChoice, chat_request, user};
-
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let mut messages = vec![user!("请详细介绍一下 Rust 的所有权机制")];
-
-    let mut stream = client
-        .chat()
-        .create_stream(chat_request("your_model_name", &messages))
-        .await
-        .unwrap();
-
-    let mut merged_choice: Option<StreamChoice> = None;
-    while let Some(result) = stream.next().await {
-        let chat_completion_chunk = result.unwrap();
-        let choice = chat_completion_chunk.choices[0].clone();
-        merged_choice = Some(match merged_choice {
-            Some(l) => l + choice,
-            None => choice,
-        })
-    }
-    messages.push(merged_choice.unwrap().delta.into());
-
-    messages.push(user!("好的, 谢谢你"));
-
-    let chat_completion = client
-        .chat()
-        .create(chat_request("your_model_name", &messages))
-        .await
-        .unwrap();
-
-    messages.push(chat_completion.choices[0].message.clone().into())
-}
-```
-
-### **📝 Completions 文本补全**
-
-#### 非流式补全
-
-```rust
-use openai4rs::{OpenAI, completions_request};
-
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    
-    let completion = client
-        .completions()
-        .create(completions_request("your_model_name", "请补全这句话：人工智能的未来"))
-        .await
-        .unwrap();
-        
-    println!("补全结果: {:#?}", completion);
-}
-```
-
-#### 流式补全
-
-```rust
-use futures::StreamExt;
-use openai4rs::{OpenAI, completions_request};
-
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    
-    let mut stream = client
-        .completions()
-        .create_stream(completions_request("your_model_name", "编写一个快速排序算法："))
-        .await
-        .unwrap();
-        
-    while let Some(result) = stream.next().await {
-        match result {
-            Ok(completion) => {
-                println!("补全内容: {:#?}", completion);
-            }
-            Err(err) => {
-                eprintln!("错误: {}", err);
-            }
+    } else {
+        // If no tool call, just print the content
+        if let Some(content) = response.content() {
+            println!("\nAssistant Response:\n{}", content);
         }
     }
+
+    Ok(())
 }
 ```
 
-### **🤖 Models 模型管理**
+#### 🧠 多轮对话
 
-#### 获取所有可用模型
+维护一个具有上下文的多轮对话：
 
 ```rust
-use openai4rs::{OpenAI, models_request};
+use dotenvy::dotenv;
+use openai4rs::*;
+use std::io::{stdin, stdout, Write};
 
 #[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    
-    let models = client
-        .models()
-        .list(models_request())
-        .await
-        .unwrap();
-        
-    println!("可用模型:");
-    for model in models.data.iter() {
-        println!("- {}: {}", model.id, model.created);
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv().ok();
+    let client = OpenAI::from_env()?;
+
+    let model = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
+    let mut messages = vec![system!(content: "You are a helpful assistant.")];
+
+    loop {
+        print!("You: ");
+        stdout().flush()?;
+        let mut user_input = String::new();
+        stdin().read_line(&mut user_input)?;
+        let user_input = user_input.trim();
+
+        if user_input.eq_ignore_ascii_case("exit") {
+            println!("Goodbye!");
+            break;
+        }
+
+        messages.push(user!(content: user_input));
+
+        let request = chat_request(model, &messages);
+
+        let response = client.chat().create(request).await?;
+        if let Some(content) = response.content() {
+            println!("Assistant: {}\n", content);
+            messages.push(assistant!(content));
+        } else {
+            println!("Assistant: No response.\n");
+        }
     }
+
+    Ok(())
 }
 ```
 
-## 🔧 配置选项
+### **🔧 高级配置**
 
-### 客户端配置
+#### 客户端配置
 
 ```rust
-use openai4rs::{OpenAI, Config};
+use dotenvy::dotenv;
+use openai4rs::*;
+use std::collections::HashMap;
 
-// 基础配置
-let client = OpenAI::new("your_api_key", "https://api.openai.com/v1");
-
-// 使用环境变量创建客户端
-// 环境变量: OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_TIMEOUT, OPENAI_CONNECT_TIMEOUT, OPENAI_RETRY_COUNT, OPENAI_PROXY, OPENAI_USER_AGENT
-let client = OpenAI::from_env().unwrap();
-
-// 使用自定义配置创建客户端
-let mut config = Config::new("your_api_key".to_string(), "https://api.openai.com/v1".to_string());
-config.set_retry_count(3)                                   // 设置最大重试次数为3
-      .set_timeout_seconds(120)                             // 设置请求超时为120秒
-      .set_connect_timeout_seconds(5)                       // 设置连接超时为5秒
-      .set_proxy(Some("http://localhost:8080".to_string())) // 设置HTTP代理
-      .set_user_agent(Some("MyApp/1.0".to_string()));       // 设置自定义User-Agent
-
-let client = OpenAI::with_config(config);
-
-// 动态更新客户端配置
-client.update_config(|config| {
-    config.set_timeout_seconds(180)
-          .set_retry_count(2);
-}).await;
-
-// 异步获取和设置 API 配置
 #[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "https://api.openai.com/v1");
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv().ok();
     
-    // 获取配置信息
-    let base_url = client.get_base_url().await;
-    let api_key = client.get_api_key().await;
+    // Get the API key and base URL from the environment
+    let api_key = std::env::var("OPENAI_API_KEY")?;
+    let base_url = std::env::var("OPENAI_BASE_URL")?;
+
+    // 1. Basic client with default settings
+    let basic_client = OpenAI::new(&api_key, &base_url);
+
+    // 2. Client with a custom base URL (e.g., for a proxy or a different provider)
+    let _custom_base_url_client = Config::builder()
+        .api_key(api_key.clone())
+        .base_url(base_url.clone()) // Replace with your custom base URL
+        .build_openai()?;
+
+    // 3. Client with a proxy
+    let _proxy_client = Config::builder()
+        .api_key(api_key.clone())
+        .base_url(base_url.clone())
+        .proxy("http://proxy.example.com:8080".to_string()) // Replace with your proxy URL
+        .build_openai()?;
+
+    // 4. Client with custom headers
+    let mut custom_headers = HashMap::new();
+    custom_headers.insert("X-Custom-Header".to_string(), "custom_value".into());
     
-    // 更新配置信息
-    client.set_base_url("https://api.custom-provider.com/v1".to_string()).await;
-    client.set_api_key("new-api-key".to_string()).await;
+    let _custom_headers_client = Config::builder()
+        .api_key(api_key.clone())
+        .base_url(base_url.clone())
+        .extra_headers(custom_headers)
+        .build_openai()?;
+
+    // 5. Client with custom timeout
+    let _timeout_client = Config::builder()
+        .api_key(api_key)
+        .base_url(base_url.clone())
+        .timeout_seconds(120) // 2 minutes
+        .build_openai()?;
+
+    Ok(())
 }
 ```
 
-### 请求参数配置
-
-```rust
-use openai4rs::{chat_request, user};
-
-let messages = vec![user!("Hello")];
-
-let request = chat_request("gpt-3.5-turbo", &messages)
-    .temperature(0.7)             // 控制随机性
-    .max_completion_tokens(1000)  // 最大token数
-    .top_p(0.9)                   // 核心采样
-    .frequency_penalty(0.1)       // 频率惩罚
-    .presence_penalty(0.1);       // 存在惩罚
-```
-
-## 📖 更多示例
+## 📖 运行示例
 
 查看 [examples](examples/) 目录获取更多使用示例：
 
-- [基础聊天](examples/chat.rs)
-- [流式响应](examples/chat_stream.rs)
-- [工具调用](examples/tool.rs)
-- [思考模式](examples/chat_reasoning_stream.rs)
-- [HTTP请求配置](examples/http_config.rs)
-- [自定义配置](examples/custom_config.rs)
+- [01. 基础聊天](examples/01_simple_chat.rs)
+- [02. 流式响应](examples/02_streaming_chat.rs)
+- [03. 多轮对话](examples/03_multi_turn_chat.rs)
+- [04. 工具调用](examples/04_tool_use.rs)
+- [05. 客户端配置](examples/05_client_configuration.rs)
+- [06. 视觉（Vision）API](examples/06_vision.rs) (如果模型支持)
+- [07. 思维模型（Thinking Model）](examples/07_thinking_model.rs) (如果模型支持复杂推理)
+
+你可以通过以下命令运行示例：
+
+```bash
+# 设置环境变量
+export OPENAI_API_KEY=your_api_key
+export OPENAI_BASE_URL=your_base_url # 可选, 默认为 https://api.openai.com/v1
+
+# 运行示例
+cargo run --example 01_simple_chat
+cargo run --example 02_streaming_chat
+# ... 其他示例
+```
 
 ## 📄 许可证
 

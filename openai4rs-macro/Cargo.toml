@@ -1,0 +1,19 @@
+[package]
+name = "openai4rs-macro"
+version = "0.1.0"
+edition = "2024"
+description = "Macros for the openai4rs crate"
+license = "Apache-2.0"
+repository = "https://github.com/zhangzhenxiang666/openai4rs"
+readme = "../README.md"
+keywords = ["ai", "openai", "macro", "proc-macro"]
+categories = ["api-bindings", "asynchronous", "science"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro-crate = "3.1.0"
+syn = { version = "2.0" }
+quote = "1.0"
+proc-macro2 = "1.0"

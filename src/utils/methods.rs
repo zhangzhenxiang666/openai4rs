@@ -1,27 +1,34 @@
 use serde_json::Value;
 use std::collections::HashMap;
 
-pub fn merge_extra_metadata(
-    left: Option<HashMap<String, Value>>,
+/// Merges `right` metadata into `left` metadata in-place.
+/// If `left` is `None` and `right` is `Some`, `left` will be replaced by `right`.
+/// This avoids unnecessary cloning of the left map when it already exists.
+pub fn merge_extra_metadata_in_place(
+    left: &mut Option<HashMap<String, Value>>,
     right: Option<HashMap<String, Value>>,
-) -> Option<HashMap<String, Value>> {
-    match (left, right) {
+) {
+    match (left.take(), right) {
+        // Both maps exist, merge `right` into `left` and put the result back in `left`.
         (Some(mut left_map), Some(right_map)) => {
             for (key, right_value) in right_map {
-                match left_map.get(&key) {
-                    Some(left_value) => {
-                        left_map.insert(key, merge_json_values(left_value.clone(), right_value));
-                    }
-                    None => {
-                        left_map.insert(key, right_value);
-                    }
+                if left_map.contains_key(&key) {
+                    let left_value = left_map.remove(&key).unwrap();
+                    left_map.insert(key, merge_json_values(left_value, right_value));
+                } else {
+                    left_map.insert(key, right_value);
                 }
             }
-            Some(left_map)
+            *left = Some(left_map);
         }
-        (Some(left_map), None) => Some(left_map),
-        (None, Some(right_map)) => Some(right_map),
-        (None, None) => None,
+        // Only left map exists, put it back as is.
+        (Some(left_map), None) => {
+            *left = Some(left_map);
+        }
+        // Only right map exists, or both are None, put right (or None) in left.
+        (None, right_map) => {
+            *left = right_map;
+        }
     }
 }
 
@@ -29,13 +36,11 @@ pub fn merge_json_values(left: Value, right: Value) -> Value {
     match (left, right) {
         (Value::Object(mut left_obj), Value::Object(right_obj)) => {
             for (key, right_value) in right_obj {
-                match left_obj.get(&key) {
-                    Some(left_value) => {
-                        left_obj.insert(key, merge_json_values(left_value.clone(), right_value));
-                    }
-                    None => {
-                        left_obj.insert(key, right_value);
-                    }
+                if left_obj.contains_key(&key) {
+                    let left_value = left_obj.remove(&key).unwrap();
+                    left_obj.insert(key, merge_json_values(left_value, right_value));
+                } else {
+                    left_obj.insert(key, right_value);
                 }
             }
             Value::Object(left_obj)

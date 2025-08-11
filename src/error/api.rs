@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::utils::traits::AsyncFrom;
 
-/// 表示由 OpenAI API 返回的错误。
+/// Represents an error returned by the OpenAI API.
 #[derive(Debug, Error)]
 #[error("API error: Status {status}, Kind {kind:?}, Message: {message}")]
 pub struct ApiError {
@@ -16,7 +16,7 @@ pub struct ApiError {
     pub r#type: Option<String>,
 }
 
-/// 基于 HTTP 状态码的 API 错误分类。
+/// API error classification based on HTTP status codes.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ApiErrorKind {
     BadRequest,
@@ -48,24 +48,29 @@ impl From<u16> for ApiErrorKind {
 }
 
 impl ApiError {
-    /// 如果错误是身份验证错误 (HTTP 401)，则返回 `true`。
+    /// Returns `true` if the error is an authentication error (HTTP 401).
     pub fn is_authentication(&self) -> bool {
         self.kind == ApiErrorKind::Authentication
     }
 
-    /// 如果错误是速率限制错误 (HTTP 429)，则返回 `true`。
+    /// Returns `true` if the error is a rate limit error (HTTP 429).
     pub fn is_rate_limit(&self) -> bool {
         self.kind == ApiErrorKind::RateLimit
     }
 
-    /// 如果错误是服务器端错误 (HTTP 5xx)，则返回 `true`。
+    /// Returns `true` if the error is a server-side error (HTTP 5xx).
     pub fn is_server_error(&self) -> bool {
         self.kind == ApiErrorKind::InternalServer
     }
 
-    /// 如果错误是错误请求错误 (HTTP 400)，则返回 `true`。
+    /// Returns `true` if the error is a bad request error (HTTP 400).
     pub fn is_bad_request(&self) -> bool {
         self.kind == ApiErrorKind::BadRequest
+    }
+
+    /// Returns `true` if the request conflict (HTTP 409).
+    pub fn is_conflict(&self) -> bool {
+        self.kind == ApiErrorKind::Conflict
     }
 }
 
@@ -99,5 +104,119 @@ impl AsyncFrom<Response> for ApiError {
             code,
             r#type,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_api_error_kind_from_status_code() {
+        // Test all defined status codes
+        assert_eq!(ApiErrorKind::from(400), ApiErrorKind::BadRequest);
+        assert_eq!(ApiErrorKind::from(401), ApiErrorKind::Authentication);
+        assert_eq!(ApiErrorKind::from(403), ApiErrorKind::PermissionDenied);
+        assert_eq!(ApiErrorKind::from(404), ApiErrorKind::NotFound);
+        assert_eq!(ApiErrorKind::from(409), ApiErrorKind::Conflict);
+        assert_eq!(ApiErrorKind::from(422), ApiErrorKind::UnprocessableEntity);
+        assert_eq!(ApiErrorKind::from(429), ApiErrorKind::RateLimit);
+        assert_eq!(ApiErrorKind::from(500), ApiErrorKind::InternalServer);
+        assert_eq!(ApiErrorKind::from(503), ApiErrorKind::InternalServer);
+
+        // Test other status codes
+        assert_eq!(ApiErrorKind::from(200), ApiErrorKind::Other);
+        assert_eq!(ApiErrorKind::from(301), ApiErrorKind::Other);
+        assert_eq!(ApiErrorKind::from(600), ApiErrorKind::Other);
+    }
+
+    #[test]
+    fn test_api_error_helpers() {
+        let auth_error = ApiError {
+            status: 401,
+            kind: ApiErrorKind::Authentication,
+            message: "Invalid API key".to_string(),
+            code: Some("invalid_key".to_string()),
+            r#type: Some("authentication_error".to_string()),
+        };
+
+        let rate_limit_error = ApiError {
+            status: 429,
+            kind: ApiErrorKind::RateLimit,
+            message: "Rate limit exceeded".to_string(),
+            code: Some("rate_limit_exceeded".to_string()),
+            r#type: Some("rate_limit_error".to_string()),
+        };
+
+        let server_error = ApiError {
+            status: 500,
+            kind: ApiErrorKind::InternalServer,
+            message: "Internal server error".to_string(),
+            code: Some("internal_error".to_string()),
+            r#type: Some("server_error".to_string()),
+        };
+
+        let bad_request_error = ApiError {
+            status: 400,
+            kind: ApiErrorKind::BadRequest,
+            message: "Bad request".to_string(),
+            code: Some("bad_request".to_string()),
+            r#type: Some("invalid_request_error".to_string()),
+        };
+
+        let conflict_error = ApiError {
+            status: 409,
+            kind: ApiErrorKind::Conflict,
+            message: "Conflict".to_string(),
+            code: Some("conflict".to_string()),
+            r#type: Some("conflict_error".to_string()),
+        };
+
+        // Test helper methods
+        assert!(auth_error.is_authentication());
+        assert!(!auth_error.is_rate_limit());
+        assert!(!auth_error.is_server_error());
+        assert!(!auth_error.is_bad_request());
+        assert!(!auth_error.is_conflict());
+
+        assert!(rate_limit_error.is_rate_limit());
+        assert!(!rate_limit_error.is_authentication());
+        assert!(!rate_limit_error.is_server_error());
+        assert!(!rate_limit_error.is_bad_request());
+        assert!(!rate_limit_error.is_conflict());
+
+        assert!(server_error.is_server_error());
+        assert!(!server_error.is_authentication());
+        assert!(!server_error.is_rate_limit());
+        assert!(!server_error.is_bad_request());
+        assert!(!server_error.is_conflict());
+
+        assert!(bad_request_error.is_bad_request());
+        assert!(!bad_request_error.is_authentication());
+        assert!(!bad_request_error.is_rate_limit());
+        assert!(!bad_request_error.is_server_error());
+        assert!(!bad_request_error.is_conflict());
+
+        assert!(conflict_error.is_conflict());
+        assert!(!conflict_error.is_authentication());
+        assert!(!conflict_error.is_rate_limit());
+        assert!(!conflict_error.is_server_error());
+        assert!(!conflict_error.is_bad_request());
+    }
+
+    #[test]
+    fn test_api_error_display() {
+        let error = ApiError {
+            status: 401,
+            kind: ApiErrorKind::Authentication,
+            message: "Invalid API key".to_string(),
+            code: Some("invalid_key".to_string()),
+            r#type: Some("authentication_error".to_string()),
+        };
+
+        let error_string = format!("{}", error);
+        assert!(error_string.contains("API error"));
+        assert!(error_string.contains("401"));
+        assert!(error_string.contains("Invalid API key"));
     }
 }

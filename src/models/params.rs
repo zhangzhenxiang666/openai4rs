@@ -2,54 +2,56 @@ use derive_builder::Builder;
 use serde::Serialize;
 use std::collections::HashMap;
 
-/// 用于列出模型的参数。
+/// Parameters for listing models.
 ///
-/// 该结构体代表 OpenAI 模型 API 的请求参数。
-/// 它允许您查询可用模型及其功能。
+/// This struct represents the request parameters for the OpenAI models API.
+/// It allows you to query available models and their capabilities.
 #[derive(Debug, Clone, Serialize, Builder)]
-#[builder(name = "RequestParamsBuilder")]
-#[builder(derive(Debug))]
-#[builder(pattern = "owned")]
-#[builder(setter(strip_option))]
+#[builder(
+    name = "RequestParamsBuilder",
+    derive(Debug),
+    pattern = "owned",
+    setter(strip_option)
+)]
 pub struct RequestParams {
-    /// 随请求发送额外的标头。
+    /// Send additional headers with the request.
     ///
-    /// 此字段不会在请求正文中序列化。
+    /// This field will not be serialized in the request body.
     #[builder(default)]
     #[serde(skip_serializing)]
     pub extra_headers: Option<HashMap<String, serde_json::Value>>,
 
-    /// 向请求添加额外的查询参数。
+    /// Add additional query parameters to the request.
     ///
-    /// 此字段不会在请求正文中序列化。
+    /// This field will not be serialized in the request body.
     #[builder(default)]
     #[serde(skip_serializing)]
     pub extra_query: Option<HashMap<String, serde_json::Value>>,
 
-    /// 向请求添加额外的 JSON 属性。
+    /// Add additional JSON properties to the request.
     ///
-    /// 此字段不会在请求正文中序列化。
+    /// This field will not be serialized in the request body.
     #[builder(default)]
     #[serde(skip_serializing)]
     pub extra_body: Option<HashMap<String, serde_json::Value>>,
 
-    /// HTTP 请求重试次数，覆盖客户端的全局设置。
+    /// HTTP request retry count, overriding the client's global setting.
     ///
-    /// 此字段不会在请求正文中序列化。
+    /// This field will not be serialized in the request body.
     #[builder(default)]
     #[serde(skip_serializing)]
     pub retry_count: Option<u32>,
 
-    /// HTTP 请求超时时间（秒），覆盖客户端的全局设置。
+    /// HTTP request timeout in seconds, overriding the client's global setting.
     ///
-    /// 此字段不会在请求正文中序列化。
+    /// This field will not be serialized in the request body.
     #[builder(default)]
     #[serde(skip_serializing)]
     pub timeout_seconds: Option<u64>,
 
-    /// HTTP 请求 User-Agent，覆盖客户端的全局设置。
+    /// HTTP request User-Agent, overriding the client's global setting.
     ///
-    /// 此字段不会在请求正文中序列化。
+    /// This field will not be serialized in the request body.
     #[builder(default)]
     #[serde(skip_serializing)]
     pub user_agent: Option<String>,

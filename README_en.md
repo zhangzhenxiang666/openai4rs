@@ -14,9 +14,10 @@ An asynchronous Rust crate based on `tokio` and `reqwest` for interacting with l
 
 - ✅ Streaming responses
 - ✅ Tool calling
-- ✅ Reasoning mode
+- ✅ Multi-turn conversations
+- ✅ Vision API (if supported by the model)
 
-### 📝 Completions
+### 📝 Completions (Legacy)
 
 - ✅ Non-streaming responses
 - ✅ Streaming responses
@@ -33,6 +34,7 @@ An asynchronous Rust crate based on `tokio` and `reqwest` for interacting with l
 - ✅ Configurable connection timeout
 - ✅ HTTP proxy support
 - ✅ Custom User-Agent
+- ✅ Custom Headers
 
 ## 🚀 Quick Start
 
@@ -42,9 +44,10 @@ Add the dependencies to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-openai4rs = "0.1.3"
+openai4rs = "0.1.5"
 tokio = { version = "1.45.1", features = ["full"] }
 futures = "0.3.31"
+dotenvy = "0.15"
 ```
 
 Or use the cargo command:
@@ -56,77 +59,90 @@ cargo add openai4rs
 ### Basic Usage
 
 ```rust
-use openai4rs::{OpenAI, chat_request, user};
+use dotenvy::dotenv;
+use openai4rs::*;
 
 #[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("Hello, world!")];
-    
-    let response = client
-        .chat()
-        .create(chat_request("gpt-3.5-turbo", &messages))
-        .await
-        .unwrap();
-        
-    println!("{:#?}", response);
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv().ok();
+    let client = OpenAI::from_env()?;
+
+    let model = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
+    let messages = vec![
+        system!(content: "You are a helpful assistant."),
+        user!(content: "Introduce the Rust programming language in one sentence."),
+    ];
+
+    let request = chat_request(model, &messages);
+
+    let response = client.chat().create(request).await?;
+
+    if let Some(content) = response.content() {
+        println!("\nResponse:\n{}", content);
+    } else {
+        println!("\nNo content in response.");
+    }
+
+    Ok(())
 }
 ```
 
-## 📚 Detailed Usage Guide
+## 📚 Core Usage
 
 ### **🗨️ Chat**
-
-#### Non-streaming Chat
-
-The simplest way to chat, getting the complete response at once:
-
-```rust
-use openai4rs::{OpenAI, chat_request, user};
-
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("Hello, please introduce yourself")];
-    
-    let chat_completion = client
-        .chat()
-        .create(chat_request("your_model_name", &messages))
-        .await
-        .unwrap();
-        
-    println!("{:#?}", chat_completion);
-}
-```
 
 #### Streaming Chat
 
 Receive response content in real-time, suitable for scenarios that require progressive display:
 
 ```rust
+use std::io::{self, Write};
+
+use dotenvy::dotenv;
 use futures::StreamExt;
-use openai4rs::{OpenAI, chat_request, user};
+use openai4rs::*;
 
 #[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("Please write a story about artificial intelligence")];
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv().ok();
+    let client = OpenAI::from_env()?;
+
+    let model = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
+    let messages = vec![
+        system!(content: "You are a helpful assistant."),
+        user!(content: "Introduce the Rust programming language in one sentence."),
+    ];
+
+    let request = chat_request(model, &messages).build()?;
+
+    println!("Sending request to model: {}...", model);
     
-    let mut stream = client
-        .chat()
-        .create_stream(chat_request("your_model_name", &messages))
-        .await
-        .unwrap();
-        
-    while let Some(result) = stream.next().await {
-        let chunk = result.unwrap();
-        // Process each response chunk
-        for choice in chunk.choices.iter() {
-            if let Some(content) = &choice.delta.content {
-                print!("{}", content);
+    let mut stream = client.chat().create_stream(request).await?;
+    let mut first_content = true;
+
+    while let Some(chunk_result) = stream.next().await {
+        match chunk_result {
+            Ok(chunk) => {
+                if chunk.has_content() {
+                    if first_content {
+                        println!("\n========Response========");
+                        first_content = false;
+                    }
+                    if let Some(content) = chunk.content() {
+                        print!("{}", content);
+                        io::stdout().flush()?;
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("\nAn error occurred during streaming: {}", e);
+                break;
             }
         }
     }
+    println!();
+
+    Ok(())
 }
 ```
 
@@ -135,308 +151,234 @@ async fn main() {
 Allow the model to call external tools to enhance its functionality:
 
 ```rust
-use futures::StreamExt;
-use openai4rs::{ChatCompletionToolParam, OpenAI, chat_request, user, ToolChoice};
+use dotenvy::dotenv;
+use openai4rs::*;
+use serde_json::json;
 
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    
-    // Define the tool
-    let tools = vec![ChatCompletionToolParam::function(
-        "get_current_time",
-        "Get the current time",
-        serde_json::json!({
-            "type": "object",
-            "properties": {},
-            "description": "Get the current date and time"
-        }),
-    )];
-
-    let messages = vec![user!("What time is it now?")];
-    
-    let mut stream = client
-        .chat()
-        .create_stream(
-            chat_request("your_model_name", &messages)
-                .tools(tools)
-                .tool_choice(ToolChoice::Auto)
-        )
-        .await
-        .unwrap();
-        
-    while let Some(result) = stream.next().await {
-        match result {
-            Ok(chunk) => {
-                println!("Received chunk: {:#?}", chunk);
-            }
-            Err(err) => {
-                eprintln!("Error: {:#?}", err);
-            }
-        }
-    }
+// Mock function to get weather data
+fn get_current_weather(location: &str, unit: Option<&str>) -> String {
+    let unit = unit.unwrap_or("celsius");
+    format!(
+        "The current weather in {} is 22 degrees {}.",
+        location, unit
+    )
 }
-```
-
-#### 🧠 Reasoning Mode
-
-Fields returned by the provider as `reasoning` or `reasoning_content` will be mapped to the `reasoning` field. Applicable to models that support reasoning functionality (e.g., qwen's qwq-32b):
-
-```rust
-use futures::StreamExt;
-use openai4rs::{OpenAI, chat_request, user};
 
 #[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("Please solve this math problem: If two sides of a triangle are 3 and 4, and the third side is 5, what type of triangle is it?")];
-    
-    let mut stream = client
-        .chat()
-        .create_stream(chat_request("qwq-32b", &messages))
-        .await
-        .unwrap();
-        
-    while let Some(result) = stream.next().await {
-        let chunk = result.unwrap();
-        for choice in chunk.choices.iter() {
-            // Display the model's reasoning process
-            if choice.delta.is_reasoning() {
-                println!("🤔 Reasoning Process:\n{}", choice.delta.get_reasoning_str());
-            }
-            // Display the final answer
-            if let Some(content) = &choice.delta.content {
-                if !content.is_empty() {
-                    println!("💡 Answer:\n{}", content);
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv().ok();
+    let client = OpenAI::from_env()?;
+
+    let model = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
+
+    // 1. Define the tool (function)
+    let weather_tool_params = Parameters::object()
+        .property(
+            "location",
+            Parameters::string()
+                .description("The city and state, e.g. San Francisco, CA")
+                .build(),
+        )
+        .property(
+            "unit",
+            Parameters::string()
+                .description("The unit of temperature, e.g. celsius or fahrenheit")
+                .build(),
+        )
+        .require("location")
+        .build()?;
+
+    let weather_tool = ChatCompletionToolParam::function(
+        "get_current_weather",
+        "Get the current weather in a given location",
+        weather_tool_params,
+    );
+
+    // 2. Create the initial message and request
+    let messages = vec![
+        system!(content: "You are a helpful assistant."),
+        user!(content: "What's the weather like in Boston today?"),
+    ];
+
+    let request = chat_request(model, &messages)
+        .tools(vec![weather_tool])
+        .tool_choice(ToolChoice::Auto)
+        .build()?;
+
+    let response = client.chat().create(request).await?;
+
+    // 3. Check if the model wants to call a tool
+    if response.has_tool_calls() {
+        let tool_calls = response.tool_calls().unwrap();
+
+        // For simplicity, we'll only handle the first tool call
+        if let Some(tool_call) = tool_calls.first() {
+            let function_name = &tool_call.function.name;
+            let arguments_str = &tool_call.function.arguments;
+
+            if function_name == "get_current_weather" {
+                let args: serde_json::Value = serde_json::from_str(arguments_str)?;
+                let location = args["location"].as_str().unwrap_or("Unknown");
+                let unit = args["unit"].as_str();
+
+                // 4. Call the function and get the result
+                let function_result = get_current_weather(location, unit);
+
+                // 5. Send the function result back to the model
+                let mut new_messages = messages.clone();
+                new_messages.push(response.first_choice_message().unwrap().clone().into());
+                new_messages.push(tool!(
+                    tool_call_id = tool_call.function.id.clone(),
+                    content = function_result
+                ));
+
+                let follow_up_request = chat_request(model, &new_messages).build()?;
+
+                let final_response = client.chat().create(follow_up_request).await?;
+                if let Some(content) = final_response.content() {
+                    println!("\nFinal Assistant Response:\n{}", content);
                 }
             }
         }
-    }
-}
-```
-
-### 🔗 Response Merging and Message Mapping
-
-#### Merge Streaming Response Output (using the overloaded `+` operator)
-
-Merge the streaming response into a complete reply:
-
-```rust
-use futures::stream::StreamExt;
-use openai4rs::{OpenAI, StreamChoice, chat_request, user};
-
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let messages = vec![user!("Please explain Rust's ownership system in detail")];
-
-    let mut stream = client
-        .chat()
-        .create_stream(chat_request("your_model_name", &messages))
-        .await
-        .unwrap();
-
-    let mut merged_choice: Option<StreamChoice> = None;
-    while let Some(result) = stream.next().await {
-        let chat_completion_chunk = result.unwrap();
-        let choice = chat_completion_chunk.choices[0].clone();
-        merged_choice = Some(match merged_choice {
-            Some(l) => l + choice,
-            None => choice,
-        })
-    }
-    println!("{:#?}", merged_choice.unwrap());
-}
-```
-
-#### Map Response to Message Chain
-
-```rust
-use futures::stream::StreamExt;
-use openai4rs::{OpenAI, StreamChoice, chat_request, user};
-
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    let mut messages = vec![user!("Please explain Rust's ownership system in detail")];
-
-    let mut stream = client
-        .chat()
-        .create_stream(chat_request("your_model_name", &messages))
-        .await
-        .unwrap();
-
-    let mut merged_choice: Option<StreamChoice> = None;
-    while let Some(result) = stream.next().await {
-        let chat_completion_chunk = result.unwrap();
-        let choice = chat_completion_chunk.choices[0].clone();
-        merged_choice = Some(match merged_choice {
-            Some(l) => l + choice,
-            None => choice,
-        })
-    }
-    messages.push(merged_choice.unwrap().delta.into());
-
-    messages.push(user!("Okay, thank you"));
-
-    let chat_completion = client
-        .chat()
-        .create(chat_request("your_model_name", &messages))
-        .await
-        .unwrap();
-
-    messages.push(chat_completion.choices[0].message.clone().into())
-}
-```
-
-### **📝 Completions**
-
-#### Non-streaming Completion
-
-```rust
-use openai4rs::{OpenAI, completions_request};
-
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    
-    let completion = client
-        .completions()
-        .create(completions_request("your_model_name", "Complete this sentence: The future of artificial intelligence is"))
-        .await
-        .unwrap();
-        
-    println!("Completion result: {:#?}", completion);
-}
-```
-
-#### Streaming Completion
-
-```rust
-use futures::StreamExt;
-use openai4rs::{OpenAI, completions_request};
-
-#[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    
-    let mut stream = client
-        .completions()
-        .create_stream(completions_request("your_model_name", "Write a quicksort algorithm:"))
-        .await
-        .unwrap();
-        
-    while let Some(result) = stream.next().await {
-        match result {
-            Ok(completion) => {
-                println!("Completion content: {:#?}", completion);
-            }
-            Err(err) => {
-                eprintln!("Error: {}", err);
-            }
+    } else {
+        // If no tool call, just print the content
+        if let Some(content) = response.content() {
+            println!("\nAssistant Response:\n{}", content);
         }
     }
+
+    Ok(())
 }
 ```
 
-### **🤖 Models Management**
+#### 🧠 Multi-turn Conversations
 
-#### Get All Available Models
+Maintain a multi-turn conversation with context:
 
 ```rust
-use openai4rs::{OpenAI, models_request};
+use dotenvy::dotenv;
+use openai4rs::*;
+use std::io::{stdin, stdout, Write};
 
 #[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "your_base_url");
-    
-    let models = client
-        .models()
-        .list(models_request())
-        .await
-        .unwrap();
-        
-    println!("Available models:");
-    for model in models.data.iter() {
-        println!("- {}: {}", model.id, model.created);
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv().ok();
+    let client = OpenAI::from_env()?;
+
+    let model = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
+    let mut messages = vec![system!(content: "You are a helpful assistant.")];
+
+    loop {
+        print!("You: ");
+        stdout().flush()?;
+        let mut user_input = String::new();
+        stdin().read_line(&mut user_input)?;
+        let user_input = user_input.trim();
+
+        if user_input.eq_ignore_ascii_case("exit") {
+            println!("Goodbye!");
+            break;
+        }
+
+        messages.push(user!(content: user_input));
+
+        let request = chat_request(model, &messages);
+
+        let response = client.chat().create(request).await?;
+        if let Some(content) = response.content() {
+            println!("Assistant: {}\n", content);
+            messages.push(assistant!(content));
+        } else {
+            println!("Assistant: No response.\n");
+        }
     }
+
+    Ok(())
 }
 ```
 
-## 🔧 Configuration Options
+### **🔧 Advanced Configuration**
 
-### Client Configuration
+#### Client Configuration
 
 ```rust
-use openai4rs::{OpenAI, Config};
+use dotenvy::dotenv;
+use openai4rs::*;
+use std::collections::HashMap;
 
-// Basic configuration
-let client = OpenAI::new("your_api_key", "https://api.openai.com/v1");
-
-// Create client from environment variables
-// Environment variables: OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_TIMEOUT, OPENAI_CONNECT_TIMEOUT, OPENAI_RETRY_COUNT, OPENAI_PROXY, OPENAI_USER_AGENT
-let client = OpenAI::from_env().unwrap();
-
-// Create client with custom configuration
-let mut config = Config::new("your_api_key".to_string(), "https://api.openai.com/v1".to_string());
-config.set_retry_count(3)                                   // Set max retry attempts to 3
-      .set_timeout_seconds(120)                             // Set request timeout to 120 seconds
-      .set_connect_timeout_seconds(5)                       // Set connection timeout to 5 seconds
-      .set_proxy(Some("http://localhost:8080".to_string())) // Set HTTP proxy
-      .set_user_agent(Some("MyApp/1.0".to_string()));       // Set custom User-Agent
-
-let client = OpenAI::with_config(config);
-
-// Dynamically update client configuration
-client.update_config(|config| {
-    config.set_timeout_seconds(180)
-          .set_retry_count(2);
-}).await;
-
-// Async API configuration access and updates
 #[tokio::main]
-async fn main() {
-    let client = OpenAI::new("your_api_key", "https://api.openai.com/v1");
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv().ok();
     
-    // Get configuration information
-    let base_url = client.get_base_url().await;
-    let api_key = client.get_api_key().await;
+    // Get the API key and base URL from the environment
+    let api_key = std::env::var("OPENAI_API_KEY")?;
+    let base_url = std::env::var("OPENAI_BASE_URL")?;
+
+    // 1. Basic client with default settings
+    let basic_client = OpenAI::new(&api_key, &base_url);
+
+    // 2. Client with a custom base URL (e.g., for a proxy or a different provider)
+    let _custom_base_url_client = Config::builder()
+        .api_key(api_key.clone())
+        .base_url(base_url.clone()) // Replace with your custom base URL
+        .build_openai()?;
+
+    // 3. Client with a proxy
+    let _proxy_client = Config::builder()
+        .api_key(api_key.clone())
+        .base_url(base_url.clone())
+        .proxy("http://proxy.example.com:8080".to_string()) // Replace with your proxy URL
+        .build_openai()?;
+
+    // 4. Client with custom headers
+    let mut custom_headers = HashMap::new();
+    custom_headers.insert("X-Custom-Header".to_string(), "custom_value".into());
     
-    // Update configuration information
-    client.set_base_url("https://api.custom-provider.com/v1".to_string()).await;
-    client.set_api_key("new-api-key".to_string()).await;
+    let _custom_headers_client = Config::builder()
+        .api_key(api_key.clone())
+        .base_url(base_url.clone())
+        .extra_headers(custom_headers)
+        .build_openai()?;
+
+    // 5. Client with custom timeout
+    let _timeout_client = Config::builder()
+        .api_key(api_key)
+        .base_url(base_url.clone())
+        .timeout_seconds(120) // 2 minutes
+        .build_openai()?;
+
+    Ok(())
 }
 ```
 
-### Request Parameter Configuration
-
-```rust
-use openai4rs::{chat_request, user};
-
-let messages = vec![user!("Hello")];
-
-let request = chat_request("gpt-3.5-turbo", &messages)
-    .temperature(0.7)          // Controls randomness
-    .max_completion_tokens(1000)   // Maximum number of tokens
-    .top_p(0.9)                  // Nucleus sampling
-    .frequency_penalty(0.1)      // Frequency penalty
-    .presence_penalty(0.1);      // Presence penalty
-```
-
-## 📖 More Examples
+## 📖 Running Examples
 
 Check the [examples](examples/) directory for more usage examples:
 
-- [Basic Chat](examples/chat.rs)
-- [Streaming Response](examples/chat_stream.rs)
-- [Tool Calling](examples/tool.rs)
-- [Reasoning Mode](examples/chat_reasoning_stream.rs)
-- [HTTP Request Configuration](examples/http_config.rs)
-- [Custom Configuration](examples/custom_config.rs)
+- [01. Basic Chat](examples/01_simple_chat.rs)
+- [02. Streaming Response](examples/02_streaming_chat.rs)
+- [03. Multi-turn Conversation](examples/03_multi_turn_chat.rs)
+- [04. Tool Calling](examples/04_tool_use.rs)
+- [05. Client Configuration](examples/05_client_configuration.rs)
+- [06. Vision API](examples/06_vision.rs) (if supported by the model)
+- [07. Thinking Model](examples/07_thinking_model.rs) (if the model supports complex reasoning)
+
+You can run the examples with the following commands:
+
+```bash
+# Set environment variables
+export OPENAI_API_KEY=your_api_key
+export OPENAI_BASE_URL=your_base_url # Optional, defaults to https://api.openai.com/v1
+
+# Run examples
+cargo run --example 01_simple_chat
+cargo run --example 02_streaming_chat
+# ... other examples
+```
 
 ## 📄 License
 
-This project is licensed under the [Apache-2.0 License](https://www.google.com/search?q=LICENSE).
+This project is licensed under the [Apache-2.0 License](LICENSE).
 
 ## 🔗 Related Links
 

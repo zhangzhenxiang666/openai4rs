@@ -4,8 +4,8 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct Model {
-    pub id: String,
     pub created: i64,
+    pub id: String,
     pub object: Option<String>,
     pub owned_by: Option<String>,
     #[serde(flatten)]
@@ -14,8 +14,8 @@ pub struct Model {
 
 #[derive(Debug, Deserialize)]
 pub struct ModelsData {
-    pub object: Option<String>,
     pub data: Vec<Model>,
+    pub object: Option<String>,
     #[serde(flatten)]
     pub extra_metadata: Option<HashMap<String, serde_json::Value>>,
 }

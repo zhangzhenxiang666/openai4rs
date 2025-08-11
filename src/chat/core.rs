@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
 
-/// 处理聊天补全请求，包括流式和非流式模式。
+/// Handles chat completion requests, including both streaming and non-streaming modes.
 pub struct Chat {
     config: Arc<RwLock<Config>>,
     client: Arc<RwLock<Client>>,
@@ -22,25 +22,27 @@ impl Chat {
         Self { config, client }
     }
 
-    /// 创建一个聊天补全。
+    /// Creates a chat completion.
     ///
-    /// 此方法向 API 发送一个请求，并在单个响应中返回完整的补全。
+    /// This method sends a request to the API and returns the complete completion
+    /// in a single response.
     ///
-    /// # 参数
+    /// # Arguments
     ///
-    /// * `params` - 聊天补全的一组参数，例如模型和消息。可以使用 `chat_request` 创建。
+    /// * `params` - A set of parameters for the chat completion, such as the model and messages.
+    ///   Can be created using `chat_request`.
     ///
-    /// # 示例
+    /// # Examples
     ///
     /// ```rust,no_run
-    /// use openai4rs::{OpenAI, chat_request, user};
+    /// use openai4rs::*;
     /// use dotenvy::dotenv;
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ///     dotenv().ok();
     ///     let client = OpenAI::from_env()?;
-    ///     let messages = vec![user!("什么是 Rust？")];
-    ///     let request = chat_request("deepseek/deepseek-chat-v3-0324:free", &messages);
+    ///     let messages = vec![user!("What is Rust?")];
+    ///     let request = chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages);
     ///     let response = client.chat().create(request).await?;
     ///     println!("{:#?}", response);
     ///     Ok(())
@@ -54,16 +56,14 @@ impl Chat {
         params.stream = Some(false);
 
         let config = self.config.read().await;
-        let retry_count = params
-            .retry_count
-            .unwrap_or_else(|| config.get_retry_count());
+        let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
 
         let response = openai_post_with_lock(
             &self.client,
             "/chat/completions",
             |builder| Self::apply_request_settings(builder, &params),
-            config.get_api_key(),
-            config.get_base_url(),
+            config.api_key(),
+            config.base_url(),
             retry_count,
         )
         .await?;
@@ -71,26 +71,28 @@ impl Chat {
         Self::process_unary(response).await
     }
 
-    /// 创建一个流式聊天补全。
+    /// Creates a streaming chat completion.
     ///
-    /// 此方法返回一个 `ChatCompletionChunk` 事件流。这对于在生成补全时实时显示非常有用。
+    /// This method returns a stream of `ChatCompletionChunk` events. This is useful
+    /// for displaying completions in real-time as they are generated.
     ///
-    /// # 参数
+    /// # Arguments
     ///
-    /// * `params` - 聊天补全的一组参数，例如模型和消息。可以使用 `chat_request` 创建。
+    /// * `params` - A set of parameters for the chat completion, such as the model and messages.
+    ///   Can be created using `chat_request`.
     ///
-    /// # 示例
+    /// # Examples
     ///
     /// ```rust,no_run
-    /// use openai4rs::{OpenAI, chat_request, user};
+    /// use openai4rs::*;
     /// use futures::StreamExt;
     /// use dotenvy::dotenv;
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ///     dotenv().ok();
     ///     let client = OpenAI::from_env()?;
-    ///     let messages = vec![user!("给我讲一个短篇故事。")];
-    ///     let request = chat_request("deepseek/deepseek-chat-v3-0324:free", &messages);
+    ///     let messages = vec![user!("Tell me a short story.")];
+    ///     let request = chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages);
     ///     let mut stream = client.chat().create_stream(request).await?;
     ///
     ///     while let Some(chunk) = stream.next().await {
@@ -115,16 +117,14 @@ impl Chat {
         params.stream = Some(true);
 
         let config = self.config.read().await;
-        let retry_count = params
-            .retry_count
-            .unwrap_or_else(|| config.get_retry_count());
+        let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
 
         let event_source = openai_post_stream_with_lock(
             &self.client,
             "/chat/completions",
             |builder| Self::apply_request_settings(builder, &params),
-            config.get_api_key(),
-            config.get_base_url(),
+            config.api_key(),
+            config.base_url(),
             retry_count,
         )
         .await?;
@@ -154,10 +154,8 @@ impl Chat {
 
         let mut body_map = HashMap::new();
 
-        if let Ok(params_value) = serde_json::to_value(params) {
-            if let Some(params_obj) = params_value.as_object() {
-                body_map.extend(params_obj.iter().map(|(k, v)| (k.clone(), v.clone())));
-            }
+        if let Ok(serde_json::Value::Object(obj)) = serde_json::to_value(params) {
+            body_map.extend(obj);
         }
 
         if let Some(extra_body) = &params.extra_body {

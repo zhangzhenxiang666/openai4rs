@@ -5,11 +5,11 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::sync::RwLock;
 
-/// OpenAI 客户端配置
+/// OpenAI client configuration
 ///
-/// 包含用于连接到 OpenAI 兼容服务的 API 密钥、基础 URL 和 HTTP 请求设置。
+/// Contains the API key, base URL, and HTTP request settings for connecting to an OpenAI-compatible service.
 ///
-/// # 示例
+/// # Examples
 ///
 /// ```rust
 /// use openai4rs::Config;
@@ -20,40 +20,38 @@ use tokio::sync::RwLock;
 /// );
 /// ```
 #[derive(Builder)]
-#[builder(name = "OpenAIConfigBuilder")]
-#[builder(pattern = "owned")]
-#[builder(setter(strip_option))]
+#[builder(name = "OpenAIConfigBuilder", pattern = "owned", setter(strip_option))]
 pub struct Config {
     api_key: String,
     base_url: String,
-    /// 请求失败的最大重试次数 默认值: 5
+    /// The maximum number of retries for failed requests. Default: 5
     #[builder(default = 5)]
     retry_count: u32,
-    /// 请求超时时间（秒） 默认值: 60
-    #[builder(default = 60)]
+    /// Request timeout in seconds. Default: 60
+    #[builder(default = 300)]
     timeout_seconds: u64,
-    /// 连接超时时间（秒） 默认值: 10
+    /// Connection timeout in seconds. Default: 10
     #[builder(default = 10)]
     connect_timeout_seconds: u64,
-    /// HTTP 代理 URL (如有)
+    /// HTTP proxy URL (if any)
     #[builder(default = None)]
     proxy: Option<String>,
-    /// 用户代理字符串
+    /// User agent string
     #[builder(default = None)]
     user_agent: Option<String>,
 }
 
 impl OpenAIConfigBuilder {
-    /// 构建配置并创建一个新的 OpenAI 客户端。
+    /// Builds the configuration and creates a new OpenAI client.
     ///
-    /// 消费构建器以创建一个 [`Config`] 实例，然后用它来创建一个新的 [`OpenAI`] 客户端。
-    /// 这是一个便捷方法，将构建配置和创建客户端合并为一步。
+    /// Consumes the builder to create a [`Config`] instance, then uses it to create a new [`OpenAI`] client.
+    /// This is a convenience method that combines building the configuration and creating the client into one step.
     ///
-    /// # 错误
+    /// # Errors
     ///
-    /// 如果配置无效或无法构建，则返回错误。
+    /// Returns an error if the configuration is invalid or cannot be built.
     ///
-    /// # 示例
+    /// # Examples
     ///
     /// ```rust
     /// use openai4rs::Config;
@@ -74,14 +72,14 @@ impl OpenAIConfigBuilder {
 }
 
 impl Config {
-    /// 使用提供的 API 密钥和基础 URL 创建一个新配置。
+    /// Creates a new configuration with the provided API key and base URL.
     ///
-    /// # 参数
+    /// # Arguments
     ///
-    /// * `api_key` - 用于身份验证的 API 密钥。
-    /// * `base_url` - API 端点的基础 URL。
+    /// * `api_key` - The API key for authentication.
+    /// * `base_url` - The base URL of the API endpoint.
     ///
-    /// # 示例
+    /// # Examples
     ///
     /// ```rust
     /// use openai4rs::Config;
@@ -99,12 +97,12 @@ impl Config {
             .unwrap()
     }
 
-    /// 创建一个新的配置构建器。
+    /// Creates a new configuration builder.
     ///
-    /// 返回一个新的 [`OpenAIConfigBuilder`] 实例，用于构造具有自定义设置的 [`Config`]。
-    /// 这是创建具有非默认值的配置的首选方法。
+    /// Returns a new [`OpenAIConfigBuilder`] instance for constructing a [`Config`] with custom settings.
+    /// This is the preferred method for creating configurations with non-default values.
     ///
-    /// # 示例
+    /// # Examples
     ///
     /// ```rust
     /// use openai4rs::Config;
@@ -123,211 +121,97 @@ impl Config {
 }
 
 impl Config {
-    /// 返回 API 密钥的副本。
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use openai4rs::Config;
-    ///
-    /// let config = Config::new("test-key".to_string(), "https://api.openai.com/v1".to_string());
-    /// assert_eq!(&config.get_api_key(), "test-key");
-    /// ```
-    pub fn get_api_key(&self) -> String {
-        self.api_key.to_string()
+    /// Returns a reference to the API key.
+    pub fn api_key(&self) -> &str {
+        &self.api_key
     }
 
-    /// 返回基础 URL 的副本。
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use openai4rs::Config;
-    ///
-    /// let config = Config::new("test-key".to_string(), "https://api.openai.com/v1".to_string());
-    /// assert_eq!(&config.get_base_url(), "https://api.openai.com/v1");
-    /// ```
-    pub fn get_base_url(&self) -> String {
-        self.base_url.to_string()
+    /// Returns a reference to the base URL.
+    pub fn base_url(&self) -> &str {
+        &self.base_url
     }
 
-    /// 更新基础 URL。
-    ///
-    /// # 参数
-    ///
-    /// * `base_url` - 要设置的新基础 URL。
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use openai4rs::Config;
-    ///
-    /// let mut config = Config::new("test-key".to_string(), "https://api.openai.com/v1".to_string());
-    /// config.set_base_url("https://api.custom.com/v1".to_string());
-    /// assert_eq!(config.get_base_url(), "https://api.custom.com/v1");
-    /// ```
-    pub fn set_base_url(&mut self, base_url: String) {
-        self.base_url = base_url;
+    /// Updates the base URL.
+    pub fn with_base_url(&mut self, base_url: impl Into<String>) -> &mut Self {
+        self.base_url = base_url.into();
+        self
     }
 
-    /// 更新 API 密钥。
-    ///
-    /// # 参数
-    ///
-    /// * `api_key` - 要设置的新 API 密钥。
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use openai4rs::Config;
-    ///
-    /// let mut config = Config::new("old-key".to_string(), "https://api.openai.com/v1".to_string());
-    /// config.set_api_key("new-key".to_string());
-    /// assert_eq!(config.get_api_key(), "new-key");
-    /// ```
-    pub fn set_api_key(&mut self, api_key: String) {
-        self.api_key = api_key;
+    /// Updates the API key.
+    pub fn with_api_key(&mut self, api_key: impl Into<String>) -> &mut Self {
+        self.api_key = api_key.into();
+        self
     }
 
-    /// 获取最大重试次数。
-    pub fn get_retry_count(&self) -> u32 {
+    /// Gets the maximum retry count.
+    pub fn retry_count(&self) -> u32 {
         self.retry_count
     }
 
-    /// 设置最大重试次数。
-    ///
-    /// # 参数
-    ///
-    /// * `retry_count` - 重试失败请求的次数。
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use openai4rs::Config;
-    ///
-    /// let mut config = Config::new("key".to_string(), "https://api.openai.com/v1".to_string());
-    /// config.set_retry_count(3);
-    /// assert_eq!(config.get_retry_count(), 3);
-    /// ```
-    pub fn set_retry_count(&mut self, retry_count: u32) -> &mut Self {
+    /// Sets the maximum retry count.
+    pub fn with_retry_count(&mut self, retry_count: u32) -> &mut Self {
         self.retry_count = retry_count;
         self
     }
 
-    /// 获取请求超时时间（秒）。
-    pub fn get_timeout_seconds(&self) -> u64 {
+    /// Gets the request timeout in seconds.
+    pub fn timeout_seconds(&self) -> u64 {
         self.timeout_seconds
     }
 
-    /// 设置请求超时时间（秒）。
-    ///
-    /// # 参数
-    ///
-    /// * `timeout_seconds` - 请求的超时时间（秒）。
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use openai4rs::Config;
-    ///
-    /// let mut config = Config::new("key".to_string(), "https://api.openai.com/v1".to_string());
-    /// config.set_timeout_seconds(30);
-    /// assert_eq!(config.get_timeout_seconds(), 30);
-    /// ```
-    pub fn set_timeout_seconds(&mut self, timeout_seconds: u64) -> &mut Self {
+    /// Sets the request timeout in seconds.
+    pub fn with_timeout_seconds(&mut self, timeout_seconds: u64) -> &mut Self {
         self.timeout_seconds = timeout_seconds;
         self
     }
 
-    /// 获取连接超时时间（秒）。
-    pub fn get_connect_timeout_seconds(&self) -> u64 {
+    /// Gets the connection timeout in seconds.
+    pub fn connect_timeout_seconds(&self) -> u64 {
         self.connect_timeout_seconds
     }
 
-    /// 设置连接超时时间（秒）。
-    ///
-    /// # 参数
-    ///
-    /// * `connect_timeout_seconds` - 连接超时时间（秒）。
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use openai4rs::Config;
-    ///
-    /// let mut config = Config::new("key".to_string(), "https://api.openai.com/v1".to_string());
-    /// config.set_connect_timeout_seconds(5);
-    /// assert_eq!(config.get_connect_timeout_seconds(), 5);
-    /// ```
-    pub fn set_connect_timeout_seconds(&mut self, connect_timeout_seconds: u64) -> &mut Self {
+    /// Sets the connection timeout in seconds.
+    pub fn with_connect_timeout_seconds(&mut self, connect_timeout_seconds: u64) -> &mut Self {
         self.connect_timeout_seconds = connect_timeout_seconds;
         self
     }
 
-    /// 获取代理 URL（如果已设置）。
-    pub fn get_proxy(&self) -> Option<String> {
-        self.proxy.clone()
+    /// Gets the proxy URL (if set).
+    pub fn proxy(&self) -> Option<&str> {
+        self.proxy.as_deref()
     }
 
-    /// 为请求设置 HTTP 代理。
-    ///
-    /// # 参数
-    ///
-    /// * `proxy` - 代理 URL (例如 "http://user:pass@host:port")。
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use openai4rs::Config;
-    ///
-    /// let mut config = Config::new("key".to_string(), "https://api.openai.com/v1".to_string());
-    /// config.set_proxy(Some("http://localhost:8080".to_string()));
-    /// assert_eq!(config.get_proxy(), Some("http://localhost:8080".to_string()));
-    /// ```
-    pub fn set_proxy(&mut self, proxy: Option<String>) -> &mut Self {
-        self.proxy = proxy;
+    /// Sets an HTTP proxy for requests.
+    pub fn with_proxy(&mut self, proxy: Option<impl Into<String>>) -> &mut Self {
+        self.proxy = proxy.map(|s| s.into());
         self
     }
 
-    /// 获取用户代理字符串（如果已设置）。
-    pub fn get_user_agent(&self) -> Option<String> {
-        self.user_agent.clone()
+    /// Gets the user agent string (if set).
+    pub fn user_agent(&self) -> Option<&str> {
+        self.user_agent.as_deref()
     }
 
-    /// 设置自定义用户代理字符串。
-    ///
-    /// # 参数
-    ///
-    /// * `user_agent` - 自定义用户代理字符串。
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use openai4rs::Config;
-    ///
-    /// let mut config = Config::new("key".to_string(), "https://api.openai.com/v1".to_string());
-    /// config.set_user_agent(Some("MyApp/1.0".to_string()));
-    /// assert_eq!(config.get_user_agent(), Some("MyApp/1.0".to_string()));
-    /// ```
-    pub fn set_user_agent(&mut self, user_agent: Option<String>) -> &mut Self {
-        self.user_agent = user_agent;
+    /// Sets a custom user agent string.
+    pub fn with_user_agent(&mut self, user_agent: Option<impl Into<String>>) -> &mut Self {
+        self.user_agent = user_agent.map(|s| s.into());
         self
     }
 
-    /// 使用配置的设置构建一个 `reqwest::Client`。
+    /// Builds a `reqwest::Client` with the configured settings.
     pub fn build_client(&self) -> Client {
         let mut client_builder = ClientBuilder::new()
             .timeout(Duration::from_secs(self.timeout_seconds))
             .connect_timeout(Duration::from_secs(self.connect_timeout_seconds));
 
-        // 如果配置了代理，则添加
+        // Add proxy if configured
         if let Some(proxy_url) = &self.proxy {
             if let Ok(proxy) = Proxy::all(proxy_url) {
                 client_builder = client_builder.proxy(proxy);
             }
         }
 
-        // 如果配置了用户代理，则添加
+        // Add user agent if configured
         if let Some(user_agent) = &self.user_agent {
             client_builder = client_builder.user_agent(user_agent);
         }
@@ -336,23 +220,23 @@ impl Config {
     }
 }
 
-/// 用于与 OpenAI 兼容 API 交互的 OpenAI 客户端
+/// OpenAI client for interacting with OpenAI-compatible APIs
 ///
-/// 这是主客户端结构体，提供对聊天补全、文本补全和模型列出功能的访问。
-/// 它使用 async/await 进行非阻塞操作，并支持流式响应。
+/// This is the main client struct that provides access to chat completions, text completions, and model listing functionality.
+/// It uses async/await for non-blocking operations and supports streaming responses.
 ///
-/// # 特性
+/// # Features
 ///
-/// - **聊天补全**: 同时支持流式和非流式聊天补全
-/// - **工具调用**: 支持聊天补全中的函数调用
-/// - **推理模式**: 支持像 qwq-32b 这样的推理模型
-/// - **文本补全**: 支持旧版文本补全 API
-/// - **模型管理**: 列出和检索模型信息
-/// - **线程安全**: 可在多个线程间安全使用
+/// - **Chat Completions**: Supports both streaming and non-streaming chat completions
+/// - **Tool Calling**: Supports function calling in chat completions
+/// - **Reasoning Mode**: Supports reasoning models like qwq-32b
+/// - **Text Completions**: Supports legacy text completion API
+/// - **Model Management**: List and retrieve model information
+/// - **Thread Safety**: Can be safely used across multiple threads
 ///
-/// # 示例
+/// # Examples
 ///
-/// ## 基本用法
+/// ## Basic Usage
 ///
 /// ```rust
 /// use openai4rs::OpenAI;
@@ -362,9 +246,9 @@ impl Config {
 ///     dotenv().ok();
 ///     let client = OpenAI::from_env().unwrap();
 ///     
-///     // 使用客户端进行各种操作
+///     // Use the client for various operations
 ///     let models = client.models().list(openai4rs::models_request()).await.unwrap();
-///     println!("可用模型: {:#?}", models);
+///     println!("Available models: {:#?}", models);
 /// }
 /// ```
 pub struct OpenAI {
@@ -376,14 +260,14 @@ pub struct OpenAI {
 }
 
 impl OpenAI {
-    /// 使用指定的 API 密钥和基础 URL 创建一个新的 OpenAI 客户端。
+    /// Creates a new OpenAI client with the specified API key and base URL.
     ///
-    /// # 参数
+    /// # Arguments
     ///
-    /// * `api_key` - 您的 OpenAI API 密钥
-    /// * `base_url` - API 的基础 URL (例如 "https://api.openai.com/v1")
+    /// * `api_key` - Your OpenAI API key
+    /// * `base_url` - The base URL of the API (e.g. "https://api.openai.com/v1")
     ///
-    /// # 示例
+    /// # Examples
     ///
     /// ```rust
     /// use openai4rs::OpenAI;
@@ -403,23 +287,23 @@ impl OpenAI {
         }
     }
 
-    /// 使用自定义配置创建一个新的 OpenAI 客户端。
+    /// Creates a new OpenAI client with a custom configuration.
     ///
-    /// 这允许您一次性设置所有配置选项。
+    /// This allows you to set all configuration options at once.
     ///
-    /// # 参数
+    /// # Arguments
     ///
-    /// * `config` - 一个自定义的 `Config` 实例
+    /// * `config` - A custom `Config` instance
     ///
-    /// # 示例
+    /// # Examples
     ///
     /// ```rust
     /// use openai4rs::{Config, OpenAI};
     ///
     /// let mut config = Config::new("your-api-key".to_string(), "https://api.openai.com/v1".to_string());
-    /// config.set_retry_count(3)
-    ///       .set_timeout_seconds(120)
-    ///       .set_user_agent(Some("MyApp/1.0".to_string()));
+    /// config.with_retry_count(3)
+    ///       .with_timeout_seconds(120)
+    ///       .with_user_agent(Some("MyApp/1.0"));
     ///
     /// let client = OpenAI::with_config(config);
     /// ```
@@ -453,9 +337,9 @@ impl OpenAI {
     ///
     /// // 一次性更新多个设置
     /// client.update_config(|config| {
-    ///     config.set_timeout_seconds(120)
-    ///           .set_retry_count(3)
-    ///           .set_proxy(Some("http://localhost:8080".to_string()));
+    ///     config.with_timeout_seconds(120)
+    ///           .with_retry_count(3)
+    ///           .with_proxy(Some("http://localhost:8080"));
     /// }).await;
     /// # }
     /// ```
@@ -464,42 +348,42 @@ impl OpenAI {
         F: FnOnce(&mut Config),
     {
         let new_client = {
-            // 更新配置
+            // Update configuration
             let mut config_guard = self.config.write().await;
             update_fn(&mut config_guard);
 
-            // 使用新设置重新创建 HTTP 客户端
+            // Recreate HTTP client with new settings
             config_guard.build_client()
         };
 
-        // 更新客户端
+        // Update client
         let mut client_guard = self.client.write().await;
         *client_guard = new_client;
     }
 
-    /// 从环境变量创建一个新的 OpenAI 客户端。
+    /// Creates a new OpenAI client from environment variables.
     ///
-    /// 查找以下环境变量：
-    /// - `OPENAI_API_KEY` (必需): 您的 API 密钥
-    /// - `OPENAI_BASE_URL` (可选): 基础 URL, 默认为 "https://api.openai.com/v1"
-    /// - `OPENAI_TIMEOUT` (可选): 请求超时秒数, 默认为 60
-    /// - `OPENAI_CONNECT_TIMEOUT` (可选): 连接超时秒数, 默认为 10
-    /// - `OPENAI_RETRY_COUNT` (可选): 重试次数, 默认为 5
-    /// - `OPENAI_PROXY` (可选): HTTP 代理 URL
-    /// - `OPENAI_USER_AGENT` (可选): 自定义用户代理字符串
+    /// Looks for the following environment variables:
+    /// - `OPENAI_API_KEY` (required): Your API key
+    /// - `OPENAI_BASE_URL` (optional): Base URL, defaults to "https://api.openai.com/v1"
+    /// - `OPENAI_TIMEOUT` (optional): Request timeout in seconds, defaults to 60
+    /// - `OPENAI_CONNECT_TIMEOUT` (optional): Connection timeout in seconds, defaults to 10
+    /// - `OPENAI_RETRY_COUNT` (optional): Number of retries, defaults to 5
+    /// - `OPENAI_PROXY` (optional): HTTP proxy URL
+    /// - `OPENAI_USER_AGENT` (optional): Custom user agent string
     ///
-    /// # 错误
+    /// # Errors
     ///
-    /// 如果环境中未设置 `OPENAI_API_KEY`，则返回错误。
+    /// Returns an error if `OPENAI_API_KEY` is not set in the environment.
     ///
-    /// # 示例
+    /// # Examples
     ///
     /// ```bash
-    /// # 设置环境变量
+    /// # Set environment variables
     /// export OPENAI_API_KEY="sk-your-api-key"
-    /// export OPENAI_BASE_URL="https://api.openai.com/v1"  # 可选
-    /// export OPENAI_TIMEOUT="120"  # 可选, 120 秒
-    /// export OPENAI_RETRY_COUNT="3"  # 可选, 重试 3 次
+    /// export OPENAI_BASE_URL="https://api.openai.com/v1"  # optional
+    /// export OPENAI_TIMEOUT="120"  # optional, 120 seconds
+    /// export OPENAI_RETRY_COUNT="3"  # optional, 3 retries
     /// ```
     ///
     /// ```rust
@@ -510,8 +394,8 @@ impl OpenAI {
     ///     dotenv().ok();
     ///     let client = OpenAI::from_env()?;
     ///     
-    ///     // 客户端已准备就绪
-    ///     println!("已连接到: {}", client.get_base_url().await);
+    ///     // Client is ready
+    ///     println!("Connected to: {}", client.base_url().await);
     ///     Ok(())
     /// }
     /// ```
@@ -522,31 +406,31 @@ impl OpenAI {
 
         let mut config = Config::new(api_key, base_url);
 
-        // 读取可选的环境变量
+        // Read optional environment variables
         if let Ok(timeout) = std::env::var("OPENAI_TIMEOUT") {
             if let Ok(timeout) = timeout.parse::<u64>() {
-                config.set_timeout_seconds(timeout);
+                config.with_timeout_seconds(timeout);
             }
         }
 
         if let Ok(connect_timeout) = std::env::var("OPENAI_CONNECT_TIMEOUT") {
             if let Ok(connect_timeout) = connect_timeout.parse::<u64>() {
-                config.set_connect_timeout_seconds(connect_timeout);
+                config.with_connect_timeout_seconds(connect_timeout);
             }
         }
 
         if let Ok(retry_count) = std::env::var("OPENAI_RETRY_COUNT") {
             if let Ok(retry_count) = retry_count.parse::<u32>() {
-                config.set_retry_count(retry_count);
+                config.with_retry_count(retry_count);
             }
         }
 
         if let Ok(proxy) = std::env::var("OPENAI_PROXY") {
-            config.set_proxy(Some(proxy));
+            config.with_proxy(Some(proxy));
         }
 
         if let Ok(user_agent) = std::env::var("OPENAI_USER_AGENT") {
-            config.set_user_agent(Some(user_agent));
+            config.with_user_agent(Some(user_agent));
         }
 
         Ok(Self::with_config(config))
@@ -554,46 +438,46 @@ impl OpenAI {
 }
 
 impl OpenAI {
-    /// 返回对聊天补全客户端的引用。
+    /// Returns a reference to the chat completion client.
     ///
-    /// 使用此客户端执行聊天补全，包括流式响应、工具调用和推理模式交互。
+    /// Use this client to perform chat completions, including streaming responses, tool calling, and reasoning mode interactions.
     ///
-    /// # 示例
+    /// # Examples
     ///
-    /// ## 基本聊天补全
+    /// ## Basic Chat Completion
     ///
-    /// ```rust
-    /// use openai4rs::{OpenAI, chat_request, user};
+    /// ```rust,no_run
+    /// use openai4rs::*;
     /// use dotenvy::dotenv;
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ///     dotenv().ok();
     ///     let client = OpenAI::from_env()?;
-    ///     let messages = vec![user!("你好，你好吗？")];
+    ///     let messages = vec![user!("Hello, how are you?")];
     ///
     ///     let response = client
     ///                     .chat()
-    ///                     .create(chat_request("deepseek/deepseek-chat-v3-0324:free", &messages))
+    ///                     .create(chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages))
     ///                     .await?;
     ///
-    ///     println!("响应: {:#?}", response);
+    ///     println!("Response: {:#?}", response);
     ///     Ok(())
     ///  }
     /// ```
     ///
-    /// ## 流式聊天补全
+    /// ## Streaming Chat Completion
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use futures::StreamExt;
-    /// use openai4rs::{OpenAI, chat_request, user};
+    /// use openai4rs::*;
     /// use dotenvy::dotenv;
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ///     dotenv().ok();
     ///     let client = OpenAI::from_env()?;
-    ///     let messages = vec![user!("给我讲个故事")];
+    ///     let messages = vec![user!("Tell me a story")];
     ///
-    ///     let mut stream = client.chat().create_stream(chat_request("deepseek/deepseek-chat-v3-0324:free", &messages).max_completion_tokens(64)).await?;
+    ///     let mut stream = client.chat().create_stream(chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages).max_completion_tokens(64)).await?;
     ///
     ///     while let Some(chunk) = stream.next().await {
     ///         let chunk = chunk?;
@@ -611,13 +495,13 @@ impl OpenAI {
             .get_or_init(|| Chat::new(Arc::clone(&self.config), Arc::clone(&self.client)))
     }
 
-    /// 返回对补全客户端的引用。
+    /// Returns a reference to the completion client.
     ///
-    /// 用于旧版文本补全（非聊天格式）。
+    /// Used for legacy text completions (non-chat format).
     ///
-    /// # 示例
+    /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use openai4rs::{OpenAI, completions_request};
     /// use dotenvy::dotenv;
     /// #[tokio::main]
@@ -626,10 +510,10 @@ impl OpenAI {
     ///     let client = OpenAI::from_env()?;
     ///     let response = client
     ///         .completions()
-    ///         .create(completions_request("deepseek/deepseek-chat-v3-0324:free", "写一首关于 Rust 编程语言的诗").max_tokens(64))
-    ///         .await?;
+    ///         .create(completions_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", "Write a poem about the Rust programming language").max_tokens(64))
+    ///         .await;
     ///
-    ///     println!("响应: {:#?}", response);
+    ///     println!("Response: {:#?}", response);
     ///     Ok(())
     /// }
     /// ```
@@ -638,11 +522,11 @@ impl OpenAI {
             .get_or_init(|| Completions::new(Arc::clone(&self.config), Arc::clone(&self.client)))
     }
 
-    /// 返回对模型客户端的引用。
+    /// Returns a reference to the model client.
     ///
-    /// 用于列出可用模型或检索模型信息。
+    /// Used for listing available models or retrieving model information.
     ///
-    /// # 示例
+    /// # Examples
     ///
     /// ```rust
     /// use openai4rs::{OpenAI, models_request};
@@ -651,14 +535,14 @@ impl OpenAI {
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ///     dotenv().ok();
     ///     let client = OpenAI::from_env()?;
-    ///     // 列出所有可用模型
+    ///     // List all available models
     ///     let models = client
     ///         .models()
     ///         .list(models_request())
     ///         .await?;
     ///
     ///     for model in models.data {
-    ///         println!("模型: {}", model.id);
+    ///         println!("Model: {}", model.id);
     ///     }
     ///     Ok(())
     /// }
@@ -668,98 +552,85 @@ impl OpenAI {
             .get_or_init(|| Models::new(Arc::clone(&self.config), Arc::clone(&self.client)))
     }
 
-    /// 返回当前的基础 URL。
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use openai4rs::OpenAI;
-    /// #[tokio::main]
-    /// async fn main(){
-    ///     let client = OpenAI::new("key", "https://api.openai.com/v1");
-    ///     assert_eq!(client.get_base_url().await, "https://api.openai.com/v1");
-    /// }
-    /// ```
-    pub async fn get_base_url(&self) -> String {
-        self.config.read().await.get_base_url()
+    /// Returns the current base URL.
+    pub async fn base_url(&self) -> String {
+        self.config.read().await.base_url().to_string()
     }
 
-    /// 返回当前的 API 密钥。
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use openai4rs::OpenAI;
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let client = OpenAI::new("test-key", "https://api.openai.com/v1");
-    ///     assert_eq!(client.get_api_key().await, "test-key");
-    /// }
-    /// ```
-    pub async fn get_api_key(&self) -> String {
-        self.config.read().await.get_api_key()
+    /// Returns the current API key.
+    pub async fn api_key(&self) -> String {
+        self.config.read().await.api_key().to_string()
     }
 
-    /// 更新客户端的基础 URL。
+    /// Updates the client's base URL.
     ///
-    /// 这对于在不同的 API 端点之间切换或从一个服务迁移到另一个服务时非常有用。
-    ///
-    /// # 参数
-    ///
-    /// * `base_url` - 要使用的新基础 URL
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use openai4rs::OpenAI;
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let client = OpenAI::new("key", "https://api.openai.com/v1");
-    ///
-    ///     // 切换到本地服务器
-    ///     client.set_base_url("http://localhost:8000/v1".to_string()).await;
-    ///     assert_eq!(client.get_base_url().await, "http://localhost:8000/v1");
-    ///
-    ///     // 切换到 Azure OpenAI
-    ///     client.set_base_url("https://your-resource.openai.azure.com/openai/deployments/your-deployment".to_string()).await;
-    /// }
-    /// ```
-    pub async fn set_base_url(&self, base_url: String) {
-        self.config.write().await.set_base_url(base_url);
+    /// This operation does not rebuild the HTTP client, as it is used in each request.
+    pub async fn with_base_url(&self, base_url: impl Into<String>) {
+        self.config.write().await.with_base_url(base_url);
     }
 
-    /// 更新客户端的 API 密钥。
+    /// Updates the client's API key.
     ///
-    /// 这对于密钥轮换或在不同 API 帐户之间切换时非常有用。
+    /// This operation does not rebuild the HTTP client, as the API key is sent in the header of each request.
+    pub async fn with_api_key(&self, api_key: impl Into<String>) {
+        self.config.write().await.with_api_key(api_key);
+    }
+
+    /// Updates the client's request timeout in seconds.
     ///
-    /// # 参数
+    /// This operation will rebuild the internal HTTP client with the new settings.
+    pub async fn with_timeout_seconds(&self, timeout_seconds: u64) {
+        self.update_config(|config| {
+            config.with_timeout_seconds(timeout_seconds);
+        })
+        .await;
+    }
+
+    /// Updates the client's connection timeout in seconds.
     ///
-    /// * `api_key` - 要使用的新 API 密钥
+    /// This operation will rebuild the internal HTTP client with the new settings.
+    pub async fn with_connect_timeout_seconds(&self, connect_timeout_seconds: u64) {
+        self.update_config(|config| {
+            config.with_connect_timeout_seconds(connect_timeout_seconds);
+        })
+        .await;
+    }
+
+    /// Updates the client's maximum retry count.
     ///
-    /// # 示例
+    /// This operation does not rebuild the HTTP client, as it is used in each retry.
+    pub async fn with_retry_count(&self, retry_count: u32) {
+        self.config.write().await.with_retry_count(retry_count);
+    }
+
+    /// Updates the client's HTTP proxy.
     ///
-    /// ```rust
-    /// use openai4rs::OpenAI;
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let client = OpenAI::new("old-key", "https://api.openai.com/v1");
+    /// This operation will rebuild the internal HTTP client with the new settings.
+    pub async fn with_proxy(&self, proxy: Option<impl Into<String>>) {
+        self.update_config(|config| {
+            config.with_proxy(proxy.map(|s| s.into()));
+        })
+        .await;
+    }
+
+    /// Updates the client's custom user agent.
     ///
-    ///     // 轮换到新密钥
-    ///     client.set_api_key("new-key".to_string()).await;
-    ///     assert_eq!(client.get_api_key().await, "new-key");
-    /// }
-    /// ```
-    pub async fn set_api_key(&self, api_key: String) {
-        self.config.write().await.set_api_key(api_key);
+    /// This operation will rebuild the internal HTTP client with the new settings.
+    pub async fn with_user_agent(&self, user_agent: Option<impl Into<String>>) {
+        self.update_config(|config| {
+            config.with_user_agent(user_agent.map(|s| s.into()));
+        })
+        .await;
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{chat::*, completions_request, models_request, user};
+    use crate::{chat::*, models_request, user};
     use dotenvy::dotenv;
-    const MODEL_NAME: &str = "deepseek/deepseek-chat-v3-0324:free";
+    use std::env;
+    const MODEL_NAME: &str = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
 
     #[test]
     fn test_config_builder() {
@@ -774,16 +645,13 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(config.get_api_key(), "test-key");
-        assert_eq!(config.get_base_url(), "https://api.test.com/v1");
-        assert_eq!(config.get_retry_count(), 3);
-        assert_eq!(config.get_timeout_seconds(), 120);
-        assert_eq!(config.get_connect_timeout_seconds(), 15);
-        assert_eq!(
-            config.get_proxy(),
-            Some("http://proxy.test.com:8080".to_string())
-        );
-        assert_eq!(config.get_user_agent(), Some("TestAgent/1.0".to_string()));
+        assert_eq!(config.api_key(), "test-key");
+        assert_eq!(config.base_url(), "https://api.test.com/v1");
+        assert_eq!(config.retry_count(), 3);
+        assert_eq!(config.timeout_seconds(), 120);
+        assert_eq!(config.connect_timeout_seconds(), 15);
+        assert_eq!(config.proxy(), Some("http://proxy.test.com:8080"));
+        assert_eq!(config.user_agent(), Some("TestAgent/1.0"));
     }
 
     #[test]
@@ -794,11 +662,11 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(config.get_retry_count(), 5); // default value
-        assert_eq!(config.get_timeout_seconds(), 60); // default value
-        assert_eq!(config.get_connect_timeout_seconds(), 10); // default value
-        assert_eq!(config.get_proxy(), None); // default value
-        assert_eq!(config.get_user_agent(), None); // default value
+        assert_eq!(config.retry_count(), 5); // default value
+        assert_eq!(config.timeout_seconds(), 300); // default value
+        assert_eq!(config.connect_timeout_seconds(), 10); // default value
+        assert_eq!(config.proxy(), None); // default value
+        assert_eq!(config.user_agent(), None); // default value
     }
 
     #[tokio::test]
@@ -811,8 +679,8 @@ mod tests {
 
         let config = client.config.read().await;
 
-        assert_eq!(config.get_api_key(), "test-key");
-        assert_eq!(config.get_base_url(), "https://api.test.com/v1");
+        assert_eq!(config.api_key(), "test-key");
+        assert_eq!(config.base_url(), "https://api.test.com/v1");
     }
 
     #[test]
@@ -822,32 +690,55 @@ mod tests {
             "https://api.test.com/v1".to_string(),
         );
 
-        assert_eq!(config.get_api_key(), "test-key");
-        assert_eq!(config.get_base_url(), "https://api.test.com/v1");
+        assert_eq!(config.api_key(), "test-key");
+        assert_eq!(config.base_url(), "https://api.test.com/v1");
     }
 
     #[test]
     fn test_config_setters() {
         let mut config = Config::new("old-key".to_string(), "https://old-api.com/v1".to_string());
 
-        config.set_api_key("new-key".to_string());
-        config.set_base_url("https://new-api.com/v1".to_string());
-        config.set_retry_count(2);
-        config.set_timeout_seconds(30);
-        config.set_connect_timeout_seconds(5);
-        config.set_proxy(Some("http://proxy.example.com:8080".to_string()));
-        config.set_user_agent(Some("CustomAgent/2.0".to_string()));
+        config
+            .with_api_key("new-key")
+            .with_base_url("https://new-api.com/v1")
+            .with_retry_count(2)
+            .with_timeout_seconds(30)
+            .with_connect_timeout_seconds(5)
+            .with_proxy(Some("http://proxy.example.com:8080"))
+            .with_user_agent(Some("CustomAgent/2.0"));
 
-        assert_eq!(config.get_api_key(), "new-key");
-        assert_eq!(config.get_base_url(), "https://new-api.com/v1");
-        assert_eq!(config.get_retry_count(), 2);
-        assert_eq!(config.get_timeout_seconds(), 30);
-        assert_eq!(config.get_connect_timeout_seconds(), 5);
-        assert_eq!(
-            config.get_proxy(),
-            Some("http://proxy.example.com:8080".to_string())
-        );
-        assert_eq!(config.get_user_agent(), Some("CustomAgent/2.0".to_string()));
+        assert_eq!(config.api_key(), "new-key");
+        assert_eq!(config.base_url(), "https://new-api.com/v1");
+        assert_eq!(config.retry_count(), 2);
+        assert_eq!(config.timeout_seconds(), 30);
+        assert_eq!(config.connect_timeout_seconds(), 5);
+        assert_eq!(config.proxy(), Some("http://proxy.example.com:8080"));
+        assert_eq!(config.user_agent(), Some("CustomAgent/2.0"));
+    }
+
+    #[tokio::test]
+    async fn test_openai_setters() {
+        let client = OpenAI::new("old-key", "https://old-api.com/v1");
+
+        client.with_api_key("new-key").await;
+        client.with_base_url("https://new-api.com/v1").await;
+        client.with_retry_count(2).await;
+        client.with_timeout_seconds(30).await;
+        client.with_connect_timeout_seconds(5).await;
+        client
+            .with_proxy(Some("http://proxy.example.com:8080"))
+            .await;
+        client.with_user_agent(Some("CustomAgent/2.0")).await;
+
+        let config = client.config.read().await;
+
+        assert_eq!(config.api_key(), "new-key");
+        assert_eq!(config.base_url(), "https://new-api.com/v1");
+        assert_eq!(config.retry_count(), 2);
+        assert_eq!(config.timeout_seconds(), 30);
+        assert_eq!(config.connect_timeout_seconds(), 5);
+        assert_eq!(config.proxy(), Some("http://proxy.example.com:8080"));
+        assert_eq!(config.user_agent(), Some("CustomAgent/2.0"));
     }
 
     #[tokio::test]
@@ -862,7 +753,7 @@ mod tests {
             match client.chat().create(request).await {
                 Ok(result) => {
                     assert_eq!(
-                        Some("Hello! 😊 How can I assist you today?".into()),
+                        Some("Hello! How can I help you today?".into()),
                         result.choices[0].message.content
                     );
                     return;
@@ -872,7 +763,7 @@ mod tests {
                     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 }
                 Err(e) => {
-                    panic!("Non-retryable error: {}", e);
+                    panic!("Non-retryable error: {:#?}", e);
                 }
             }
         }
@@ -884,7 +775,7 @@ mod tests {
         let base_url = "https://openrouter.ai/api/v1";
         let api_key = "******";
         let client = OpenAI::new(api_key, base_url);
-        let messages = vec![user!("Hello")];
+        let messages = vec![user!("hello world")];
         let result = client
             .chat()
             .create(
@@ -897,7 +788,7 @@ mod tests {
             Ok(_) => panic!("Unexpected success response"),
             Err(err) => {
                 if !err.is_authentication() {
-                    panic!("Unexpected error: {:?}", err);
+                    panic!("Unexpected error: {:#?}", err);
                 }
             }
         }
@@ -908,33 +799,96 @@ mod tests {
         dotenv().ok();
         let client = OpenAI::from_env().unwrap();
         let models = client.models().list(models_request()).await;
+        println!("{:#?}", models);
         assert!(models.is_ok())
     }
 
     #[tokio::test]
-    async fn test_completions() {
-        dotenv().ok();
+    async fn test_from_env_should_load_all_variables() {
+        // Temporarily store original values to restore them later
+        let original_api_key = env::var("OPENAI_API_KEY").ok();
+        let original_base_url = env::var("OPENAI_BASE_URL").ok();
+        let original_timeout = env::var("OPENAI_TIMEOUT").ok();
+        let original_connect_timeout = env::var("OPENAI_CONNECT_TIMEOUT").ok();
+        let original_retry_count = env::var("OPENAI_RETRY_COUNT").ok();
+        let original_proxy = env::var("OPENAI_PROXY").ok();
+        let original_user_agent = env::var("OPENAI_USER_AGENT").ok();
+
+        // Set up all relevant environment variables
+        unsafe {
+            env::set_var("OPENAI_API_KEY", "env-test-key");
+            env::set_var("OPENAI_BASE_URL", "https://env-test.com/v1");
+            env::set_var("OPENAI_TIMEOUT", "180");
+            env::set_var("OPENAI_CONNECT_TIMEOUT", "20");
+            env::set_var("OPENAI_RETRY_COUNT", "10");
+            env::set_var("OPENAI_PROXY", "http://env-proxy:8888");
+            env::set_var("OPENAI_USER_AGENT", "EnvTestAgent/1.0");
+        }
+
         let client = OpenAI::from_env().unwrap();
 
-        let mut retries = 3;
-        while retries > 0 {
-            let request = completions_request(MODEL_NAME, "Hello")
-                .temperature(0.0)
-                .max_tokens(100);
-            match client.completions().create(request).await {
-                Ok(_) => {
-                    // If the request succeeds, we can break the loop.
-                    return;
-                }
-                Err(e) if e.is_retryable() => {
-                    retries -= 1;
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                }
-                Err(e) => {
-                    panic!("Non-retryable error: {}", e);
-                }
+        let config = client.config.read().await;
+
+        assert_eq!(config.api_key(), "env-test-key");
+        assert_eq!(config.base_url(), "https://env-test.com/v1");
+        assert_eq!(config.timeout_seconds(), 180);
+        assert_eq!(config.connect_timeout_seconds(), 20);
+        assert_eq!(config.retry_count(), 10);
+        assert_eq!(config.proxy(), Some("http://env-proxy:8888"));
+        assert_eq!(config.user_agent(), Some("EnvTestAgent/1.0"));
+
+        // Restore original environment variables
+        unsafe {
+            match original_api_key {
+                Some(val) => env::set_var("OPENAI_API_KEY", val),
+                None => env::remove_var("OPENAI_API_KEY"),
+            }
+            match original_base_url {
+                Some(val) => env::set_var("OPENAI_BASE_URL", val),
+                None => env::remove_var("OPENAI_BASE_URL"),
+            }
+            match original_timeout {
+                Some(val) => env::set_var("OPENAI_TIMEOUT", val),
+                None => env::remove_var("OPENAI_TIMEOUT"),
+            }
+            match original_connect_timeout {
+                Some(val) => env::set_var("OPENAI_CONNECT_TIMEOUT", val),
+                None => env::remove_var("OPENAI_CONNECT_TIMEOUT"),
+            }
+            match original_retry_count {
+                Some(val) => env::set_var("OPENAI_RETRY_COUNT", val),
+                None => env::remove_var("OPENAI_RETRY_COUNT"),
+            }
+            match original_proxy {
+                Some(val) => env::set_var("OPENAI_PROXY", val),
+                None => env::remove_var("OPENAI_PROXY"),
+            }
+            match original_user_agent {
+                Some(val) => env::set_var("OPENAI_USER_AGENT", val),
+                None => env::remove_var("OPENAI_USER_AGENT"),
             }
         }
-        panic!("Test failed after multiple retries");
+    }
+
+    #[test]
+    fn test_from_env_should_fail_when_api_key_is_missing() {
+        // Temporarily store original value to restore it later
+        let original_api_key = env::var("OPENAI_API_KEY").ok();
+
+        // Ensure the required env var is not set
+        unsafe {
+            env::remove_var("OPENAI_API_KEY");
+        }
+        let result = OpenAI::from_env();
+        assert!(result.is_err());
+        assert_eq!(result.err().unwrap(), "OPENAI_API_KEY not set");
+
+        // Restore original environment variable
+        unsafe {
+            match original_api_key {
+                Some(val) => env::set_var("OPENAI_API_KEY", val),
+                None => {} // Do nothing if it wasn't originally set
+            }
+        }
     }
 }

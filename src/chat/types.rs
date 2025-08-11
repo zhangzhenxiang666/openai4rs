@@ -1,48 +1,40 @@
+use crate::chat::tool_parameters::{ConversionError, Parameters};
 use crate::common::types::{CompletionGeneric, extract_optional, try_deserialize_or_skip};
 use crate::content;
-use crate::utils::methods::merge_extra_metadata;
+use crate::utils::methods::merge_extra_metadata_in_place;
+use derive_builder::Builder;
 use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt;
 
-pub type ChatCompletion = CompletionGeneric<UnStreamChoice>;
+pub type ChatCompletion = CompletionGeneric<FinalChoice>;
 pub type ChatCompletionChunk = CompletionGeneric<StreamChoice>;
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct UnStreamChoice {
+pub struct FinalChoice {
     pub index: i64,
-
     pub finish_reason: FinishReason,
-
-    pub logprobs: Option<ChoiceLogprobs>,
-
     pub message: ChatCompletionMessage,
+    pub logprobs: Option<ChoiceLogprobs>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct StreamChoice {
     pub index: i64,
-
-    pub finish_reason: Option<FinishReason>,
-
-    pub logprobs: Option<ChoiceLogprobs>,
     pub delta: ChoiceDelta,
+    pub finish_reason: Option<FinishReason>,
+    pub logprobs: Option<ChoiceLogprobs>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ChoiceDelta {
     pub content: Option<String>,
-
     pub refusal: Option<String>,
-
-    pub role: Option<String>,
-
-    pub tool_calls: Option<Vec<ChatCompletionToolCall>>,
-
     pub reasoning: Option<String>,
-
+    pub role: Option<String>,
+    pub tool_calls: Option<Vec<ChatCompletionToolCall>>,
     pub extra_metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
@@ -56,23 +48,16 @@ pub enum ToolChoice {
 
 #[derive(Debug, Clone)]
 pub struct ChatCompletionMessage {
-    pub content: Option<String>,
-
-    pub refusal: Option<String>,
-
     pub role: String,
-
-    pub annotations: Option<Vec<Annotation>>,
-
-    pub tool_calls: Option<Vec<ChatCompletionToolCall>>,
-
+    pub content: Option<String>,
+    pub refusal: Option<String>,
     pub reasoning: Option<String>,
-
+    pub annotations: Option<Vec<Annotation>>,
+    pub tool_calls: Option<Vec<ChatCompletionToolCall>>,
     pub extra_metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone)]
-
 pub struct ChatCompletionToolCall {
     pub index: i64,
     pub function: Function,
@@ -80,7 +65,6 @@ pub struct ChatCompletionToolCall {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-
 pub struct Annotation {
     pub r#type: String,
     pub url_citation: AnnotationURLCitation,
@@ -102,16 +86,16 @@ pub struct ChoiceLogprobs {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ChatCompletionTokenLogprob {
+    pub logprob: f64,
     pub token: String,
     pub bytes: Option<Vec<u8>>,
-    pub logprob: f64,
     pub top_logprobs: Option<Vec<TopLogprob>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TopLogprob {
-    pub token: String,
     pub logprob: f64,
+    pub token: String,
     pub bytes: Option<Vec<u8>>,
 }
 
@@ -172,13 +156,19 @@ pub enum ChatCompletionToolParam {
     Function(FunctionDefinition),
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Builder)]
+#[builder(
+    name = "FunctionDefinitionBuilder",
+    pattern = "owned",
+    setter(strip_option = true)
+)]
 pub struct FunctionDefinition {
     pub name: String,
     pub description: String,
+    pub parameters: Parameters,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[builder(default = None)]
     pub strict: Option<bool>,
-    pub parameters: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -220,90 +210,201 @@ pub enum ReasoningEffort {
     High,
 }
 
+impl ChatCompletion {
+    /// Returns the text content of the first choice's message, if available.
+    /// This is the most common way to access the model's response.
+    pub fn content(&self) -> Option<&str> {
+        self.choices
+            .first()
+            .and_then(|choice| choice.message.content())
+    }
+
+    /// Checks if the first choice's message contains any content.
+    pub fn has_content(&self) -> bool {
+        self.choices
+            .first()
+            .map(|choice| choice.message.has_content())
+            .unwrap_or(false)
+    }
+
+    /// Checks if the first choice's message contains any tool calls.
+    pub fn has_tool_calls(&self) -> bool {
+        self.choices
+            .first()
+            .map(|choice| choice.message.has_tool_calls())
+            .unwrap_or(false)
+    }
+
+    /// Returns a reference to the list of tool calls from the first choice's message, if any.
+    pub fn tool_calls(&self) -> Option<&Vec<ChatCompletionToolCall>> {
+        self.choices
+            .first()
+            .and_then(|choice| choice.message.tool_calls())
+    }
+
+    /// Returns a reference to the message object of the first choice.
+    /// This is useful when you need to access other properties of the message,
+    /// such as `role` or `refusal`.
+    pub fn first_choice_message(&self) -> Option<&ChatCompletionMessage> {
+        self.choices.first().map(|choice| &choice.message)
+    }
+}
+
+impl ChatCompletionChunk {
+    /// Returns the text content from the delta of the first choice, if available.
+    /// This is a convenient way to access the streamed content chunks.
+    pub fn content(&self) -> Option<&str> {
+        self.choices
+            .first()
+            .and_then(|choice| choice.delta.content())
+    }
+
+    /// Checks if the first choice's delta contains any content.
+    pub fn has_content(&self) -> bool {
+        self.choices
+            .first()
+            .map(|choice| choice.delta.has_content())
+            .unwrap_or(false)
+    }
+
+    /// Checks if the first choice's delta contains any tool calls.
+    pub fn has_tool_calls(&self) -> bool {
+        self.choices
+            .first()
+            .map(|choice| choice.delta.has_tool_calls())
+            .unwrap_or(false)
+    }
+
+    /// Returns a reference to the list of tool calls from the delta of the first choice, if any.
+    pub fn tool_calls(&self) -> Option<&Vec<ChatCompletionToolCall>> {
+        self.choices
+            .first()
+            .and_then(|choice| choice.delta.tool_calls())
+    }
+
+    /// Checks if the first choice's delta contains reasoning content.
+    pub fn has_reasoning(&self) -> bool {
+        self.choices
+            .first()
+            .map(|choice| choice.delta.has_reasoning())
+            .unwrap_or(false)
+    }
+
+    /// Returns the reasoning content from the delta of the first choice, if available.
+    pub fn reasoning(&self) -> Option<&str> {
+        self.choices
+            .first()
+            .and_then(|choice| choice.delta.reasoning())
+    }
+
+    /// Returns an iterator over the deltas of all choices in the chunk.
+    pub fn deltas(&self) -> impl Iterator<Item = &ChoiceDelta> {
+        self.choices.iter().map(|choice| &choice.delta)
+    }
+}
+
 impl ChatCompletionMessage {
-    pub fn is_tool_calls(&self) -> bool {
+    pub fn has_tool_calls(&self) -> bool {
         self.tool_calls
             .as_ref()
             .is_some_and(|calls| !calls.is_empty())
     }
-    pub fn is_reasoning(&self) -> bool {
+    pub fn has_reasoning(&self) -> bool {
         self.reasoning.as_ref().is_some_and(|reas| !reas.is_empty())
     }
 
-    pub fn get_content_str(&self) -> &str {
-        match self.content.as_ref() {
-            Some(content) => content.as_str(),
-            None => "",
-        }
+    pub fn has_content(&self) -> bool {
+        self.content.as_ref().is_some_and(|c| !c.is_empty())
     }
 
-    pub fn get_reasoning_str(&self) -> &str {
-        match self.reasoning.as_ref() {
-            Some(reasoning) => reasoning.as_str(),
-            None => "",
-        }
+    pub fn content(&self) -> Option<&str> {
+        self.content.as_deref()
     }
 
-    pub fn get_content(self) -> String {
-        match self.content {
-            Some(content) => content,
-            None => "".into(),
-        }
+    pub fn reasoning(&self) -> Option<&str> {
+        self.reasoning.as_deref()
+    }
+
+    pub fn tool_calls(&self) -> Option<&Vec<ChatCompletionToolCall>> {
+        self.tool_calls.as_ref()
     }
 }
 
 impl ChoiceDelta {
-    pub fn is_tool_calls(&self) -> bool {
+    pub fn has_tool_calls(&self) -> bool {
         self.tool_calls
             .as_ref()
             .is_some_and(|calls| !calls.is_empty())
     }
 
-    pub fn is_reasoning(&self) -> bool {
+    pub fn has_reasoning(&self) -> bool {
         self.reasoning.as_ref().is_some_and(|reas| !reas.is_empty())
     }
 
-    pub fn get_content_str(&self) -> &str {
-        match self.content.as_ref() {
-            Some(content) => content.as_str(),
-            None => "",
-        }
+    pub fn has_content(&self) -> bool {
+        self.content.as_ref().is_some_and(|c| !c.is_empty())
+    }
+    pub fn content(&self) -> Option<&str> {
+        self.content.as_deref()
     }
 
-    pub fn get_reasoning_str(&self) -> &str {
-        match self.reasoning.as_ref() {
-            Some(reasoning) => reasoning.as_str(),
-            None => "",
-        }
+    pub fn reasoning(&self) -> Option<&str> {
+        self.reasoning.as_deref()
     }
 
-    pub fn get_content(self) -> String {
-        match self.content {
-            Some(content) => content,
-            None => "".into(),
-        }
+    pub fn tool_calls(&self) -> Option<&Vec<ChatCompletionToolCall>> {
+        self.tool_calls.as_ref()
     }
 }
 
 impl FunctionDefinition {
-    pub fn new(
-        name: &str,
-        description: &str,
-        parameters: serde_json::Value,
-        strict: Option<bool>,
-    ) -> Self {
-        Self {
-            name: name.into(),
-            description: description.into(),
-            parameters,
-            strict,
-        }
+    /// Creates a new `FunctionDefinitionBuilder` to construct a `FunctionDefinition`.
+    pub fn builder() -> FunctionDefinitionBuilder {
+        FunctionDefinitionBuilder::create_empty()
+    }
+
+    /// A convenient method to create a `FunctionDefinition` from a `serde_json::Value`.
+    ///
+    /// This method is a wrapper around `TryFrom<Value>`.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - A `serde_json::Value` that should represent a FunctionDefinition.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing either the constructed `FunctionDefinition` or a `ConversionError`.
+    pub fn from_value(value: Value) -> Result<Self, ConversionError> {
+        Self::try_from(value)
     }
 }
 
 impl ChatCompletionToolParam {
-    pub fn function(name: &str, description: &str, parameters: serde_json::Value) -> Self {
-        Self::Function(FunctionDefinition::new(name, description, parameters, None))
+    /// Creates a new function tool parameter with type-safe `Parameters`.
+    pub fn function(name: &str, description: &str, parameters: Parameters) -> Self {
+        Self::Function(
+            FunctionDefinition::builder()
+                .name(name.to_string())
+                .description(description.to_string())
+                .parameters(parameters)
+                .build()
+                .unwrap(), // Safe to unwrap as all required fields are provided
+        )
+    }
+
+    /// A convenient method to create a `ChatCompletionToolParam` from a `serde_json::Value`.
+    ///
+    /// This method is a wrapper around `TryFrom<Value>`.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - A `serde_json::Value` that should represent a ChatCompletionToolParam.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing either the constructed `ChatCompletionToolParam` or a `ConversionError`.
+    pub fn from_value(value: Value) -> Result<Self, ConversionError> {
+        Self::try_from(value)
     }
 }
 
@@ -386,7 +487,7 @@ impl From<ChoiceDelta> for ChatCompletionMessage {
     }
 }
 
-impl From<StreamChoice> for UnStreamChoice {
+impl From<StreamChoice> for FinalChoice {
     fn from(value: StreamChoice) -> Self {
         Self {
             index: value.index,
@@ -397,82 +498,190 @@ impl From<StreamChoice> for UnStreamChoice {
     }
 }
 
-impl std::ops::Add for StreamChoice {
-    type Output = Self;
+impl TryFrom<Value> for FunctionDefinition {
+    type Error = ConversionError;
 
-    fn add(mut self, rhs: Self) -> Self::Output {
-        if self.index == 0 {
-            self.index = rhs.index;
-        }
-        if rhs.finish_reason.is_some() {
-            self.finish_reason = rhs.finish_reason;
-        }
-        if rhs.logprobs.is_some() {
-            self.logprobs = rhs.logprobs;
-        }
-        self.delta = self.delta + rhs.delta;
-        self
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        let obj = value.as_object().ok_or_else(|| {
+            ConversionError::ValueNotAnObject(format!(
+                "Expected object for FunctionDefinition, got: {:?} (type: {:?})",
+                value, value
+            ))
+        })?;
+
+        let name = obj
+            .get("name")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                ConversionError::InvalidFieldValue(
+                    "name".to_string(),
+                    "Field 'name' is required and must be a string".to_string(),
+                )
+            })?
+            .to_string();
+
+        let description = obj
+            .get("description")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                ConversionError::InvalidFieldValue(
+                    "description".to_string(),
+                    "Field 'description' is required and must be a string".to_string(),
+                )
+            })?
+            .to_string();
+
+        let parameters_value = obj.get("parameters").ok_or_else(|| {
+            ConversionError::InvalidFieldValue(
+                "parameters".to_string(),
+                "Field 'parameters' is required".to_string(),
+            )
+        })?;
+        let parameters = Parameters::try_from(parameters_value.clone())?;
+
+        // Handle optional "strict" field
+        let strict = obj.get("strict").and_then(Value::as_bool);
+
+        Ok(FunctionDefinition {
+            name,
+            description,
+            parameters,
+            strict,
+        })
     }
 }
 
-impl std::ops::Add for ChoiceDelta {
-    type Output = Self;
+impl TryFrom<Value> for ChatCompletionToolParam {
+    type Error = ConversionError;
 
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self.content = match (self.content, rhs.content) {
-            (Some(left), Some(right)) => Some(left + &right),
-            (Some(left), None) => Some(left),
-            (None, Some(right)) => Some(right),
-            (None, None) => None,
-        };
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        let obj = value.as_object().ok_or_else(|| {
+            ConversionError::ValueNotAnObject(format!(
+                "Expected object for ChatCompletionToolParam, got: {:?} (type: {:?})",
+                value, value
+            ))
+        })?;
 
-        if rhs.refusal.is_some() {
-            self.refusal = rhs.refusal;
-        }
-
-        if rhs.role.is_some() {
-            self.role = rhs.role;
-        }
-
-        self.tool_calls = match (self.tool_calls, rhs.tool_calls) {
-            (Some(mut left), Some(right)) => {
-                left = left.into_iter().zip(right).map(|(l, r)| l + r).collect();
-                Some(left)
+        // Check if it's the standard format with "type" and "function" fields
+        if let Some(type_str) = obj.get("type").and_then(Value::as_str) {
+            if type_str == "function" {
+                if let Some(function_value) = obj.get("function") {
+                    let function_def = FunctionDefinition::try_from(function_value.clone())?;
+                    return Ok(ChatCompletionToolParam::Function(function_def));
+                } else {
+                    // "type": "function" is present but "function" field is missing
+                    return Err(ConversionError::InvalidFieldValue(
+                        "function".to_string(),
+                        "Field 'function' is required when 'type' is 'function'".to_string(),
+                    ));
+                }
+            } else {
+                // "type" field is present but not "function"
+                return Err(ConversionError::InvalidFieldValue(
+                    "type".to_string(),
+                    format!(
+                        "Expected 'function' for 'type' field, got: {} (full object: {:?})",
+                        type_str, obj
+                    ),
+                ));
             }
-            (Some(left), None) => Some(left),
-            (None, Some(right)) => Some(right),
-            (None, None) => None,
-        };
+        }
 
-        self.reasoning = match (self.reasoning, rhs.reasoning) {
-            (Some(left), Some(right)) => Some(left + &right),
-            (Some(left), None) => Some(left),
-            (None, Some(right)) => Some(right),
-            (None, None) => None,
-        };
-
-        self.extra_metadata = merge_extra_metadata(self.extra_metadata, rhs.extra_metadata);
-
-        self
+        // If no "type" field, assume it's the direct FunctionDefinition format
+        let function_def = FunctionDefinition::try_from(value)?;
+        Ok(ChatCompletionToolParam::Function(function_def))
     }
 }
 
-impl std::ops::Add for ChatCompletionToolCall {
-    type Output = Self;
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self.index = rhs.index;
-        self.function = self.function + rhs.function;
-        self
+impl StreamChoice {
+    pub fn merge(&mut self, delta: Self) {
+        if self.index == 0 {
+            self.index = delta.index;
+        }
+        if delta.finish_reason.is_some() {
+            self.finish_reason = delta.finish_reason;
+        }
+        if delta.logprobs.is_some() {
+            self.logprobs = delta.logprobs;
+        }
+        self.delta.merge(delta.delta);
     }
 }
 
-impl std::ops::Add for Function {
-    type Output = Self;
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self.id.push_str(&rhs.id);
-        self.name.push_str(&rhs.name);
-        self.arguments.push_str(&rhs.arguments);
-        self
+impl ChoiceDelta {
+    pub fn merge(&mut self, delta: Self) {
+        // Merge content
+        match (self.content.as_mut(), delta.content) {
+            (Some(left), Some(right)) => left.push_str(&right),
+            (None, Some(right)) => self.content = Some(right),
+            _ => {}
+        }
+
+        // Update refusal if present in delta
+        if delta.refusal.is_some() {
+            self.refusal = delta.refusal;
+        }
+
+        // Update role if present in delta
+        if delta.role.is_some() {
+            self.role = delta.role;
+        }
+
+        // Merge tool calls with adaptive logic
+        match (self.tool_calls.as_mut(), delta.tool_calls) {
+            (Some(left), Some(right)) => {
+                // Heuristic to detect non-standard, sequential tool call streams.
+                // If the incoming delta has one tool call with index 0,
+                // we assume it's a continuation of the last tool call in the `left` vector.
+                if right.len() == 1 && right[0].index == 0 {
+                    if let Some(last_tool_call) = left.last_mut() {
+                        // This is safe because we've checked right.len() == 1.
+                        if let Some(r) = right.into_iter().next() {
+                            last_tool_call.merge(r);
+                        }
+                    } else {
+                        // If `left` is empty, just take `right`.
+                        *left = right;
+                    }
+                } else {
+                    // Standard, index-based merging for robust handling of concurrent tool calls.
+                    for r in right.into_iter() {
+                        if let Some(l) = left.iter_mut().find(|l| l.index == r.index) {
+                            l.merge(r);
+                        } else {
+                            left.push(r);
+                        }
+                    }
+                }
+            }
+            (None, Some(right)) => self.tool_calls = Some(right),
+            _ => {}
+        }
+
+        // Merge reasoning
+        match (self.reasoning.as_mut(), delta.reasoning) {
+            (Some(left), Some(right)) => left.push_str(&right),
+            (None, Some(right)) => self.reasoning = Some(right),
+            _ => {}
+        }
+
+        // Merge extra metadata in-place to avoid unnecessary cloning
+        merge_extra_metadata_in_place(&mut self.extra_metadata, delta.extra_metadata);
+    }
+}
+
+impl ChatCompletionToolCall {
+    pub fn merge(&mut self, delta: Self) {
+        self.index = delta.index;
+        self.function.merge(delta.function);
+    }
+}
+
+impl Function {
+    pub fn merge(&mut self, delta: Self) {
+        self.id.push_str(&delta.id);
+        self.name.push_str(&delta.name);
+        self.arguments.push_str(&delta.arguments);
     }
 }
 
@@ -540,7 +749,7 @@ impl Serialize for ChatCompletionMessageParam {
                         .map_err(|e| serde::ser::Error::custom(e.to_string()))?,
                 );
                 if let Some(name) = &inner.name {
-                    map.insert("name".into(), Value::from(name.clone()));
+                    map.insert("name".into(), Value::from(name.as_str()));
                 }
                 serializer.collect_map(map)
             }
@@ -553,7 +762,7 @@ impl Serialize for ChatCompletionMessageParam {
                         .map_err(|e| serde::ser::Error::custom(e.to_string()))?,
                 );
                 if let Some(name) = &inner.name {
-                    map.insert("name".into(), Value::from(name.clone()));
+                    map.insert("name".into(), Value::from(name.as_str()));
                 }
                 serializer.collect_map(map)
             }
@@ -568,10 +777,10 @@ impl Serialize for ChatCompletionMessageParam {
                     );
                 }
                 if let Some(name) = &inner.name {
-                    map.insert("name".into(), Value::from(name.clone()));
+                    map.insert("name".into(), Value::from(name.as_str()));
                 }
                 if let Some(refusal) = &inner.refusal {
-                    map.insert("refusal".into(), Value::from(refusal.clone()));
+                    map.insert("refusal".into(), Value::from(refusal.as_str()));
                 }
                 if let Some(tool_calls) = &inner.tool_calls {
                     map.insert(
@@ -846,7 +1055,9 @@ impl<'de> Deserialize<'de> for ChatCompletionMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::chat::tool_parameters::Parameters;
     use crate::{chat_request, system, user};
+    use openai4rs_macro::assistant;
     use std::fs;
 
     #[test]
@@ -854,6 +1065,65 @@ mod tests {
         let json = fs::read_to_string("./assets/chatcompletion.json").unwrap();
         let chatcompletion: Result<ChatCompletion, _> = serde_json::from_str(json.as_str());
         assert!(chatcompletion.is_ok());
+    }
+
+    #[test]
+    fn test_from_value_to_function_definition() {
+        let json = fs::read_to_string("./assets/function_definition.json").unwrap();
+        let value: serde_json::Value = serde_json::from_str(json.as_str()).unwrap();
+        let function_definition_result = FunctionDefinition::try_from(value.clone());
+        assert!(function_definition_result.is_ok());
+
+        let function_definition = function_definition_result.unwrap();
+        assert_eq!(function_definition.name, "get_current_weather");
+        assert_eq!(
+            function_definition.description,
+            "Get the current weather in a given location"
+        );
+        // Check parameters structure
+        match &function_definition.parameters {
+            Parameters::Object(obj_params) => {
+                assert_eq!(obj_params.required, vec!["location"]);
+                assert!(obj_params.properties.contains_key("location"));
+                assert!(obj_params.properties.contains_key("unit"));
+            }
+            _ => panic!("Parameters should be an object"),
+        }
+    }
+
+    #[test]
+    fn test_from_value_to_chat_completion_tool_param() {
+        // Test standard format
+        let json = fs::read_to_string("./assets/chat_completion_tool_param.json").unwrap();
+        let value: serde_json::Value = serde_json::from_str(json.as_str()).unwrap();
+        let chat_completion_tool_param_result = ChatCompletionToolParam::try_from(value);
+        assert!(chat_completion_tool_param_result.is_ok());
+
+        // Verify the parsed data for standard format
+        let ChatCompletionToolParam::Function(function_def) =
+            chat_completion_tool_param_result.unwrap();
+
+        assert_eq!(function_def.name, "get_current_weather");
+        assert_eq!(
+            function_def.description,
+            "Get the current weather in a given location"
+        );
+
+        // Test direct FunctionDefinition format
+        let json = fs::read_to_string("./assets/function_definition.json").unwrap();
+        let value: serde_json::Value = serde_json::from_str(json.as_str()).unwrap();
+        let chat_completion_tool_param_result = ChatCompletionToolParam::try_from(value);
+        assert!(chat_completion_tool_param_result.is_ok());
+
+        // Verify the parsed data for direct format
+        let ChatCompletionToolParam::Function(function_def) =
+            chat_completion_tool_param_result.unwrap();
+
+        assert_eq!(function_def.name, "get_current_weather");
+        assert_eq!(
+            function_def.description,
+            "Get the current weather in a given location"
+        );
     }
 
     #[test]
@@ -867,17 +1137,17 @@ mod tests {
 
     #[test]
     fn test_assistant_serialize() {
-        let assistant =
-            ChatCompletionMessageParam::Assistant(ChatCompletionAssistantMessageParam {
-                content: Some(content!("content")),
-                name: Some("name".into()),
-                refusal: Some("refusal".into()),
-                tool_calls: Some(vec![ChatCompletionMessageToolCallParam::function(
-                    "id",
-                    "name",
-                    "{'path': '/.cargo'}",
-                )]),
-            });
+        let assistant = assistant!(
+            content = "content",
+            name = "name",
+            refusal = "refusal",
+            tool_calls = vec![ChatCompletionMessageToolCallParam::function(
+                "id",
+                "name",
+                "{'path': '/.cargo'}",
+            )]
+        );
+
         let json = serde_json::to_string(&assistant).unwrap();
         assert_eq!(
             &json,
@@ -886,35 +1156,139 @@ mod tests {
     }
 
     #[test]
-    fn test_request_params_serialize() {
-        let messages = vec![system!("system message"), user!("user message")];
+    fn test_request_params_serialize_with_schema() {
+        let messages = vec![system!("system message"), user!(content:"user message")];
+
+        let tool_params = Parameters::object()
+            .property(
+                "name",
+                Parameters::string()
+                    .description("name of the person")
+                    .build(),
+            )
+            .require("name")
+            .build()
+            .unwrap();
+
+        let function_tool =
+            ChatCompletionToolParam::function("function_name", "function description", tool_params);
+
         let request = chat_request("meta-llama/llama-3.3-8b-instruct:free", &messages)
             .temperature(0.1)
             .top_logprobs(1)
             .n(1)
-            .top_logprobs(1)
             .max_tokens(1024)
             .tool_choice(ToolChoice::Auto)
-            .tools(vec![ChatCompletionToolParam::function(
-                "function_name",
-                "function description",
-                serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "name": {
-                            "type": "string",
-                            "description": "name of the person"
-                        }
-                    },
-                    "required": ["name"]
-                }),
-            )])
+            .tools(vec![function_tool])
             .build()
             .unwrap();
+
         let json = serde_json::to_string(&request).unwrap();
         assert_eq!(
             &json,
             r#"{"model":"meta-llama/llama-3.3-8b-instruct:free","messages":[{"content":"system message","role":"system"},{"content":"user message","role":"user"}],"max_tokens":1024,"n":1,"temperature":0.1,"top_logprobs":1,"tools":[{"function":{"description":"function description","name":"function_name","parameters":{"properties":{"name":{"description":"name of the person","type":"string"}},"required":["name"],"type":"object"}},"type":"function"}],"tool_choice":"auto"}"#
         );
+    }
+
+    #[test]
+    fn test_chat_completion_helpers() {
+        let message = ChatCompletionMessage {
+            role: "assistant".to_string(),
+            content: Some("Hello, world!".to_string()),
+            refusal: None,
+            reasoning: None,
+            annotations: None,
+            tool_calls: Some(vec![ChatCompletionToolCall {
+                index: 0,
+                function: Function {
+                    id: "call_123".to_string(),
+                    name: "get_current_weather".to_string(),
+                    arguments: r#"{"location": "Boston, MA"}"#.to_string(),
+                },
+                r#type: "function".to_string(),
+            }]),
+            extra_metadata: None,
+        };
+
+        let choice = FinalChoice {
+            index: 0,
+            finish_reason: FinishReason::Stop,
+            message: message.clone(),
+            logprobs: None,
+        };
+
+        let chat_completion = ChatCompletion {
+            id: "chatcmpl-123".to_string(),
+            choices: vec![choice],
+            created: 1234567890,
+            model: "gpt-3.5-turbo".to_string(),
+            object: "chat.completion".to_string(),
+            usage: None,
+            service_tier: None,
+            system_fingerprint: None,
+            extra_metadata: None,
+        };
+
+        // Test content()
+        assert_eq!(chat_completion.content(), Some("Hello, world!"));
+
+        // Test has_tool_calls()
+        assert!(chat_completion.has_tool_calls());
+
+        // Test tool_calls()
+        let tool_calls = chat_completion.tool_calls().unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].function.name, "get_current_weather");
+    }
+
+    #[test]
+    fn test_chat_completion_chunk_helpers() {
+        let delta = ChoiceDelta {
+            content: Some("Hello, world!".to_string()),
+            refusal: None,
+            reasoning: None,
+            role: Some("assistant".to_string()),
+            tool_calls: Some(vec![ChatCompletionToolCall {
+                index: 0,
+                function: Function {
+                    id: "call_123".to_string(),
+                    name: "get_current_weather".to_string(),
+                    arguments: r#"{"location": "Boston, MA"}"#.to_string(),
+                },
+                r#type: "function".to_string(),
+            }]),
+            extra_metadata: None,
+        };
+
+        let choice = StreamChoice {
+            index: 0,
+            delta: delta.clone(),
+            finish_reason: Some(FinishReason::Stop),
+            logprobs: None,
+        };
+
+        let chat_completion_chunk = ChatCompletionChunk {
+            id: "chatcmpl-123".to_string(),
+            choices: vec![choice],
+            created: 1234567890,
+            model: "gpt-3.5-turbo".to_string(),
+            object: "chat.completion.chunk".to_string(),
+            usage: None,
+            service_tier: None,
+            system_fingerprint: None,
+            extra_metadata: None,
+        };
+
+        // Test content()
+        assert_eq!(chat_completion_chunk.content(), Some("Hello, world!"));
+
+        // Test tool_calls()
+        let tool_calls = chat_completion_chunk.tool_calls().unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].function.name, "get_current_weather");
+
+        // Test deltas()
+        let deltas: Vec<&ChoiceDelta> = chat_completion_chunk.deltas().collect();
+        assert_eq!(deltas.len(), 1);
     }
 }

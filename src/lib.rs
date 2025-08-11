@@ -1,80 +1,85 @@
+//! # OpenAI4RS: An Asynchronous Rust Client for OpenAI-Compatible APIs
 //!
-//! # openai4rs
+//! `openai4rs` is an unofficial Rust crate designed for seamless interaction with
+//! OpenAI-compatible APIs, offering a robust and fluent asynchronous experience.
 //!
-//! 一个非官方的 Rust crate，用于与兼容 OpenAI 的 API 进行交互，提供流畅且强大的异步体验。
+//! This library is built with ease of use, thread safety, and high configurability in mind,
+//! making it suitable for a wide range of applications from simple scripts to complex,
+//! high-performance services.
 //!
-//! 该库设计旨在易于使用、线程安全且高度可配置，适用于从简单脚本到复杂、高性能服务的广泛应用。
+//! ## Key Features
 //!
-//! ## 主要特性
+//! - **Async-First**: Built on `tokio` and `reqwest` for non-blocking I/O operations.
+//! - **Chat Completions**: Full support for the Chat Completions API, including streaming and tool calling.
+//! - **Legacy Completions**: Support for legacy text completion models.
+//! - **Model Management**: List and retrieve information about available models.
+//! - **Configurable HTTP Client**: Customize timeouts, retries, proxies, and user agents.
+//! - **Thread Safety**: The client can be safely shared across multiple threads.
+//! - **Reasoning Support**: Special support for reasoning-based models.
 //!
-//! - **异步优先**: 基于 `tokio` 和 `reqwest` 构建，实现非阻塞 I/O。
-//! - **聊天补全**: 完全支持聊天补全 API，包括流式传输和工具调用。
-//! - **文本补全**: 支持旧版的文本补全模型。
-//! - **模型管理**: 列出和检索可用模型的信息。
-//! - **可配置的 HTTP 客户端**: 自定义超时、重试、代理和用户代理。
-//! - **线程安全**: 可在多个线程之间安全地共享客户端。
-//! - **推理模式**: 对基于推理的模型提供特别支持。
+//! ## Quick Start
 //!
-//! ## 快速入门
-//!
-//! 首先，将 `openai4rs` 添加到您的 `Cargo.toml` 中：
+//! First, add `openai4rs` to your `Cargo.toml`:
 //!
 //! ```toml
 //! [dependencies]
-//! openai4rs = "0.1.3"
+//! openai4rs = "0.1.5"
 //! tokio = { version = "1", features = ["full"] }
 //! dotenvy = "0.15"
 //! ```
 //!
-//! 然后，使用环境变量配置客户端并进行您的第一次 API 调用。
+//! Then, configure the client using environment variables and make your first API call.
 //!
 //! ```rust
-//! use openai4rs::{OpenAI, chat_request, user};
+//! use openai4rs::*;
 //! use dotenvy::dotenv;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // 加载 .env 文件
+//!     // Load .env file
 //!     dotenv().ok();
 //!
-//!     // 从环境变量创建客户端
+//!     // Create client from environment variables
 //!     let client = OpenAI::from_env()?;
 //!
-//!     // 创建聊天请求
-//!     let messages = vec![user!("法国的首都是哪里？")];
-//!     let request = chat_request("deepseek/deepseek-chat-v3-0324:free", &messages);
+//!     // Create a chat request
+//!     let messages = vec![user!("What is the capital of France?")];
+//!     let request = chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages);
 //!
-//!     // 获取响应
+//!     // Get the response
 //!     let response = client.chat().create(request).await?;
-//!     println!("响应: {:#?}", response);
+//!     println!("Response: {:#?}", response);
 //!
 //!     Ok(())
 //! }
 //! ```
 //!
-//! 更多示例和详细用法，请参阅每个模块的文档。
+//! For more examples and detailed usage, refer to the documentation of each module.
 //!
 
-/// 处理聊天补全，包括流式传输和工具调用。
+/// Handles chat completions, including streaming and tool calling.
 pub mod chat;
-
-/// 核心客户端实现、配置和入口点。
+/// Core client implementation, configuration, and entry point.
 pub mod client;
-/// 库中共享的通用类型和实用程序。
+/// Common types and utilities shared within the library.
 pub mod common;
-/// 旧版文本补全功能。
+/// Legacy text completion functionality.
 pub mod completions;
-/// 错误处理和自定义错误类型。
+/// Error handling and custom error types.
 pub mod error;
-/// 用于创建请求和消息的便捷宏。
-pub mod macros;
-/// 用于列出和检索模型信息的模型管理。
+/// Model management for listing and retrieving model information.
 pub mod models;
-/// 实用函数和特征。
+/// Utility functions and traits.
 pub mod utils;
+
+// Re-export core types and functions
 pub use chat::*;
 pub use client::{Config, OpenAI};
 pub use completions::completions_request;
+pub use error::OpenAIError;
 pub use models::models_request;
 pub use serde_json;
 pub use utils::Apply;
+
+// Import and re-export the new procedural macros
+pub use openai4rs_macro::{assistant, content, system, tool, user};
