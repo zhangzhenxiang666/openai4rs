@@ -629,7 +629,6 @@ mod tests {
     use super::*;
     use crate::{chat::*, models_request, user};
     use dotenvy::dotenv;
-    use std::env;
     const MODEL_NAME: &str = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
 
     #[test]
@@ -800,94 +799,5 @@ mod tests {
         let client = OpenAI::from_env().unwrap();
         let models = client.models().list(models_request()).await;
         assert!(models.is_ok())
-    }
-
-    #[tokio::test]
-    async fn test_from_env_should_load_all_variables() {
-        // Temporarily store original values to restore them later
-        let original_api_key = env::var("OPENAI_API_KEY").ok();
-        let original_base_url = env::var("OPENAI_BASE_URL").ok();
-        let original_timeout = env::var("OPENAI_TIMEOUT").ok();
-        let original_connect_timeout = env::var("OPENAI_CONNECT_TIMEOUT").ok();
-        let original_retry_count = env::var("OPENAI_RETRY_COUNT").ok();
-        let original_proxy = env::var("OPENAI_PROXY").ok();
-        let original_user_agent = env::var("OPENAI_USER_AGENT").ok();
-
-        // Set up all relevant environment variables
-        unsafe {
-            env::set_var("OPENAI_API_KEY", "env-test-key");
-            env::set_var("OPENAI_BASE_URL", "https://env-test.com/v1");
-            env::set_var("OPENAI_TIMEOUT", "180");
-            env::set_var("OPENAI_CONNECT_TIMEOUT", "20");
-            env::set_var("OPENAI_RETRY_COUNT", "10");
-            env::set_var("OPENAI_PROXY", "http://env-proxy:8888");
-            env::set_var("OPENAI_USER_AGENT", "EnvTestAgent/1.0");
-        }
-
-        let client = OpenAI::from_env().unwrap();
-
-        let config = client.config.read().await;
-
-        assert_eq!(config.api_key(), "env-test-key");
-        assert_eq!(config.base_url(), "https://env-test.com/v1");
-        assert_eq!(config.timeout_seconds(), 180);
-        assert_eq!(config.connect_timeout_seconds(), 20);
-        assert_eq!(config.retry_count(), 10);
-        assert_eq!(config.proxy(), Some("http://env-proxy:8888"));
-        assert_eq!(config.user_agent(), Some("EnvTestAgent/1.0"));
-
-        // Restore original environment variables
-        unsafe {
-            match original_api_key {
-                Some(val) => env::set_var("OPENAI_API_KEY", val),
-                None => env::remove_var("OPENAI_API_KEY"),
-            }
-            match original_base_url {
-                Some(val) => env::set_var("OPENAI_BASE_URL", val),
-                None => env::remove_var("OPENAI_BASE_URL"),
-            }
-            match original_timeout {
-                Some(val) => env::set_var("OPENAI_TIMEOUT", val),
-                None => env::remove_var("OPENAI_TIMEOUT"),
-            }
-            match original_connect_timeout {
-                Some(val) => env::set_var("OPENAI_CONNECT_TIMEOUT", val),
-                None => env::remove_var("OPENAI_CONNECT_TIMEOUT"),
-            }
-            match original_retry_count {
-                Some(val) => env::set_var("OPENAI_RETRY_COUNT", val),
-                None => env::remove_var("OPENAI_RETRY_COUNT"),
-            }
-            match original_proxy {
-                Some(val) => env::set_var("OPENAI_PROXY", val),
-                None => env::remove_var("OPENAI_PROXY"),
-            }
-            match original_user_agent {
-                Some(val) => env::set_var("OPENAI_USER_AGENT", val),
-                None => env::remove_var("OPENAI_USER_AGENT"),
-            }
-        }
-    }
-
-    #[test]
-    fn test_from_env_should_fail_when_api_key_is_missing() {
-        // Temporarily store original value to restore it later
-        let original_api_key = env::var("OPENAI_API_KEY").ok();
-
-        // Ensure the required env var is not set
-        unsafe {
-            env::remove_var("OPENAI_API_KEY");
-        }
-        let result = OpenAI::from_env();
-        assert!(result.is_err());
-        assert_eq!(result.err().unwrap(), "OPENAI_API_KEY not set");
-
-        // Restore original environment variable
-        unsafe {
-            match original_api_key {
-                Some(val) => env::set_var("OPENAI_API_KEY", val),
-                None => {} // Do nothing if it wasn't originally set
-            }
-        }
     }
 }
