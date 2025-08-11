@@ -799,7 +799,6 @@ mod tests {
         dotenv().ok();
         let client = OpenAI::from_env().unwrap();
         let models = client.models().list(models_request()).await;
-        println!("{:#?}", models);
         assert!(models.is_ok())
     }
 
