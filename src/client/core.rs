@@ -1,15 +1,18 @@
-use crate::{chat::Chat, completions::Completions, models::Models};
+use crate::{
+    chat::Chat,
+    completions::Completions,
+    http::{config::HttpConfig, service::HttpService},
+    models::Models,
+};
 use derive_builder::Builder;
-use reqwest::{Client, ClientBuilder, Proxy};
 use std::sync::{Arc, OnceLock};
-use std::time::Duration;
 use tokio::sync::RwLock;
 
 /// OpenAI client configuration
 ///
 /// Contains the API key, base URL, and HTTP request settings for connecting to an OpenAI-compatible service.
 ///
-/// # Examples
+/// Examples
 ///
 /// ```rust
 /// use openai4rs::Config;
@@ -27,18 +30,8 @@ pub struct Config {
     /// The maximum number of retries for failed requests. Default: 5
     #[builder(default = 5)]
     retry_count: u32,
-    /// Request timeout in seconds. Default: 60
-    #[builder(default = 300)]
-    timeout_seconds: u64,
-    /// Connection timeout in seconds. Default: 10
-    #[builder(default = 10)]
-    connect_timeout_seconds: u64,
-    /// HTTP proxy URL (if any)
-    #[builder(default = None)]
-    proxy: Option<String>,
-    /// User agent string
-    #[builder(default = None)]
-    user_agent: Option<String>,
+    #[builder(default = HttpConfig::default())]
+    http_config: HttpConfig,
 }
 
 impl OpenAIConfigBuilder {
@@ -54,17 +47,23 @@ impl OpenAIConfigBuilder {
     /// # Examples
     ///
     /// ```rust
-    /// use openai4rs::Config;
+    /// use openai4rs::{Config, HttpConfig};
+    ///
     ///
     /// let client = Config::builder()
-    ///     .api_key("sk-your-api-key".to_string())
-    ///     .base_url("https://api.openai.com/v1".to_string())
-    ///     .retry_count(3)
-    ///     .timeout_seconds(120)
-    ///     .proxy("http://127.0.0.1:7890".to_string())
-    ///     .user_agent("MyApp/1.0".to_string())
-    ///     .build_openai()
-    ///     .unwrap();
+    ///    .api_key("sk-your-api-key".to_string())
+    ///    .base_url("https://api.openai.com/v1".to_string())
+    ///    .retry_count(3)
+    ///    .http_config(
+    ///        HttpConfig::builder()
+    ///            .timeout_seconds(120)
+    ///            .proxy("http://127.0.0.1:7890".to_string())
+    ///            .user_agent("MyApp/1.0".to_string())
+    ///            .build()
+    ///            .unwrap(),
+    ///    )
+    ///    .build_openai()
+    ///    .unwrap();
     /// ```
     pub fn build_openai(self) -> Result<OpenAI, OpenAIConfigBuilderError> {
         Ok(OpenAI::with_config(self.build()?))
@@ -107,13 +106,13 @@ impl Config {
     /// ```rust
     /// use openai4rs::Config;
     ///
-    /// let config = Config::builder()
+    /// let mut config = Config::builder()
     ///     .api_key("sk-your-api-key".to_string())
     ///     .base_url("https://api.openai.com/v1".to_string())
     ///     .retry_count(3)
-    ///     .timeout_seconds(120)
     ///     .build()
     ///     .unwrap();
+    /// config.with_timeout_seconds(120);
     /// ```
     pub fn builder() -> OpenAIConfigBuilder {
         OpenAIConfigBuilder::create_empty()
@@ -156,67 +155,46 @@ impl Config {
 
     /// Gets the request timeout in seconds.
     pub fn timeout_seconds(&self) -> u64 {
-        self.timeout_seconds
+        self.http_config.timeout_seconds
     }
 
     /// Sets the request timeout in seconds.
     pub fn with_timeout_seconds(&mut self, timeout_seconds: u64) -> &mut Self {
-        self.timeout_seconds = timeout_seconds;
+        self.http_config.timeout_seconds = timeout_seconds;
         self
     }
 
     /// Gets the connection timeout in seconds.
     pub fn connect_timeout_seconds(&self) -> u64 {
-        self.connect_timeout_seconds
+        self.http_config.connect_timeout_seconds
     }
 
     /// Sets the connection timeout in seconds.
     pub fn with_connect_timeout_seconds(&mut self, connect_timeout_seconds: u64) -> &mut Self {
-        self.connect_timeout_seconds = connect_timeout_seconds;
+        self.http_config.connect_timeout_seconds = connect_timeout_seconds;
         self
     }
 
     /// Gets the proxy URL (if set).
     pub fn proxy(&self) -> Option<&str> {
-        self.proxy.as_deref()
+        self.http_config.proxy.as_deref()
     }
 
     /// Sets an HTTP proxy for requests.
     pub fn with_proxy(&mut self, proxy: Option<impl Into<String>>) -> &mut Self {
-        self.proxy = proxy.map(|s| s.into());
+        self.http_config.proxy = proxy.map(|s| s.into());
         self
     }
 
     /// Gets the user agent string (if set).
     pub fn user_agent(&self) -> Option<&str> {
-        self.user_agent.as_deref()
+        self.http_config.user_agent.as_deref()
     }
 
     /// Sets a custom user agent string.
     pub fn with_user_agent(&mut self, user_agent: Option<impl Into<String>>) -> &mut Self {
-        self.user_agent = user_agent.map(|s| s.into());
+        self.http_config.user_agent = user_agent.map(|s| s.into());
         self
-    }
-
-    /// Builds a `reqwest::Client` with the configured settings.
-    pub fn build_client(&self) -> Client {
-        let mut client_builder = ClientBuilder::new()
-            .timeout(Duration::from_secs(self.timeout_seconds))
-            .connect_timeout(Duration::from_secs(self.connect_timeout_seconds));
-
-        // Add proxy if configured
-        if let Some(proxy_url) = &self.proxy {
-            if let Ok(proxy) = Proxy::all(proxy_url) {
-                client_builder = client_builder.proxy(proxy);
-            }
-        }
-
-        // Add user agent if configured
-        if let Some(user_agent) = &self.user_agent {
-            client_builder = client_builder.user_agent(user_agent);
-        }
-
-        client_builder.build().unwrap_or_else(|_| Client::new())
     }
 }
 
@@ -253,7 +231,7 @@ impl Config {
 /// ```
 pub struct OpenAI {
     config: Arc<RwLock<Config>>,
-    client: Arc<RwLock<Client>>,
+    http_service: Arc<RwLock<HttpService>>,
     chat: OnceLock<Chat>,
     completions: OnceLock<Completions>,
     models: OnceLock<Models>,
@@ -276,11 +254,11 @@ impl OpenAI {
     /// ```
     pub fn new(api_key: &str, base_url: &str) -> Self {
         let config = Config::new(api_key.to_string(), base_url.to_string());
-        let client = config.build_client();
+        let http_service = HttpService::new(config.http_config.clone());
 
         Self {
             config: Arc::new(RwLock::new(config)),
-            client: Arc::new(RwLock::new(client)),
+            http_service: Arc::new(RwLock::new(http_service)),
             chat: OnceLock::new(),
             completions: OnceLock::new(),
             models: OnceLock::new(),
@@ -308,57 +286,55 @@ impl OpenAI {
     /// let client = OpenAI::with_config(config);
     /// ```
     pub fn with_config(config: Config) -> Self {
-        let client = config.build_client();
+        let http_service = HttpService::new(config.http_config.clone());
 
         Self {
             config: Arc::new(RwLock::new(config)),
-            client: Arc::new(RwLock::new(client)),
+            http_service: Arc::new(RwLock::new(http_service)),
             chat: OnceLock::new(),
             completions: OnceLock::new(),
             models: OnceLock::new(),
         }
     }
 
-    /// 更新客户端配置并重新创建 HTTP 客户端。
+    /// Updates the client configuration and recreates the HTTP client.
     ///
-    /// 此方法允许您修改现有客户端的配置，并使用新设置自动重新创建内部 HTTP 客户端。
+    /// This method allows you to modify the configuration of an existing client and automatically recreate the internal HTTP client with the new settings.
     ///
-    /// # 参数
+    /// # Parameters
     ///
-    /// * `update_fn` - 一个更新配置的函数
+    /// * `update_fn` - A function to update the configuration
     ///
-    /// # 示例
+    /// # Example
     ///
     /// ```rust
-    /// # use openai4rs::OpenAI;
-    /// # #[tokio::main]
-    /// # async fn main() {
+    /// use openai4rs::OpenAI;
+    /// #[tokio::main]
+    /// async fn main() {
     /// let client = OpenAI::new("key", "https://api.openai.com/v1");
     ///
-    /// // 一次性更新多个设置
+    /// // Update multiple settings at once
     /// client.update_config(|config| {
     ///     config.with_timeout_seconds(120)
     ///           .with_retry_count(3)
     ///           .with_proxy(Some("http://localhost:8080"));
     /// }).await;
-    /// # }
+    /// }
     /// ```
     pub async fn update_config<F>(&self, update_fn: F)
     where
         F: FnOnce(&mut Config),
     {
-        let new_client = {
-            // Update configuration
+        // Update configuration and rebuild HttpService
+        let new_http_service = {
             let mut config_guard = self.config.write().await;
             update_fn(&mut config_guard);
-
-            // Recreate HTTP client with new settings
-            config_guard.build_client()
+            HttpService::new(config_guard.http_config.clone())
         };
 
-        // Update client
-        let mut client_guard = self.client.write().await;
-        *client_guard = new_client;
+        // Atomically replace the HttpService
+        let mut service_guard = self.http_service.write().await;
+        *service_guard = new_http_service;
     }
 
     /// Creates a new OpenAI client from environment variables.
@@ -456,13 +432,13 @@ impl OpenAI {
     ///     let messages = vec![user!("Hello, how are you?")];
     ///
     ///     let response = client
-    ///                     .chat()
-    ///                     .create(chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages))
-    ///                     .await?;
+    ///         .chat()
+    ///         .create(chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages))
+    ///         .await?;
     ///
     ///     println!("Response: {:#?}", response);
     ///     Ok(())
-    ///  }
+    /// }
     /// ```
     ///
     /// ## Streaming Chat Completion
@@ -477,7 +453,13 @@ impl OpenAI {
     ///     let client = OpenAI::from_env()?;
     ///     let messages = vec![user!("Tell me a story")];
     ///
-    ///     let mut stream = client.chat().create_stream(chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages).max_completion_tokens(64)).await?;
+    ///     let mut stream = client
+    ///         .chat()
+    ///         .create_stream(
+    ///             chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages)
+    ///                 .max_completion_tokens(64),
+    ///         )
+    ///         .await?;
     ///
     ///     while let Some(chunk) = stream.next().await {
     ///         let chunk = chunk?;
@@ -492,7 +474,7 @@ impl OpenAI {
     /// ```
     pub fn chat(&self) -> &Chat {
         self.chat
-            .get_or_init(|| Chat::new(Arc::clone(&self.config), Arc::clone(&self.client)))
+            .get_or_init(|| Chat::new(Arc::clone(&self.config), Arc::clone(&self.http_service)))
     }
 
     /// Returns a reference to the completion client.
@@ -518,8 +500,9 @@ impl OpenAI {
     /// }
     /// ```
     pub fn completions(&self) -> &Completions {
-        self.completions
-            .get_or_init(|| Completions::new(Arc::clone(&self.config), Arc::clone(&self.client)))
+        self.completions.get_or_init(|| {
+            Completions::new(Arc::clone(&self.config), Arc::clone(&self.http_service))
+        })
     }
 
     /// Returns a reference to the model client.
@@ -549,7 +532,7 @@ impl OpenAI {
     /// ```
     pub fn models(&self) -> &Models {
         self.models
-            .get_or_init(|| Models::new(Arc::clone(&self.config), Arc::clone(&self.client)))
+            .get_or_init(|| Models::new(Arc::clone(&self.config), Arc::clone(&self.http_service)))
     }
 
     /// Returns the current base URL.
@@ -578,7 +561,7 @@ impl OpenAI {
 
     /// Updates the client's request timeout in seconds.
     ///
-    /// This operation will rebuild the internal HTTP client with the new settings.
+    /// This operation will rebuild the internal HttpService with the new settings.
     pub async fn with_timeout_seconds(&self, timeout_seconds: u64) {
         self.update_config(|config| {
             config.with_timeout_seconds(timeout_seconds);
@@ -588,7 +571,7 @@ impl OpenAI {
 
     /// Updates the client's connection timeout in seconds.
     ///
-    /// This operation will rebuild the internal HTTP client with the new settings.
+    /// This operation will rebuild the internal HttpService with the new settings.
     pub async fn with_connect_timeout_seconds(&self, connect_timeout_seconds: u64) {
         self.update_config(|config| {
             config.with_connect_timeout_seconds(connect_timeout_seconds);
@@ -605,7 +588,7 @@ impl OpenAI {
 
     /// Updates the client's HTTP proxy.
     ///
-    /// This operation will rebuild the internal HTTP client with the new settings.
+    /// This operation will rebuild the internal HttpService with the new settings.
     pub async fn with_proxy(&self, proxy: Option<impl Into<String>>) {
         self.update_config(|config| {
             config.with_proxy(proxy.map(|s| s.into()));
@@ -615,7 +598,7 @@ impl OpenAI {
 
     /// Updates the client's custom user agent.
     ///
-    /// This operation will rebuild the internal HTTP client with the new settings.
+    /// This operation will rebuild the internal HttpService with the new settings.
     pub async fn with_user_agent(&self, user_agent: Option<impl Into<String>>) {
         self.update_config(|config| {
             config.with_user_agent(user_agent.map(|s| s.into()));
@@ -633,14 +616,17 @@ mod tests {
 
     #[test]
     fn test_config_builder() {
+        let mut http_config = HttpConfig::default();
+        http_config.timeout_seconds = 120;
+        http_config.connect_timeout_seconds = 15;
+        http_config.proxy = Some("http://proxy.test.com:8080".to_string());
+        http_config.user_agent = Some("TestAgent/1.0".to_string());
+
         let config = Config::builder()
             .api_key("test-key".to_string())
             .base_url("https://api.test.com/v1".to_string())
             .retry_count(3)
-            .timeout_seconds(120)
-            .connect_timeout_seconds(15)
-            .proxy("http://proxy.test.com:8080".to_string())
-            .user_agent("TestAgent/1.0".to_string())
+            .http_config(http_config)
             .build()
             .unwrap();
 

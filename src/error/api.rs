@@ -72,6 +72,12 @@ impl ApiError {
     pub fn is_conflict(&self) -> bool {
         self.kind == ApiErrorKind::Conflict
     }
+
+    /// Returns `true` if the request that caused the error might succeed on retry.
+    pub fn is_retryable(&self) -> bool {
+        // Rate limits, server-side errors, and conflicts are worth retrying.
+        self.is_rate_limit() || self.is_server_error() || self.is_conflict()
+    }
 }
 
 #[async_trait]

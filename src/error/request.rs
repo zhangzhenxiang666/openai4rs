@@ -58,4 +58,10 @@ impl RequestError {
             Self::EventSource(_) => None,
         }
     }
+
+    /// Returns `true` if the request that caused the error might succeed on retry.
+    pub fn is_retryable(&self) -> bool {
+        // Timeouts and connection errors are often transient.
+        self.is_timeout() || self.is_connection()
+    }
 }

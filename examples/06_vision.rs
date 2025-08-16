@@ -11,18 +11,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example image URL (replace with your own image URL or a local image encoded in base64)
     // For this example, we'll use a public image URL.
     // Note: Ensure the image URL is accessible and the model supports vision.
-    let image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg";
+    let image_url = "https://qianwen-res.oss-cn-beijing.aliyuncs.com/QVQ/demo.png";
 
     let messages = vec![
         system!(content: "You are a helpful assistant that can describe images."),
         user!(content: vec![
-            content!({"type": "image_url", "image_url":[{"url":image_url}]}) // This macro likely needs to be adapted for vision, but we'll use it for now.
+            content!({"type": "image_url", "image_url":{"url":image_url}}) // This macro likely needs to be adapted for vision, but we'll use it for now.
             ,content!({"type": "text", "text": "What is in this image?"})
         ]),
     ];
-
     let request = chat_request(model, &messages).build()?;
-
     println!("Sending request to model: {} with an image...", model);
 
     let response = client.chat().create(request).await?;

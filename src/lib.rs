@@ -61,12 +61,15 @@
 pub mod chat;
 /// Core client implementation, configuration, and entry point.
 pub mod client;
+
 /// Common types and utilities shared within the library.
 pub mod common;
 /// Legacy text completion functionality.
 pub mod completions;
 /// Error handling and custom error types.
 pub mod error;
+/// A generic HTTP service layer with retry logic and error handling.
+pub mod http;
 /// Model management for listing and retrieving model information.
 pub mod models;
 /// Utility functions and traits.
@@ -77,6 +80,7 @@ pub use chat::*;
 pub use client::{Config, OpenAI};
 pub use completions::completions_request;
 pub use error::OpenAIError;
+pub use http::config::HttpConfig;
 pub use models::models_request;
 pub use serde_json;
 pub use utils::Apply;

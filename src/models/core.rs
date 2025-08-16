@@ -1,10 +1,10 @@
 use super::params::{IntoRequestParams, RequestParams};
 use super::types::{Model, ModelsData};
 use crate::client::Config;
-use crate::client::http::openai_get_with_lock;
 use crate::error::OpenAIError;
+use crate::http::service::HttpService;
 use crate::utils::traits::ResponseHandler;
-use reqwest::{Client, RequestBuilder};
+use reqwest::RequestBuilder;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,12 +12,15 @@ use tokio::sync::RwLock;
 
 pub struct Models {
     config: Arc<RwLock<Config>>,
-    client: Arc<RwLock<Client>>,
+    http_service: Arc<RwLock<HttpService>>,
 }
 
 impl Models {
-    pub fn new(config: Arc<RwLock<Config>>, client: Arc<RwLock<Client>>) -> Self {
-        Self { config, client }
+    pub fn new(config: Arc<RwLock<Config>>, http_service: Arc<RwLock<HttpService>>) -> Self {
+        Self {
+            config,
+            http_service,
+        }
     }
 
     pub async fn retrieve<T>(&self, model: &str, params: T) -> Result<Model, OpenAIError>
@@ -28,15 +31,22 @@ impl Models {
         let config = self.config.read().await;
         let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
 
-        let response = openai_get_with_lock(
-            &self.client,
-            &format!("/models/{}", model),
-            |builder| Self::apply_request_settings(builder, &params),
-            config.api_key(),
-            config.base_url(),
-            retry_count,
-        )
-        .await?;
+        let http_service = self.http_service.read().await;
+        let response = http_service
+            .execute_unary(
+                |client| {
+                    let mut builder = client.get(format!("{}/models/{}", config.base_url(), model));
+                    builder = Self::apply_request_settings(builder, &params);
+                    // Add Authorization header
+                    builder = builder.header(
+                        reqwest::header::AUTHORIZATION,
+                        format!("Bearer {}", config.api_key()),
+                    );
+                    builder
+                },
+                retry_count,
+            )
+            .await?;
 
         Self::process_unary(response).await
     }
@@ -49,15 +59,22 @@ impl Models {
         let config = self.config.read().await;
         let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
 
-        let response = openai_get_with_lock(
-            &self.client,
-            "/models",
-            |builder| Self::apply_request_settings(builder, &params),
-            config.api_key(),
-            config.base_url(),
-            retry_count,
-        )
-        .await?;
+        let http_service = self.http_service.read().await;
+        let response = http_service
+            .execute_unary(
+                |client| {
+                    let mut builder = client.get(format!("{}/models", config.base_url()));
+                    builder = Self::apply_request_settings(builder, &params);
+                    // Add Authorization header
+                    builder = builder.header(
+                        reqwest::header::AUTHORIZATION,
+                        format!("Bearer {}", config.api_key()),
+                    );
+                    builder
+                },
+                retry_count,
+            )
+            .await?;
 
         Self::process_unary(response).await
     }

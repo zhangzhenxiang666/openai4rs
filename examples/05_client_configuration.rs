@@ -18,18 +18,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_openai()?;
 
     // 3. Client with a proxy
-    let _proxy_client = Config::builder()
+    let proxy_config = Config::builder()
         .api_key(api_key.clone())
         .base_url(base_url.clone())
-        .proxy("http://proxy.example.com:8080".to_string()) // Replace with your proxy URL
-        .build_openai()?;
+        .http_config(
+            HttpConfig::builder()
+                .proxy("http://proxy.example.com:8080".to_string())
+                .build()
+                .unwrap(),
+        )
+        .build()?;
+    let _proxy_client = OpenAI::with_config(proxy_config);
 
     // 4. Client with custom timeout
-    let _timeout_client = Config::builder()
+    let timeout_config = Config::builder()
         .api_key(api_key)
         .base_url(base_url.clone())
-        .timeout_seconds(120) // 2 minutes
-        .build_openai()?;
+        .http_config(HttpConfig::builder().timeout_seconds(120).build().unwrap())
+        .build()?;
+    let _timeout_client = OpenAI::with_config(timeout_config);
 
     // For demonstration, we'll use the basic client to make a simple request.
     // In a real application, you would use the client that best fits your needs.

@@ -502,12 +502,15 @@ impl TryFrom<Value> for FunctionDefinition {
     type Error = ConversionError;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        let obj = value.as_object().ok_or_else(|| {
-            ConversionError::ValueNotAnObject(format!(
-                "Expected object for FunctionDefinition, got: {:?} (type: {:?})",
-                value, value
-            ))
-        })?;
+        let mut obj = match value {
+            Value::Object(map) => map,
+            _ => {
+                return Err(ConversionError::ValueNotAnObject(format!(
+                    "Expected object for FunctionDefinition, got: {:?} (type: {:?})",
+                    value, value
+                )));
+            }
+        };
 
         let name = obj
             .get("name")
@@ -531,13 +534,17 @@ impl TryFrom<Value> for FunctionDefinition {
             })?
             .to_string();
 
-        let parameters_value = obj.get("parameters").ok_or_else(|| {
-            ConversionError::InvalidFieldValue(
-                "parameters".to_string(),
-                "Field 'parameters' is required".to_string(),
-            )
-        })?;
-        let parameters = Parameters::try_from(parameters_value.clone())?;
+        let parameters_value = match obj.remove("parameters") {
+            Some(value) => value,
+            None => {
+                return Err(ConversionError::InvalidFieldValue(
+                    "parameters".to_string(),
+                    "Field 'parameters' is required".to_string(),
+                ));
+            }
+        };
+
+        let parameters = Parameters::try_from(parameters_value)?;
 
         // Handle optional "strict" field
         let strict = obj.get("strict").and_then(Value::as_bool);
@@ -555,18 +562,21 @@ impl TryFrom<Value> for ChatCompletionToolParam {
     type Error = ConversionError;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        let obj = value.as_object().ok_or_else(|| {
-            ConversionError::ValueNotAnObject(format!(
-                "Expected object for ChatCompletionToolParam, got: {:?} (type: {:?})",
-                value, value
-            ))
-        })?;
+        let mut obj = match value {
+            Value::Object(map) => map,
+            _ => {
+                return Err(ConversionError::ValueNotAnObject(format!(
+                    "Expected object for ChatCompletionToolParam, got: {:?} (type: {:?})",
+                    value, value
+                )));
+            }
+        };
 
         // Check if it's the standard format with "type" and "function" fields
         if let Some(type_str) = obj.get("type").and_then(Value::as_str) {
             if type_str == "function" {
-                if let Some(function_value) = obj.get("function") {
-                    let function_def = FunctionDefinition::try_from(function_value.clone())?;
+                if let Some(function_value) = obj.remove("function") {
+                    let function_def = FunctionDefinition::try_from(function_value)?;
                     return Ok(ChatCompletionToolParam::Function(function_def));
                 } else {
                     // "type": "function" is present but "function" field is missing
@@ -588,7 +598,7 @@ impl TryFrom<Value> for ChatCompletionToolParam {
         }
 
         // If no "type" field, assume it's the direct FunctionDefinition format
-        let function_def = FunctionDefinition::try_from(value)?;
+        let function_def = FunctionDefinition::try_from(Value::Object(obj))?;
         Ok(ChatCompletionToolParam::Function(function_def))
     }
 }

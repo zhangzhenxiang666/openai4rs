@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(chunk) => {
                 if chunk.has_reasoning() {
                     if first_reasoning {
-                        println!("\n========Think========");
+                        println!("\n\n========Think========");
                         first_reasoning = false;
                     }
                     if let Some(reasoning) = chunk.reasoning() {
@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 if chunk.has_content() {
                     if first_content {
-                        println!("\n========Answer========");
+                        println!("\n\n========Answer========");
                         first_content = false;
                     }
                     if let Some(content) = chunk.content() {

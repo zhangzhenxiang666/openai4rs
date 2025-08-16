@@ -466,9 +466,10 @@ impl TryFrom<Value> for Parameters {
     type Error = ConversionError;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        let obj = value
-            .as_object()
-            .ok_or_else(|| ConversionError::ValueNotAnObject(format!("{:?}", value)))?;
+        let mut obj = match value {
+            Value::Object(map) => map,
+            _ => return Err(ConversionError::ValueNotAnObject(format!("{:?}", value))),
+        };
 
         let type_str = obj
             .get("type")
@@ -483,29 +484,33 @@ impl TryFrom<Value> for Parameters {
                     builder.description = Some(desc.to_string());
                 }
 
-                if let Some(props_val) = obj.get("properties") {
-                    let props_map = props_val.as_object().ok_or_else(|| {
-                        ConversionError::InvalidFieldValue(
-                            "properties".to_string(),
-                            "must be an object".to_string(),
-                        )
-                    })?;
+                if let Some(props_val) = obj.remove("properties") {
+                    let props_map = match props_val {
+                        Value::Object(map) => map,
+                        _ => {
+                            return Err(ConversionError::InvalidFieldValue(
+                                "properties".to_string(),
+                                "must be an object".to_string(),
+                            ));
+                        }
+                    };
                     for (k, v) in props_map {
-                        builder
-                            .properties
-                            .insert(k.clone(), Parameters::try_from(v.clone())?);
+                        builder.properties.insert(k, Parameters::try_from(v)?);
                     }
                 }
 
-                if let Some(req_val) = obj.get("required") {
-                    let req_arr = req_val.as_array().ok_or_else(|| {
-                        ConversionError::InvalidFieldValue(
-                            "required".to_string(),
-                            "must be an array".to_string(),
-                        )
-                    })?;
+                if let Some(req_val) = obj.remove("required") {
+                    let req_arr = match req_val {
+                        Value::Array(arr) => arr,
+                        _ => {
+                            return Err(ConversionError::InvalidFieldValue(
+                                "required".to_string(),
+                                "must be an array".to_string(),
+                            ));
+                        }
+                    };
                     builder.required = req_arr
-                        .iter()
+                        .into_iter()
                         .map(|v| v.as_str().map(ToString::to_string))
                         .collect::<Option<Vec<String>>>()
                         .ok_or_else(|| {
@@ -534,8 +539,8 @@ impl TryFrom<Value> for Parameters {
                     builder.description = Some(desc.to_string());
                 }
 
-                if let Some(items_val) = obj.get("items") {
-                    builder.items = Some(Box::new(Parameters::try_from(items_val.clone())?));
+                if let Some(items_val) = obj.remove("items") {
+                    builder.items = Some(Box::new(Parameters::try_from(items_val)?));
                 }
 
                 Ok(Parameters::Array(builder))
@@ -547,14 +552,17 @@ impl TryFrom<Value> for Parameters {
                     builder.description = Some(desc.to_string());
                 }
 
-                if let Some(enum_val) = obj.get("enum") {
-                    let enum_arr = enum_val.as_array().ok_or_else(|| {
-                        ConversionError::InvalidFieldValue(
-                            "enum".to_string(),
-                            "must be an array".to_string(),
-                        )
-                    })?;
-                    builder.enum_values = Some(enum_arr.clone());
+                if let Some(enum_val) = obj.remove("enum") {
+                    let enum_arr = match enum_val {
+                        Value::Array(arr) => arr,
+                        _ => {
+                            return Err(ConversionError::InvalidFieldValue(
+                                "enum".to_string(),
+                                "must be an array".to_string(),
+                            ));
+                        }
+                    };
+                    builder.enum_values = Some(enum_arr);
                 }
 
                 Ok(Parameters::String(builder))
@@ -566,14 +574,17 @@ impl TryFrom<Value> for Parameters {
                     builder.description = Some(desc.to_string());
                 }
 
-                if let Some(enum_val) = obj.get("enum") {
-                    let enum_arr = enum_val.as_array().ok_or_else(|| {
-                        ConversionError::InvalidFieldValue(
-                            "enum".to_string(),
-                            "must be an array".to_string(),
-                        )
-                    })?;
-                    builder.enum_values = Some(enum_arr.clone());
+                if let Some(enum_val) = obj.remove("enum") {
+                    let enum_arr = match enum_val {
+                        Value::Array(arr) => arr,
+                        _ => {
+                            return Err(ConversionError::InvalidFieldValue(
+                                "enum".to_string(),
+                                "must be an array".to_string(),
+                            ));
+                        }
+                    };
+                    builder.enum_values = Some(enum_arr);
                 }
 
                 Ok(Parameters::Number(builder))
@@ -585,14 +596,17 @@ impl TryFrom<Value> for Parameters {
                     builder.description = Some(desc.to_string());
                 }
 
-                if let Some(enum_val) = obj.get("enum") {
-                    let enum_arr = enum_val.as_array().ok_or_else(|| {
-                        ConversionError::InvalidFieldValue(
-                            "enum".to_string(),
-                            "must be an array".to_string(),
-                        )
-                    })?;
-                    builder.enum_values = Some(enum_arr.clone());
+                if let Some(enum_val) = obj.remove("enum") {
+                    let enum_arr = match enum_val {
+                        Value::Array(arr) => arr,
+                        _ => {
+                            return Err(ConversionError::InvalidFieldValue(
+                                "enum".to_string(),
+                                "must be an array".to_string(),
+                            ));
+                        }
+                    };
+                    builder.enum_values = Some(enum_arr);
                 }
 
                 Ok(Parameters::Integer(builder))

@@ -304,16 +304,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use dotenvy::dotenv;
 use openai4rs::*;
-use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
-    
-    // Get the API key and base URL from the environment
+
+    // Get the API key from the environment
     let api_key = std::env::var("OPENAI_API_KEY")?;
     let base_url = std::env::var("OPENAI_BASE_URL")?;
-
     // 1. Basic client with default settings
     let basic_client = OpenAI::new(&api_key, &base_url);
 
@@ -324,28 +322,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_openai()?;
 
     // 3. Client with a proxy
-    let _proxy_client = Config::builder()
+    let proxy_config = Config::builder()
         .api_key(api_key.clone())
         .base_url(base_url.clone())
-        .proxy("http://proxy.example.com:8080".to_string()) // Replace with your proxy URL
-        .build_openai()?;
+        .http_config(
+            HttpConfig::builder()
+                .proxy("http://proxy.example.com:8080".to_string())
+                .build()
+                .unwrap(),
+        )
+        .build()?;
+    let _proxy_client = OpenAI::with_config(proxy_config);
 
-    // 4. Client with custom headers
-    let mut custom_headers = HashMap::new();
-    custom_headers.insert("X-Custom-Header".to_string(), "custom_value".into());
-    
-    let _custom_headers_client = Config::builder()
-        .api_key(api_key.clone())
-        .base_url(base_url.clone())
-        .extra_headers(custom_headers)
-        .build_openai()?;
-
-    // 5. Client with custom timeout
-    let _timeout_client = Config::builder()
+    // 4. Client with custom timeout
+    let timeout_config = Config::builder()
         .api_key(api_key)
         .base_url(base_url.clone())
-        .timeout_seconds(120) // 2 minutes
-        .build_openai()?;
+        .http_config(HttpConfig::builder().timeout_seconds(120).build().unwrap())
+        .build()?;
+    let _timeout_client = OpenAI::with_config(timeout_config);
+
+    // For demonstration, we'll use the basic client to make a simple request.
+    // In a real application, you would use the client that best fits your needs.
+
+    let model = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
+    let messages = vec![user!(content: "Ping to check if the client is working.")];
+    let request = chat_request(model, &messages);
+
+    println!("Testing basic client...");
+    match basic_client.chat().create(request).await {
+        Ok(response) => {
+            if let Some(content) = response.content() {
+                println!("Success: {}", content);
+            }
+        }
+        Err(e) => {
+            eprintln!("Error with basic client: {}", e);
+        }
+    }
 
     Ok(())
 }

@@ -1,10 +1,10 @@
 use super::params::{IntoRequestParams, RequestParams};
 use super::types::{ChatCompletion, ChatCompletionChunk};
 use crate::client::Config;
-use crate::client::http::{openai_post_stream_with_lock, openai_post_with_lock};
 use crate::error::OpenAIError;
+use crate::http::service::HttpService;
 use crate::utils::traits::ResponseHandler;
-use reqwest::{Client, RequestBuilder};
+use reqwest::RequestBuilder;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,12 +14,15 @@ use tokio_stream::wrappers::ReceiverStream;
 /// Handles chat completion requests, including both streaming and non-streaming modes.
 pub struct Chat {
     config: Arc<RwLock<Config>>,
-    client: Arc<RwLock<Client>>,
+    http_service: Arc<RwLock<HttpService>>,
 }
 
 impl Chat {
-    pub fn new(config: Arc<RwLock<Config>>, client: Arc<RwLock<Client>>) -> Self {
-        Self { config, client }
+    pub fn new(config: Arc<RwLock<Config>>, http_service: Arc<RwLock<HttpService>>) -> Self {
+        Self {
+            config,
+            http_service,
+        }
     }
 
     /// Creates a chat completion.
@@ -58,16 +61,23 @@ impl Chat {
         let config = self.config.read().await;
         let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
 
-        let response = openai_post_with_lock(
-            &self.client,
-            "/chat/completions",
-            |builder| Self::apply_request_settings(builder, &params),
-            config.api_key(),
-            config.base_url(),
-            retry_count,
-        )
-        .await?;
-
+        let http_service = self.http_service.read().await;
+        let response = http_service
+            .execute_unary(
+                |client| {
+                    let mut builder =
+                        client.post(format!("{}/chat/completions", config.base_url()));
+                    builder = Self::apply_request_settings(builder, &params);
+                    // Add Authorization header
+                    builder = builder.header(
+                        reqwest::header::AUTHORIZATION,
+                        format!("Bearer {}", config.api_key()),
+                    );
+                    builder
+                },
+                retry_count,
+            )
+            .await?;
         Self::process_unary(response).await
     }
 
@@ -119,15 +129,23 @@ impl Chat {
         let config = self.config.read().await;
         let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
 
-        let event_source = openai_post_stream_with_lock(
-            &self.client,
-            "/chat/completions",
-            |builder| Self::apply_request_settings(builder, &params),
-            config.api_key(),
-            config.base_url(),
-            retry_count,
-        )
-        .await?;
+        let http_service = self.http_service.read().await;
+        let event_source = http_service
+            .execute_stream(
+                |client| {
+                    let mut builder =
+                        client.post(format!("{}/chat/completions", config.base_url()));
+                    builder = Self::apply_request_settings(builder, &params);
+                    // Add Authorization header
+                    builder = builder.header(
+                        reqwest::header::AUTHORIZATION,
+                        format!("Bearer {}", config.api_key()),
+                    );
+                    builder
+                },
+                retry_count,
+            )
+            .await?;
 
         Ok(Self::process_stream(event_source).await)
     }
