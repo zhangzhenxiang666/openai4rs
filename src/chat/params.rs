@@ -17,16 +17,16 @@ use std::collections::HashMap;
     setter(strip_option)
 )]
 pub struct RequestParams<'a> {
-    /// 用于生成响应的模型 ID，例如 `gpt-4o` 或 `o1`。
+    /// The ID of the model to use for generating responses, such as `gpt-4o` or `o1`.
     ///
-    /// OpenAI 提供具有不同功能、
-    /// 性能特点和价位的多种模型。
+    /// OpenAI provides multiple models with different capabilities,
+    /// performance characteristics, and pricing.
     pub model: &'a str,
 
-    /// 构成迄今为止对话的消息列表。
+    /// The list of messages that make up the conversation so far.
     ///
-    /// 根据您使用的模型，支持不同的消息类型（模态），
-    /// 例如文本、图像和音频。
+    /// Depending on the model you're using, different message types (modalities)
+    /// are supported, such as text, images, and audio.
     pub messages: &'a Vec<ChatCompletionMessageParam>,
 
     /// A number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far,

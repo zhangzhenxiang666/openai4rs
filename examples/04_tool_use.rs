@@ -43,8 +43,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2. Create the initial message and request
     let messages = vec![
-        system!(content: "You are a helpful assistant."),
-        user!(content: "What's the weather like in Boston today?"),
+        system!(content = "You are a helpful assistant."),
+        user!(content = "What's the weather like in Boston today?"),
     ];
 
     let request = chat_request(model, &messages)

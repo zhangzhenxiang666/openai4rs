@@ -69,11 +69,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let model = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
     let messages = vec![
-        system!(content: "You are a helpful assistant."),
-        user!(content: "Introduce the Rust programming language in one sentence."),
+        system!("You are a helpful assistant."),
+        user!("Introduce the Rust programming language in one sentence."),
     ];
 
     let request = chat_request(model, &messages);
+
+    println!("Sending request to model: {}...", model);
 
     let response = client.chat().create(request).await?;
 
@@ -153,10 +155,10 @@ Allow the model to call external tools to enhance its functionality:
 ```rust
 use dotenvy::dotenv;
 use openai4rs::*;
-use serde_json::json;
 
 // Mock function to get weather data
 fn get_current_weather(location: &str, unit: Option<&str>) -> String {
+    // In a real application, this would call an external weather API.
     let unit = unit.unwrap_or("celsius");
     format!(
         "The current weather in {} is 22 degrees {}.",
@@ -196,8 +198,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2. Create the initial message and request
     let messages = vec![
-        system!(content: "You are a helpful assistant."),
-        user!(content: "What's the weather like in Boston today?"),
+        system!(content = "You are a helpful assistant."),
+        user!(content = "What's the weather like in Boston today?"),
     ];
 
     let request = chat_request(model, &messages)
@@ -205,10 +207,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .tool_choice(ToolChoice::Auto)
         .build()?;
 
+    println!("Sending request to model: {}...", model);
+
     let response = client.chat().create(request).await?;
+    println!("Initial response: {:#?}", response);
 
     // 3. Check if the model wants to call a tool
     if response.has_tool_calls() {
+        println!("\nModel wants to call a tool.");
         let tool_calls = response.tool_calls().unwrap();
 
         // For simplicity, we'll only handle the first tool call
@@ -221,8 +227,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let location = args["location"].as_str().unwrap_or("Unknown");
                 let unit = args["unit"].as_str();
 
+                println!(
+                    "Calling function '{}' with arguments: location='{}', unit='{:?}'",
+                    function_name, location, unit
+                );
+
                 // 4. Call the function and get the result
                 let function_result = get_current_weather(location, unit);
+                println!("Function result: {}", function_result);
 
                 // 5. Send the function result back to the model
                 let mut new_messages = messages.clone();

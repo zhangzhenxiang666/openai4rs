@@ -8,8 +8,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let model = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
     let messages = vec![
-        system!(content: "You are a helpful assistant."),
-        user!(content: "Introduce the Rust programming language in one sentence."),
+        system!("You are a helpful assistant."),
+        user!("Introduce the Rust programming language in one sentence."),
     ];
 
     let request = chat_request(model, &messages);
