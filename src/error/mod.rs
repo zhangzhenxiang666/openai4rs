@@ -91,16 +91,18 @@
 //! }
 //! ```
 
-use crate::utils::traits::AsyncFrom;
 pub use api::{ApiError, ApiErrorKind};
+use eventsource_stream::EventStreamError;
 pub use processing::ProcessingError;
 pub use request::RequestError;
-use reqwest_eventsource::Error as EventSourceError;
 use thiserror::Error;
+
+use crate::error::sse::SseError;
 
 pub mod api;
 pub mod processing;
 pub mod request;
+pub mod sse;
 
 /// The main error type for the `openai4rs` crate.
 ///
@@ -215,23 +217,14 @@ impl OpenAIError {
 }
 
 impl OpenAIError {
-    pub async fn from_eventsource_error(err: EventSourceError) -> Self {
+    pub fn from_eventsource_stream_error(err: EventStreamError<reqwest::Error>) -> Self {
         match err {
-            EventSourceError::InvalidStatusCode(_, response) => {
-                ApiError::async_from(response).await.into()
+            EventStreamError::Utf8(utf8_err) => {
+                ProcessingError::Sse(SseError::Utf8(utf8_err)).into()
             }
-            EventSourceError::Transport(e) => RequestError::from(e).into(),
-            EventSourceError::StreamEnded => {
-                RequestError::EventSource("Event stream ended unexpectedly".to_string()).into()
-            }
-            EventSourceError::InvalidContentType(header, _) => RequestError::EventSource(format!(
-                "Invalid Content-Type for event stream: {:?}",
-                header
-            ))
-            .into(),
-            other => {
-                ProcessingError::Unknown(format!("Unclassified event source error: {}", other))
-                    .into()
+            EventStreamError::Transport(e) => RequestError::from(e).into(),
+            EventStreamError::Parser(parse_err) => {
+                ProcessingError::Sse(SseError::Parser(parse_err.to_string())).into()
             }
         }
     }

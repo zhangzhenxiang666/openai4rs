@@ -1,26 +1,18 @@
 use super::params::{IntoRequestParams, RequestParams};
 use super::types::{Model, ModelsData};
-use crate::client::Config;
 use crate::error::OpenAIError;
-use crate::http::service::HttpService;
-use crate::utils::traits::ResponseHandler;
+use crate::service::client::HttpClient;
 use reqwest::RequestBuilder;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
 
 pub struct Models {
-    config: Arc<RwLock<Config>>,
-    http_service: Arc<RwLock<HttpService>>,
+    http_client: HttpClient,
 }
 
 impl Models {
-    pub fn new(config: Arc<RwLock<Config>>, http_service: Arc<RwLock<HttpService>>) -> Self {
-        Self {
-            config,
-            http_service,
-        }
+    pub fn new(http_client: HttpClient) -> Models {
+        Models { http_client }
     }
 
     pub async fn retrieve<T>(&self, model: &str, params: T) -> Result<Model, OpenAIError>
@@ -28,27 +20,19 @@ impl Models {
         T: IntoRequestParams,
     {
         let params = params.into_request_params();
-        let config = self.config.read().await;
-        let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
+        let retry_count = params.retry_count.unwrap_or(0);
 
-        let http_service = self.http_service.read().await;
-        let response = http_service
-            .execute_unary(
-                |client| {
-                    let mut builder = client.get(format!("{}/models/{}", config.base_url(), model));
+        self.http_client
+            .get_json(
+                |config| format!("{}/models/{}", config.base_url(), model),
+                |config, mut builder| {
                     builder = Self::apply_request_settings(builder, &params);
-                    // Add Authorization header
-                    builder = builder.header(
-                        reqwest::header::AUTHORIZATION,
-                        format!("Bearer {}", config.api_key()),
-                    );
+                    builder = builder.bearer_auth(config.api_key());
                     builder
                 },
                 retry_count,
             )
-            .await?;
-
-        Self::process_unary(response).await
+            .await
     }
 
     pub async fn list<T>(&self, params: T) -> Result<ModelsData, OpenAIError>
@@ -56,27 +40,19 @@ impl Models {
         T: IntoRequestParams,
     {
         let params = params.into_request_params();
-        let config = self.config.read().await;
-        let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
+        let retry_count = params.retry_count.unwrap_or(0);
 
-        let http_service = self.http_service.read().await;
-        let response = http_service
-            .execute_unary(
-                |client| {
-                    let mut builder = client.get(format!("{}/models", config.base_url()));
+        self.http_client
+            .get_json(
+                |config| format!("{}/models", config.base_url()),
+                |config, mut builder| {
                     builder = Self::apply_request_settings(builder, &params);
-                    // Add Authorization header
-                    builder = builder.header(
-                        reqwest::header::AUTHORIZATION,
-                        format!("Bearer {}", config.api_key()),
-                    );
+                    builder = builder.bearer_auth(config.api_key());
                     builder
                 },
                 retry_count,
             )
-            .await?;
-
-        Self::process_unary(response).await
+            .await
     }
 }
 
@@ -117,5 +93,3 @@ impl Models {
         builder
     }
 }
-
-impl ResponseHandler for Models {}

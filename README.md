@@ -44,7 +44,7 @@
 
 ```toml
 [dependencies]
-openai4rs = "0.1.5"
+openai4rs = "0.1.6"
 tokio = { version = "1.45.1", features = ["full"] }
 futures = "0.3.31"
 dotenvy = "0.15"

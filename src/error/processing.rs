@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use super::sse::SseError;
+
 /// An error that occurred during the processing of an API response.
 #[derive(Debug, Error)]
 pub enum ProcessingError {
@@ -14,6 +16,10 @@ pub enum ProcessingError {
     /// Failed to convert a value from one type to another.
     #[error("Failed to convert value '{raw}' to type '{target_type}'")]
     Conversion { raw: String, target_type: String },
+
+    /// An error occurred while processing a Server-Sent Events stream.
+    #[error("Failed to process SSE stream: {0}")]
+    Sse(#[from] SseError),
 
     /// An unknown or unclassified processing error.
     #[error("An unknown processing error occurred: {0}")]

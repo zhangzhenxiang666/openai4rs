@@ -135,14 +135,14 @@ pub struct ObjectParametersBuilder {
 }
 
 impl ObjectParametersBuilder {
-    fn new() -> Self {
-        Self {
+    fn new() -> ObjectParametersBuilder {
+        ObjectParametersBuilder {
             params: ObjectParameters::default(),
         }
     }
 
     /// Sets the description for the object.
-    pub fn description(mut self, description: &str) -> Self {
+    pub fn description(mut self, description: &str) -> ObjectParametersBuilder {
         self.params.description = Some(description.to_string());
         self
     }
@@ -150,7 +150,7 @@ impl ObjectParametersBuilder {
     /// Adds a property to the object.
     ///
     /// The `name` is the property name, and `schema` defines the parameter for that property.
-    pub fn property(mut self, name: &str, schema: Parameters) -> Self {
+    pub fn property(mut self, name: &str, schema: Parameters) -> ObjectParametersBuilder {
         self.params.properties.insert(name.to_string(), schema);
         self
     }
@@ -158,7 +158,7 @@ impl ObjectParametersBuilder {
     /// Marks a property as required.
     ///
     /// The property must have been previously added with `property()`.
-    pub fn required(mut self, required: Vec<String>) -> Self {
+    pub fn required(mut self, required: Vec<String>) -> ObjectParametersBuilder {
         self.params.required = required;
         self
     }
@@ -166,7 +166,7 @@ impl ObjectParametersBuilder {
     /// Marks a property as require.
     ///
     /// The property must have been previously added with `property()`.
-    pub fn require(mut self, name: &str) -> Self {
+    pub fn require(mut self, name: &str) -> ObjectParametersBuilder {
         self.params.required.push(name.to_string());
         self
     }
@@ -194,20 +194,20 @@ pub struct ArrayParametersBuilder {
 }
 
 impl ArrayParametersBuilder {
-    fn new() -> Self {
-        Self {
+    fn new() -> ArrayParametersBuilder {
+        ArrayParametersBuilder {
             params: ArrayParameters::default(),
         }
     }
 
     /// Sets the description for the array.
-    pub fn description(mut self, description: &str) -> Self {
+    pub fn description(mut self, description: &str) -> ArrayParametersBuilder {
         self.params.description = Some(description.to_string());
         self
     }
 
     /// Sets the schema for the items in the array.
-    pub fn items(mut self, items_schema: Parameters) -> Self {
+    pub fn items(mut self, items_schema: Parameters) -> ArrayParametersBuilder {
         self.params.items = Some(Box::new(items_schema));
         self
     }
@@ -225,14 +225,14 @@ pub struct StringParametersBuilder {
 }
 
 impl StringParametersBuilder {
-    fn new() -> Self {
-        Self {
+    fn new() -> StringParametersBuilder {
+        StringParametersBuilder {
             params: StringParameters::default(),
         }
     }
 
     /// Sets the description for the string.
-    pub fn description(mut self, description: &str) -> Self {
+    pub fn description(mut self, description: &str) -> StringParametersBuilder {
         self.params.description = Some(description.to_string());
         self
     }
@@ -240,7 +240,7 @@ impl StringParametersBuilder {
     /// Adds an enum value for the string.
     ///
     /// Constrains the string to be one of the specified values.
-    pub fn enum_value(mut self, value: Value) -> Self {
+    pub fn enum_value(mut self, value: Value) -> StringParametersBuilder {
         self.params
             .enum_values
             .get_or_insert_with(Vec::new)
@@ -268,14 +268,14 @@ pub struct NumberParametersBuilder {
 }
 
 impl NumberParametersBuilder {
-    fn new() -> Self {
-        Self {
+    fn new() -> NumberParametersBuilder {
+        NumberParametersBuilder {
             params: NumberParameters::default(),
         }
     }
 
     /// Sets the description for the number.
-    pub fn description(mut self, description: &str) -> Self {
+    pub fn description(mut self, description: &str) -> NumberParametersBuilder {
         self.params.description = Some(description.to_string());
         self
     }
@@ -283,7 +283,7 @@ impl NumberParametersBuilder {
     /// Adds an enum value for the number.
     ///
     /// Constrains the number to be one of the specified values.
-    pub fn enum_value(mut self, value: Value) -> Self {
+    pub fn enum_value(mut self, value: Value) -> NumberParametersBuilder {
         self.params
             .enum_values
             .get_or_insert_with(Vec::new)
@@ -304,14 +304,14 @@ pub struct IntegerParametersBuilder {
 }
 
 impl IntegerParametersBuilder {
-    fn new() -> Self {
-        Self {
+    fn new() -> IntegerParametersBuilder {
+        IntegerParametersBuilder {
             params: IntegerParameters::default(),
         }
     }
 
     /// Sets the description for the integer.
-    pub fn description(mut self, description: &str) -> Self {
+    pub fn description(mut self, description: &str) -> IntegerParametersBuilder {
         self.params.description = Some(description.to_string());
         self
     }
@@ -319,7 +319,7 @@ impl IntegerParametersBuilder {
     /// Adds an enum value for the integer.
     ///
     /// Constrains the integer to be one of the specified values.
-    pub fn enum_value(mut self, value: Value) -> Self {
+    pub fn enum_value(mut self, value: Value) -> IntegerParametersBuilder {
         self.params
             .enum_values
             .get_or_insert_with(Vec::new)
@@ -340,14 +340,14 @@ pub struct BooleanParametersBuilder {
 }
 
 impl BooleanParametersBuilder {
-    fn new() -> Self {
-        Self {
+    fn new() -> BooleanParametersBuilder {
+        BooleanParametersBuilder {
             params: BooleanParameters::default(),
         }
     }
 
     /// Sets the description for the boolean.
-    pub fn description(mut self, description: &str) -> Self {
+    pub fn description(mut self, description: &str) -> BooleanParametersBuilder {
         self.params.description = Some(description.to_string());
         self
     }

@@ -1,28 +1,20 @@
 use super::params::{IntoRequestParams, RequestParams};
 use super::types::{ChatCompletion, ChatCompletionChunk};
-use crate::client::Config;
 use crate::error::OpenAIError;
-use crate::http::service::HttpService;
-use crate::utils::traits::ResponseHandler;
+use crate::service::client::HttpClient;
 use reqwest::RequestBuilder;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
 
 /// Handles chat completion requests, including both streaming and non-streaming modes.
 pub struct Chat {
-    config: Arc<RwLock<Config>>,
-    http_service: Arc<RwLock<HttpService>>,
+    http_client: HttpClient,
 }
 
 impl Chat {
-    pub fn new(config: Arc<RwLock<Config>>, http_service: Arc<RwLock<HttpService>>) -> Self {
-        Self {
-            config,
-            http_service,
-        }
+    pub fn new(http_client: HttpClient) -> Chat {
+        Chat { http_client }
     }
 
     /// Creates a chat completion.
@@ -58,27 +50,19 @@ impl Chat {
         let mut params = params.into_request_params();
         params.stream = Some(false);
 
-        let config = self.config.read().await;
-        let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
+        let retry_count = params.retry_count.unwrap_or(0);
 
-        let http_service = self.http_service.read().await;
-        let response = http_service
-            .execute_unary(
-                |client| {
-                    let mut builder =
-                        client.post(format!("{}/chat/completions", config.base_url()));
+        self.http_client
+            .post_json(
+                |config| format!("{}/chat/completions", config.base_url()),
+                |config, mut builder| {
                     builder = Self::apply_request_settings(builder, &params);
-                    // Add Authorization header
-                    builder = builder.header(
-                        reqwest::header::AUTHORIZATION,
-                        format!("Bearer {}", config.api_key()),
-                    );
+                    builder = builder.bearer_auth(config.api_key());
                     builder
                 },
                 retry_count,
             )
-            .await?;
-        Self::process_unary(response).await
+            .await
     }
 
     /// Creates a streaming chat completion.
@@ -126,32 +110,21 @@ impl Chat {
         let mut params = params.into_request_params();
         params.stream = Some(true);
 
-        let config = self.config.read().await;
-        let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
+        let retry_count = params.retry_count.unwrap_or(0);
 
-        let http_service = self.http_service.read().await;
-        let event_source = http_service
-            .execute_stream(
-                |client| {
-                    let mut builder =
-                        client.post(format!("{}/chat/completions", config.base_url()));
+        self.http_client
+            .post_json_stream(
+                |config| format!("{}/chat/completions", config.base_url()),
+                |config, mut builder| {
                     builder = Self::apply_request_settings(builder, &params);
-                    // Add Authorization header
-                    builder = builder.header(
-                        reqwest::header::AUTHORIZATION,
-                        format!("Bearer {}", config.api_key()),
-                    );
+                    builder = builder.bearer_auth(config.api_key());
                     builder
                 },
                 retry_count,
             )
-            .await?;
-
-        Ok(Self::process_stream(event_source).await)
+            .await
     }
 }
-
-impl ResponseHandler for Chat {}
 
 impl Chat {
     fn apply_request_settings(

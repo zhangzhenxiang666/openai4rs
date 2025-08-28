@@ -1,27 +1,19 @@
 use super::params::{IntoRequestParams, RequestParams};
 use super::types::Completion;
-use crate::client::Config;
 use crate::error::OpenAIError;
-use crate::http::service::HttpService;
-use crate::utils::traits::ResponseHandler;
+use crate::service::client::HttpClient;
 use reqwest::RequestBuilder;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
 
 pub struct Completions {
-    config: Arc<RwLock<Config>>,
-    http_service: Arc<RwLock<HttpService>>,
+    http_client: HttpClient,
 }
 
 impl Completions {
-    pub fn new(config: Arc<RwLock<Config>>, http_service: Arc<RwLock<HttpService>>) -> Self {
-        Self {
-            config,
-            http_service,
-        }
+    pub fn new(http_client: HttpClient) -> Completions {
+        Completions { http_client }
     }
 
     pub async fn create<'a, T>(&self, params: T) -> Result<Completion, OpenAIError>
@@ -31,26 +23,19 @@ impl Completions {
         let mut params = params.into_request_params();
         params.stream = Some(false);
 
-        let config = self.config.read().await;
-        let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
+        let retry_count = params.retry_count.unwrap_or(0);
 
-        let http_service = self.http_service.read().await;
-        let response = http_service
-            .execute_unary(
-                |client| {
-                    let mut builder = client.post(format!("{}/completions", config.base_url()));
+        self.http_client
+            .post_json(
+                |config| format!("{}/completions", config.base_url()),
+                |config, mut builder| {
                     builder = Self::apply_request_settings(builder, &params);
-                    // Add Authorization header
-                    builder = builder.header(
-                        reqwest::header::AUTHORIZATION,
-                        format!("Bearer {}", config.api_key()),
-                    );
+                    builder = builder.bearer_auth(config.api_key());
                     builder
                 },
                 retry_count,
             )
-            .await?;
-        Self::process_unary(response).await
+            .await
     }
 
     pub async fn create_stream<'a, T>(
@@ -63,31 +48,21 @@ impl Completions {
         let mut params = params.into_request_params();
         params.stream = Some(true);
 
-        let config = self.config.read().await;
-        let retry_count = params.retry_count.unwrap_or_else(|| config.retry_count());
+        let retry_count = params.retry_count.unwrap_or(0);
 
-        let http_service = self.http_service.read().await;
-        let event_source = http_service
-            .execute_stream(
-                |client| {
-                    let mut builder = client.post(format!("{}/completions", config.base_url()));
+        self.http_client
+            .post_json_stream(
+                |config| format!("{}/completions", config.base_url()),
+                |config, mut builder| {
                     builder = Self::apply_request_settings(builder, &params);
-                    // Add Authorization header
-                    builder = builder.header(
-                        reqwest::header::AUTHORIZATION,
-                        format!("Bearer {}", config.api_key()),
-                    );
+                    builder = builder.bearer_auth(config.api_key());
                     builder
                 },
                 retry_count,
             )
-            .await?;
-
-        Ok(Self::process_stream(event_source).await)
+            .await
     }
 }
-
-impl ResponseHandler for Completions {}
 
 impl Completions {
     fn apply_request_settings(

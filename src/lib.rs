@@ -23,7 +23,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! openai4rs = "0.1.5"
+//! openai4rs = "0.1.6"
 //! tokio = { version = "1", features = ["full"] }
 //! dotenvy = "0.15"
 //! ```
@@ -68,10 +68,10 @@ pub mod common;
 pub mod completions;
 /// Error handling and custom error types.
 pub mod error;
-/// A generic HTTP service layer with retry logic and error handling.
-pub mod http;
 /// Model management for listing and retrieving model information.
 pub mod models;
+/// A generic HTTP service layer with retry logic and error handling.
+pub mod service;
 /// Utility functions and traits.
 pub mod utils;
 
@@ -80,9 +80,9 @@ pub use chat::*;
 pub use client::{Config, OpenAI};
 pub use completions::completions_request;
 pub use error::OpenAIError;
-pub use http::config::HttpConfig;
 pub use models::models_request;
 pub use serde_json;
+pub use service::config::HttpConfig;
 pub use utils::Apply;
 
 // Import and re-export the new procedural macros

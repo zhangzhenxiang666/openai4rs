@@ -1,8 +1,8 @@
 use crate::{
     chat::Chat,
     completions::Completions,
-    http::{config::HttpConfig, service::HttpService},
     models::Models,
+    service::{client::HttpClient, config::HttpConfig},
 };
 use derive_builder::Builder;
 use std::sync::{Arc, OnceLock};
@@ -196,6 +196,10 @@ impl Config {
         self.http_config.user_agent = user_agent.map(|s| s.into());
         self
     }
+
+    pub fn http_config(&self) -> &HttpConfig {
+        &self.http_config
+    }
 }
 
 /// OpenAI client for interacting with OpenAI-compatible APIs
@@ -231,7 +235,7 @@ impl Config {
 /// ```
 pub struct OpenAI {
     config: Arc<RwLock<Config>>,
-    http_service: Arc<RwLock<HttpService>>,
+    http_client: HttpClient,
     chat: OnceLock<Chat>,
     completions: OnceLock<Completions>,
     models: OnceLock<Models>,
@@ -252,13 +256,16 @@ impl OpenAI {
     ///
     /// let client = OpenAI::new("your-api-key", "https://api.openai.com/v1");
     /// ```
-    pub fn new(api_key: &str, base_url: &str) -> Self {
+    pub fn new(api_key: &str, base_url: &str) -> OpenAI {
         let config = Config::new(api_key.to_string(), base_url.to_string());
-        let http_service = HttpService::new(config.http_config.clone());
+        let http_config = config.http_config.clone();
 
-        Self {
-            config: Arc::new(RwLock::new(config)),
-            http_service: Arc::new(RwLock::new(http_service)),
+        let config = Arc::new(RwLock::new(config));
+        let http_client = HttpClient::new(config.clone(), http_config);
+
+        OpenAI {
+            config,
+            http_client,
             chat: OnceLock::new(),
             completions: OnceLock::new(),
             models: OnceLock::new(),
@@ -285,12 +292,14 @@ impl OpenAI {
     ///
     /// let client = OpenAI::with_config(config);
     /// ```
-    pub fn with_config(config: Config) -> Self {
-        let http_service = HttpService::new(config.http_config.clone());
+    pub fn with_config(config: Config) -> OpenAI {
+        let http_config = config.http_config.clone();
+        let config = Arc::new(RwLock::new(config));
+        let http_client = HttpClient::new(config.clone(), http_config);
 
-        Self {
-            config: Arc::new(RwLock::new(config)),
-            http_service: Arc::new(RwLock::new(http_service)),
+        OpenAI {
+            config,
+            http_client,
             chat: OnceLock::new(),
             completions: OnceLock::new(),
             models: OnceLock::new(),
@@ -325,16 +334,12 @@ impl OpenAI {
     where
         F: FnOnce(&mut Config),
     {
-        // Update configuration and rebuild HttpService
-        let new_http_service = {
+        {
             let mut config_guard = self.config.write().await;
             update_fn(&mut config_guard);
-            HttpService::new(config_guard.http_config.clone())
-        };
+        }
 
-        // Atomically replace the HttpService
-        let mut service_guard = self.http_service.write().await;
-        *service_guard = new_http_service;
+        self.http_client.update().await;
     }
 
     /// Creates a new OpenAI client from environment variables.
@@ -474,7 +479,7 @@ impl OpenAI {
     /// ```
     pub fn chat(&self) -> &Chat {
         self.chat
-            .get_or_init(|| Chat::new(Arc::clone(&self.config), Arc::clone(&self.http_service)))
+            .get_or_init(|| Chat::new(self.http_client.clone()))
     }
 
     /// Returns a reference to the completion client.
@@ -500,9 +505,8 @@ impl OpenAI {
     /// }
     /// ```
     pub fn completions(&self) -> &Completions {
-        self.completions.get_or_init(|| {
-            Completions::new(Arc::clone(&self.config), Arc::clone(&self.http_service))
-        })
+        self.completions
+            .get_or_init(|| Completions::new(self.http_client.clone()))
     }
 
     /// Returns a reference to the model client.
@@ -532,7 +536,7 @@ impl OpenAI {
     /// ```
     pub fn models(&self) -> &Models {
         self.models
-            .get_or_init(|| Models::new(Arc::clone(&self.config), Arc::clone(&self.http_service)))
+            .get_or_init(|| Models::new(self.http_client.clone()))
     }
 
     /// Returns the current base URL.
@@ -784,6 +788,7 @@ mod tests {
         dotenv().ok();
         let client = OpenAI::from_env().unwrap();
         let models = client.models().list(models_request()).await;
+        println!("{:#?}", models);
         assert!(models.is_ok())
     }
 }
