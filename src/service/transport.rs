@@ -67,12 +67,15 @@ impl Transport {
     /// JSON response into the specified type.
     ///
     /// # Parameters
-    /// * `url_fn` - Function that generates the URL based on the current configuration
+    /// * `url_fn` - Function that generates the URL based on the current configuration.
+    ///              The function can return any type that implements `IntoUrl`, providing
+    ///              more flexibility than simple string-based URLs.
     /// * `builder_fn` - Function that builds the request with headers and body
     /// * `retry_count` - Number of retry attempts (0 means use config default)
     ///
     /// # Type Parameters
-    /// * `U` - Function type for generating the URL
+    /// * `U` - Function type for generating the URL, returning a type that implements `IntoUrl`
+    /// * `E` - The type returned by `url_fn` that implements `IntoUrl`
     /// * `F` - Function type for building the request
     /// * `T` - The expected response type that implements DeserializeOwned
     ///
@@ -107,12 +110,15 @@ impl Transport {
     /// JSON response into the specified type.
     ///
     /// # Parameters
-    /// * `url_fn` - Function that generates the URL based on the current configuration
+    /// * `url_fn` - Function that generates the URL based on the current configuration.
+    ///              The function can return any type that implements `IntoUrl`, providing
+    ///              more flexibility than simple string-based URLs.
     /// * `builder_fn` - Function that builds the request with headers and query parameters
     /// * `retry_count` - Number of retry attempts (0 means use config default)
     ///
     /// # Type Parameters
-    /// * `U` - Function type for generating the URL
+    /// * `U` - Function type for generating the URL, returning a type that implements `IntoUrl`
+    /// * `E` - The type returned by `url_fn` that implements `IntoUrl`
     /// * `F` - Function type for building the request
     /// * `T` - The expected response type that implements DeserializeOwned
     ///
@@ -148,12 +154,15 @@ impl Transport {
     /// response chunks.
     ///
     /// # Parameters
-    /// * `url_fn` - Function that generates the URL based on the current configuration
+    /// * `url_fn` - Function that generates the URL based on the current configuration.
+    ///              The function can return any type that implements `IntoUrl`, providing
+    ///              more flexibility than simple string-based URLs.
     /// * `builder_fn` - Function that builds the request with headers and body
     /// * `retry_count` - Number of retry attempts (0 means use config default)
     ///
     /// # Type Parameters
-    /// * `U` - Function type for generating the URL
+    /// * `U` - Function type for generating the URL, returning a type that implements `IntoUrl`
+    /// * `E` - The type returned by `url_fn` that implements `IntoUrl`
     /// * `F` - Function type for building the request
     /// * `T` - The expected response chunk type that implements DeserializeOwned
     ///

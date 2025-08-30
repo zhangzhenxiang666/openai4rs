@@ -70,7 +70,14 @@ pub mod completions;
 pub mod error;
 /// Model management for listing and retrieving model information.
 pub mod models;
-/// A generic HTTP service layer with retry logic and error handling.
+/// A generic HTTP service layer with retry logic, error handling, and flexible URL generation.
+///
+/// This module provides a robust HTTP transport layer for making requests to OpenAI-compatible APIs.
+/// It features configurable timeouts, proxy support, automatic retry logic with exponential backoff,
+/// and support for both regular JSON responses and streaming Server-Sent Events (SSE).
+///
+/// The service module has been optimized to use generic closures for URL generation, allowing
+/// for more flexible URL construction compared to simple string-based approaches.
 pub mod service;
 /// Utility functions and traits.
 pub mod utils;

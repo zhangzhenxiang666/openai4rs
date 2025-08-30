@@ -53,12 +53,15 @@ impl HttpClient {
     /// return a JSON response.
     ///
     /// # Parameters
-    /// * `url_fn` - A function that generates the URL based on the current configuration
+    /// * `url_fn` - A function that generates the URL based on the current configuration.
+    ///              The function can return any type that implements `IntoUrl`, providing
+    ///              more flexibility than simple string-based URLs.
     /// * `builder_fn` - A function that builds the request with headers and body
     /// * `retry_count` - Number of retry attempts for failed requests (0 means use config default)
     ///
     /// # Type Parameters
-    /// * `U` - Function type for generating the URL
+    /// * `U` - Function type for generating the URL, returning a type that implements `IntoUrl`
+    /// * `E` - The type returned by `url_fn` that implements `IntoUrl`
     /// * `F` - Function type for building the request
     /// * `T` - The expected response type that implements DeserializeOwned
     ///
@@ -86,12 +89,15 @@ impl HttpClient {
     /// This method is used for API endpoints that use the GET method and return JSON responses.
     ///
     /// # Parameters
-    /// * `url_fn` - A function that generates the URL based on the current configuration
+    /// * `url_fn` - A function that generates the URL based on the current configuration.
+    ///              The function can return any type that implements `IntoUrl`, providing
+    ///              more flexibility than simple string-based URLs.
     /// * `builder_fn` - A function that builds the request with headers and query parameters
     /// * `retry_count` - Number of retry attempts for failed requests (0 means use config default)
     ///
     /// # Type Parameters
-    /// * `U` - Function type for generating the URL
+    /// * `U` - Function type for generating the URL, returning a type that implements `IntoUrl`
+    /// * `E` - The type returned by `url_fn` that implements `IntoUrl`
     /// * `F` - Function type for building the request
     /// * `T` - The expected response type that implements DeserializeOwned
     ///
@@ -120,12 +126,15 @@ impl HttpClient {
     /// Server-Sent Events (SSE), such as the chat completions streaming endpoint.
     ///
     /// # Parameters
-    /// * `url_fn` - A function that generates the URL based on the current configuration
+    /// * `url_fn` - A function that generates the URL based on the current configuration.
+    ///              The function can return any type that implements `IntoUrl`, providing
+    ///              more flexibility than simple string-based URLs.
     /// * `builder_fn` - A function that builds the request with headers and body
     /// * `retry_count` - Number of retry attempts for failed requests (0 means use config default)
     ///
     /// # Type Parameters
-    /// * `U` - Function type for generating the URL
+    /// * `U` - Function type for generating the URL, returning a type that implements `IntoUrl`
+    /// * `E` - The type returned by `url_fn` that implements `IntoUrl`
     /// * `F` - Function type for building the request
     /// * `T` - The expected response chunk type that implements DeserializeOwned
     ///
