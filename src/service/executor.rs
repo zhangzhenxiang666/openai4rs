@@ -2,7 +2,7 @@ use super::config::HttpConfig;
 use crate::Config;
 use crate::error::{ApiError, ApiErrorKind, OpenAIError, RequestError};
 use crate::utils::traits::AsyncFrom;
-use reqwest::{Client, ClientBuilder, Proxy, RequestBuilder, Response};
+use reqwest::{Client, ClientBuilder, IntoUrl, Proxy, RequestBuilder, Response};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -77,14 +77,15 @@ impl HttpExecutor {
     ///
     /// # Returns
     /// A Result containing the raw HTTP response or an OpenAIError
-    pub async fn post<U, F>(
+    pub async fn post<U, E, F>(
         &self,
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
     ) -> Result<Response, OpenAIError>
     where
-        U: Fn(&Config) -> String,
+        U: Fn(&Config) -> E,
+        E: IntoUrl,
         F: Fn(&Config, RequestBuilder) -> RequestBuilder,
     {
         let client_guard = self.reqwest_client.read().await;
@@ -126,14 +127,15 @@ impl HttpExecutor {
     ///
     /// # Returns
     /// A Result containing the raw HTTP response or an OpenAIError
-    pub async fn get<U, F>(
+    pub async fn get<U, E, F>(
         &self,
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
     ) -> Result<Response, OpenAIError>
     where
-        U: Fn(&Config) -> String,
+        U: Fn(&Config) -> E,
+        E: IntoUrl,
         F: Fn(&Config, RequestBuilder) -> RequestBuilder,
     {
         let client_guard = self.reqwest_client.read().await;

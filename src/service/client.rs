@@ -1,7 +1,7 @@
 use crate::client::Config;
 use crate::error::OpenAIError;
 use crate::service::{config::HttpConfig, transport::Transport};
-use reqwest::RequestBuilder;
+use reqwest::{IntoUrl, RequestBuilder};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
@@ -64,14 +64,15 @@ impl HttpClient {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn post_json<U, F, T>(
+    pub async fn post_json<U, E, F, T>(
         &self,
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
     ) -> Result<T, OpenAIError>
     where
-        U: Fn(&Config) -> String,
+        U: Fn(&Config) -> E,
+        E: IntoUrl,
         F: Fn(&Config, RequestBuilder) -> RequestBuilder,
         T: serde::de::DeserializeOwned,
     {
@@ -96,14 +97,15 @@ impl HttpClient {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn get_json<U, F, T>(
+    pub async fn get_json<U, E, F, T>(
         &self,
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
     ) -> Result<T, OpenAIError>
     where
-        U: Fn(&Config) -> String,
+        U: Fn(&Config) -> E,
+        E: IntoUrl,
         F: Fn(&Config, RequestBuilder) -> RequestBuilder,
         T: serde::de::DeserializeOwned,
     {
@@ -129,14 +131,15 @@ impl HttpClient {
     ///
     /// # Returns
     /// A Result containing a stream of response chunks or an OpenAIError
-    pub async fn post_json_stream<U, F, T>(
+    pub async fn post_json_stream<U, E, F, T>(
         &self,
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
     ) -> Result<ReceiverStream<Result<T, OpenAIError>>, OpenAIError>
     where
-        U: Fn(&Config) -> String,
+        U: Fn(&Config) -> E,
+        E: IntoUrl,
         F: Fn(&Config, RequestBuilder) -> RequestBuilder,
         T: serde::de::DeserializeOwned + Send + 'static,
     {

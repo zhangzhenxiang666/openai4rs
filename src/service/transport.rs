@@ -3,7 +3,7 @@ use crate::service::executor::HttpExecutor;
 use crate::{Config, HttpConfig};
 use eventsource_stream::{Event, EventStreamError, Eventsource};
 use futures::StreamExt;
-use reqwest::RequestBuilder;
+use reqwest::{IntoUrl, RequestBuilder};
 use std::any::type_name;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -78,14 +78,15 @@ impl Transport {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn post_json<U, F, T>(
+    pub async fn post_json<U, E, F, T>(
         &self,
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
     ) -> Result<T, OpenAIError>
     where
-        U: Fn(&Config) -> String,
+        U: Fn(&Config) -> E,
+        E: IntoUrl,
         F: Fn(&Config, RequestBuilder) -> RequestBuilder,
         T: serde::de::DeserializeOwned,
     {
@@ -117,14 +118,15 @@ impl Transport {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn get_json<U, F, T>(
+    pub async fn get_json<U, E, F, T>(
         &self,
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
     ) -> Result<T, OpenAIError>
     where
-        U: Fn(&Config) -> String,
+        U: Fn(&Config) -> E,
+        E: IntoUrl,
         F: Fn(&Config, RequestBuilder) -> RequestBuilder,
         T: serde::de::DeserializeOwned,
     {
@@ -157,14 +159,15 @@ impl Transport {
     ///
     /// # Returns
     /// A Result containing a stream of response chunks or an OpenAIError
-    pub async fn post_json_stream<U, F, T>(
+    pub async fn post_json_stream<U, E, F, T>(
         &self,
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
     ) -> Result<tokio_stream::wrappers::ReceiverStream<Result<T, OpenAIError>>, OpenAIError>
     where
-        U: Fn(&Config) -> String,
+        U: Fn(&Config) -> E,
+        E: IntoUrl,
         F: Fn(&Config, RequestBuilder) -> RequestBuilder,
         T: serde::de::DeserializeOwned + Send + 'static,
     {

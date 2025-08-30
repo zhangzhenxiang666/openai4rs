@@ -477,6 +477,7 @@ impl OpenAI {
     ///     Ok(())
     /// }
     /// ```
+    #[inline]
     pub fn chat(&self) -> &Chat {
         self.chat
             .get_or_init(|| Chat::new(self.http_client.clone()))
@@ -504,6 +505,7 @@ impl OpenAI {
     ///     Ok(())
     /// }
     /// ```
+    #[inline]
     pub fn completions(&self) -> &Completions {
         self.completions
             .get_or_init(|| Completions::new(self.http_client.clone()))
@@ -534,6 +536,7 @@ impl OpenAI {
     ///     Ok(())
     /// }
     /// ```
+    #[inline]
     pub fn models(&self) -> &Models {
         self.models
             .get_or_init(|| Models::new(self.http_client.clone()))
@@ -788,7 +791,6 @@ mod tests {
         dotenv().ok();
         let client = OpenAI::from_env().unwrap();
         let models = client.models().list(models_request()).await;
-        println!("{:#?}", models);
         assert!(models.is_ok())
     }
 }
