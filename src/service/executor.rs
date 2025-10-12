@@ -34,16 +34,22 @@ impl HttpExecutor {
     ///
     /// # Parameters
     /// * `config` - The main OpenAI client configuration
-    /// * `http_config` - HTTP-specific configuration for the reqwest client
     ///
     /// # Returns
     /// A new HttpExecutor instance
-    pub fn new(config: Arc<RwLock<Config>>, http_config: HttpConfig) -> HttpExecutor {
-        let reqwest_client = Self::build_reqwest_client(&http_config);
+    pub fn new(config: Config) -> HttpExecutor {
+        let reqwest_client = Self::build_reqwest_client(config.http_config());
         HttpExecutor {
-            config,
+            config: Arc::new(RwLock::new(config)),
             reqwest_client: RwLock::new(reqwest_client),
         }
+    }
+
+    /// Returns a clone of the internal configuration wrapped in an Arc<RwLock>.
+    ///
+    /// This allows access to the current configuration for request building.
+    pub(crate) fn config(&self) -> Arc<RwLock<Config>> {
+        self.config.clone()
     }
 
     /// Rebuilds the internal `reqwest::Client` based on the current configuration.
