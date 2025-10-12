@@ -1,6 +1,6 @@
 use crate::client::Config;
 use crate::error::OpenAIError;
-use crate::service::{config::HttpConfig, transport::Transport};
+use crate::service::transport::Transport;
 use reqwest::{IntoUrl, RequestBuilder};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -29,14 +29,20 @@ impl HttpClient {
     ///
     /// # Parameters
     /// * `config` - The main configuration for the OpenAI client, wrapped in Arc<RwLock<>>
-    /// * `http_config` - HTTP-specific configuration including timeouts and proxy settings
     ///
     /// # Returns
     /// A new HttpClient instance ready for making API requests
-    pub fn new(config: Arc<RwLock<Config>>, http_config: HttpConfig) -> HttpClient {
+    pub fn new(config: Config) -> HttpClient {
         HttpClient {
-            transport: Arc::new(Transport::new(config, http_config)),
+            transport: Arc::new(Transport::new(config)),
         }
+    }
+
+    /// Returns a clone of the internal configuration wrapped in an Arc<RwLock>.
+    ///
+    /// This allows access to the current configuration for request building.
+    pub(crate) fn config(&self) -> Arc<RwLock<Config>> {
+        self.transport.config()
     }
 
     /// Updates the internal HTTP client configuration.

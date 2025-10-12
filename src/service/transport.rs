@@ -1,6 +1,6 @@
+use crate::Config;
 use crate::error::{OpenAIError, ProcessingError};
 use crate::service::executor::HttpExecutor;
-use crate::{Config, HttpConfig};
 use eventsource_stream::{Event, EventStreamError, Eventsource};
 use futures::StreamExt;
 use reqwest::{IntoUrl, RequestBuilder};
@@ -51,14 +51,20 @@ impl Transport {
     ///
     /// # Parameters
     /// * `config` - The main OpenAI client configuration
-    /// * `http_config` - HTTP-specific configuration
     ///
     /// # Returns
     /// A new Transport instance
-    pub fn new(config: Arc<RwLock<Config>>, http_config: HttpConfig) -> Transport {
+    pub fn new(config: Config) -> Transport {
         Transport {
-            executor: HttpExecutor::new(config, http_config),
+            executor: HttpExecutor::new(config),
         }
+    }
+
+    /// Returns a clone of the internal configuration wrapped in an Arc<RwLock>.
+    ///
+    /// This allows access to the current configuration for request building.
+    pub(crate) fn config(&self) -> Arc<RwLock<Config>> {
+        self.executor.config()
     }
 
     /// Sends a POST request with JSON payload and deserializes the response.

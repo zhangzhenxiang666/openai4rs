@@ -258,13 +258,10 @@ impl OpenAI {
     /// ```
     pub fn new(api_key: &str, base_url: &str) -> OpenAI {
         let config = Config::new(api_key.to_string(), base_url.to_string());
-        let http_config = config.http_config.clone();
-
-        let config = Arc::new(RwLock::new(config));
-        let http_client = HttpClient::new(config.clone(), http_config);
+        let http_client = HttpClient::new(config);
 
         OpenAI {
-            config,
+            config: http_client.config(),
             http_client,
             chat: OnceLock::new(),
             completions: OnceLock::new(),
@@ -293,12 +290,10 @@ impl OpenAI {
     /// let client = OpenAI::with_config(config);
     /// ```
     pub fn with_config(config: Config) -> OpenAI {
-        let http_config = config.http_config.clone();
-        let config = Arc::new(RwLock::new(config));
-        let http_client = HttpClient::new(config.clone(), http_config);
+        let http_client = HttpClient::new(config);
 
         OpenAI {
-            config,
+            config: http_client.config(),
             http_client,
             chat: OnceLock::new(),
             completions: OnceLock::new(),
