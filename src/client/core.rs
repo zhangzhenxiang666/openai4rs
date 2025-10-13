@@ -433,7 +433,7 @@ impl OpenAI {
     ///
     ///     let response = client
     ///         .chat()
-    ///         .create(chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages))
+    ///         .create(chat_request("Qwen/Qwen3-235B-A22B-Instruct-2507", &messages))
     ///         .await?;
     ///
     ///     println!("Response: {:#?}", response);
@@ -456,7 +456,7 @@ impl OpenAI {
     ///     let mut stream = client
     ///         .chat()
     ///         .create_stream(
-    ///             chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages)
+    ///             chat_request("Qwen/Qwen3-235B-A22B-Instruct-2507", &messages)
     ///                 .max_completion_tokens(64),
     ///         )
     ///         .await?;
@@ -493,7 +493,7 @@ impl OpenAI {
     ///     let client = OpenAI::from_env()?;
     ///     let response = client
     ///         .completions()
-    ///         .create(completions_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", "Write a poem about the Rust programming language").max_tokens(64))
+    ///         .create(completions_request("Qwen/Qwen3-235B-A22B-Instruct-2507", "Write a poem about the Rust programming language").max_tokens(64))
     ///         .await;
     ///
     ///     println!("Response: {:#?}", response);
@@ -614,7 +614,7 @@ mod tests {
     use super::*;
     use crate::{chat::*, models_request, user};
     use dotenvy::dotenv;
-    const MODEL_NAME: &str = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
+    const MODEL_NAME: &str = "Qwen/Qwen3-235B-A22B-Instruct-2507";
 
     #[test]
     fn test_config_builder() {
@@ -740,7 +740,7 @@ mod tests {
             match client.chat().create(request).await {
                 Ok(result) => {
                     assert_eq!(
-                        Some("Hello! How can I help you today?".into()),
+                        Some("Hi! ٩(◕‿◕｡)۶ How can I assist you today?".into()),
                         result.choices[0].message.content
                     );
                     return;

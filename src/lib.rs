@@ -44,7 +44,7 @@
 //!
 //!     // Create a chat request
 //!     let messages = vec![user!("What is the capital of France?")];
-//!     let request = chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages);
+//!     let request = chat_request("Qwen/Qwen3-235B-A22B-Instruct-2507", &messages);
 //!
 //!     // Get the response
 //!     let response = client.chat().create(request).await?;

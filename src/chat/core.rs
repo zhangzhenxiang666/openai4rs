@@ -37,7 +37,7 @@ impl Chat {
     ///     dotenv().ok();
     ///     let client = OpenAI::from_env()?;
     ///     let messages = vec![user!("What is Rust?")];
-    ///     let request = chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages);
+    ///     let request = chat_request("Qwen/Qwen3-235B-A22B-Instruct-2507", &messages);
     ///     let response = client.chat().create(request).await?;
     ///     println!("{:#?}", response);
     ///     Ok(())
@@ -86,7 +86,7 @@ impl Chat {
     ///     dotenv().ok();
     ///     let client = OpenAI::from_env()?;
     ///     let messages = vec![user!("Tell me a short story.")];
-    ///     let request = chat_request("Qwen/Qwen3-Coder-480B-A35B-Instruct", &messages);
+    ///     let request = chat_request("Qwen/Qwen3-235B-A22B-Instruct-2507", &messages);
     ///     let mut stream = client.chat().create_stream(request).await?;
     ///
     ///     while let Some(chunk) = stream.next().await {

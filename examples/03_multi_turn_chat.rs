@@ -7,7 +7,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
     let client = OpenAI::from_env()?;
 
-    let model = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
+    let model = "Qwen/Qwen3-235B-A22B-Instruct-2507";
     let mut messages = vec![system!(content: "You are a helpful assistant.")];
 
     loop {

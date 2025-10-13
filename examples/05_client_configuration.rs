@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // For demonstration, we'll use the basic client to make a simple request.
     // In a real application, you would use the client that best fits your needs.
 
-    let model = "Qwen/Qwen3-Coder-480B-A35B-Instruct";
+    let model = "Qwen/Qwen3-235B-A22B-Instruct-2507";
     let messages = vec![user!(content: "Ping to check if the client is working.")];
     let request = chat_request(model, &messages);
 
