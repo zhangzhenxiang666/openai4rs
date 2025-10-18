@@ -51,7 +51,7 @@ impl HttpConfig {
     /// # Examples
     ///
     /// ```
-    /// use openai4rsc::HttpConfig;
+    /// use openai4rs::HttpConfig;
     ///
     /// let config = HttpConfig::builder()
     ///     .timeout_seconds(60)

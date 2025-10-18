@@ -330,28 +330,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2. Client with a custom base URL (e.g., for a proxy or a different provider)
     let _custom_base_url_client = Config::builder()
-        .api_key(api_key.clone())
-        .base_url(base_url.clone()) // Replace with your custom base URL
+        .api_key(&api_key)
+        .base_url(&base_url) // Replace with your custom base URL
         .build_openai()?;
 
     // 3. Client with a proxy
     let proxy_config = Config::builder()
-        .api_key(api_key.clone())
-        .base_url(base_url.clone())
-        .http_config(
-            HttpConfig::builder()
-                .proxy("http://proxy.example.com:8080".to_string())
-                .build()
-                .unwrap(),
-        )
+        .api_key(&api_key)
+        .base_url(&base_url)
+        .proxy("http://proxy.example.com:8080")
         .build()?;
     let _proxy_client = OpenAI::with_config(proxy_config);
 
     // 4. Client with custom timeout
     let timeout_config = Config::builder()
-        .api_key(api_key)
-        .base_url(base_url.clone())
-        .http_config(HttpConfig::builder().timeout_seconds(120).build().unwrap())
+        .api_key(&api_key)
+        .base_url(&base_url)
+        .timeout_seconds(120)
         .build()?;
     let _timeout_client = OpenAI::with_config(timeout_config);
 
