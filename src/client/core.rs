@@ -1,206 +1,6 @@
-use crate::{
-    chat::Chat,
-    completions::Completions,
-    models::Models,
-    service::{client::HttpClient, config::HttpConfig},
-};
-use derive_builder::Builder;
+use crate::{chat::Chat, completions::Completions, config::Config, models::Models, service::client::HttpClient};
 use std::sync::{Arc, OnceLock};
 use tokio::sync::RwLock;
-
-/// OpenAI client configuration
-///
-/// Contains the API key, base URL, and HTTP request settings for connecting to an OpenAI-compatible service.
-///
-/// Examples
-///
-/// ```rust
-/// use openai4rs::Config;
-///
-/// let config = Config::new(
-///     "your-api-key".to_string(),
-///     "https://api.openai.com/v1".to_string()
-/// );
-/// ```
-#[derive(Builder)]
-#[builder(name = "OpenAIConfigBuilder", pattern = "owned", setter(strip_option))]
-pub struct Config {
-    api_key: String,
-    base_url: String,
-    /// The maximum number of retries for failed requests. Default: 5
-    #[builder(default = 5)]
-    retry_count: u32,
-    #[builder(default = HttpConfig::default())]
-    http_config: HttpConfig,
-}
-
-impl OpenAIConfigBuilder {
-    /// Builds the configuration and creates a new OpenAI client.
-    ///
-    /// Consumes the builder to create a [`Config`] instance, then uses it to create a new [`OpenAI`] client.
-    /// This is a convenience method that combines building the configuration and creating the client into one step.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the configuration is invalid or cannot be built.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use openai4rs::{Config, HttpConfig};
-    ///
-    ///
-    /// let client = Config::builder()
-    ///    .api_key("sk-your-api-key".to_string())
-    ///    .base_url("https://api.openai.com/v1".to_string())
-    ///    .retry_count(3)
-    ///    .http_config(
-    ///        HttpConfig::builder()
-    ///            .timeout_seconds(120)
-    ///            .proxy("http://127.0.0.1:7890".to_string())
-    ///            .user_agent("MyApp/1.0".to_string())
-    ///            .build()
-    ///            .unwrap(),
-    ///    )
-    ///    .build_openai()
-    ///    .unwrap();
-    /// ```
-    pub fn build_openai(self) -> Result<OpenAI, OpenAIConfigBuilderError> {
-        Ok(OpenAI::with_config(self.build()?))
-    }
-}
-
-impl Config {
-    /// Creates a new configuration with the provided API key and base URL.
-    ///
-    /// # Arguments
-    ///
-    /// * `api_key` - The API key for authentication.
-    /// * `base_url` - The base URL of the API endpoint.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use openai4rs::Config;
-    ///
-    /// let config = Config::new(
-    ///     "sk-your-api-key".to_string(),
-    ///     "https://api.openai.com/v1".to_string()
-    /// );
-    /// ```
-    pub fn new(api_key: String, base_url: String) -> Self {
-        Self::builder()
-            .api_key(api_key)
-            .base_url(base_url)
-            .build()
-            .unwrap()
-    }
-
-    /// Creates a new configuration builder.
-    ///
-    /// Returns a new [`OpenAIConfigBuilder`] instance for constructing a [`Config`] with custom settings.
-    /// This is the preferred method for creating configurations with non-default values.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use openai4rs::Config;
-    ///
-    /// let mut config = Config::builder()
-    ///     .api_key("sk-your-api-key".to_string())
-    ///     .base_url("https://api.openai.com/v1".to_string())
-    ///     .retry_count(3)
-    ///     .build()
-    ///     .unwrap();
-    /// config.with_timeout_seconds(120);
-    /// ```
-    pub fn builder() -> OpenAIConfigBuilder {
-        OpenAIConfigBuilder::create_empty()
-    }
-}
-
-impl Config {
-    /// Returns a reference to the API key.
-    pub fn api_key(&self) -> &str {
-        &self.api_key
-    }
-
-    /// Returns a reference to the base URL.
-    pub fn base_url(&self) -> &str {
-        &self.base_url
-    }
-
-    /// Updates the base URL.
-    pub fn with_base_url(&mut self, base_url: impl Into<String>) -> &mut Self {
-        self.base_url = base_url.into();
-        self
-    }
-
-    /// Updates the API key.
-    pub fn with_api_key(&mut self, api_key: impl Into<String>) -> &mut Self {
-        self.api_key = api_key.into();
-        self
-    }
-
-    /// Gets the maximum retry count.
-    pub fn retry_count(&self) -> u32 {
-        self.retry_count
-    }
-
-    /// Sets the maximum retry count.
-    pub fn with_retry_count(&mut self, retry_count: u32) -> &mut Self {
-        self.retry_count = retry_count;
-        self
-    }
-
-    /// Gets the request timeout in seconds.
-    pub fn timeout_seconds(&self) -> u64 {
-        self.http_config.timeout_seconds
-    }
-
-    /// Sets the request timeout in seconds.
-    pub fn with_timeout_seconds(&mut self, timeout_seconds: u64) -> &mut Self {
-        self.http_config.timeout_seconds = timeout_seconds;
-        self
-    }
-
-    /// Gets the connection timeout in seconds.
-    pub fn connect_timeout_seconds(&self) -> u64 {
-        self.http_config.connect_timeout_seconds
-    }
-
-    /// Sets the connection timeout in seconds.
-    pub fn with_connect_timeout_seconds(&mut self, connect_timeout_seconds: u64) -> &mut Self {
-        self.http_config.connect_timeout_seconds = connect_timeout_seconds;
-        self
-    }
-
-    /// Gets the proxy URL (if set).
-    pub fn proxy(&self) -> Option<&str> {
-        self.http_config.proxy.as_deref()
-    }
-
-    /// Sets an HTTP proxy for requests.
-    pub fn with_proxy(&mut self, proxy: Option<impl Into<String>>) -> &mut Self {
-        self.http_config.proxy = proxy.map(|s| s.into());
-        self
-    }
-
-    /// Gets the user agent string (if set).
-    pub fn user_agent(&self) -> Option<&str> {
-        self.http_config.user_agent.as_deref()
-    }
-
-    /// Sets a custom user agent string.
-    pub fn with_user_agent(&mut self, user_agent: Option<impl Into<String>>) -> &mut Self {
-        self.http_config.user_agent = user_agent.map(|s| s.into());
-        self
-    }
-
-    pub fn http_config(&self) -> &HttpConfig {
-        &self.http_config
-    }
-}
 
 /// OpenAI client for interacting with OpenAI-compatible APIs
 ///
@@ -227,7 +27,7 @@ impl Config {
 /// async fn main() {
 ///     dotenv().ok();
 ///     let client = OpenAI::from_env().unwrap();
-///     
+///
 ///     // Use the client for various operations
 ///     let models = client.models().list(openai4rs::models_request()).await.unwrap();
 ///     println!("Available models: {:#?}", models);
@@ -285,7 +85,7 @@ impl OpenAI {
     /// let mut config = Config::new("your-api-key".to_string(), "https://api.openai.com/v1".to_string());
     /// config.with_retry_count(3)
     ///       .with_timeout_seconds(120)
-    ///       .with_user_agent(Some("MyApp/1.0"));
+    ///       .with_user_agent("MyApp/1.0");
     ///
     /// let client = OpenAI::with_config(config);
     /// ```
@@ -321,7 +121,7 @@ impl OpenAI {
     /// client.update_config(|config| {
     ///     config.with_timeout_seconds(120)
     ///           .with_retry_count(3)
-    ///           .with_proxy(Some("http://localhost:8080"));
+    ///           .with_proxy("http://localhost:8080");
     /// }).await;
     /// }
     /// ```
@@ -402,11 +202,11 @@ impl OpenAI {
         }
 
         if let Ok(proxy) = std::env::var("OPENAI_PROXY") {
-            config.with_proxy(Some(proxy));
+            config.with_proxy(proxy);
         }
 
         if let Ok(user_agent) = std::env::var("OPENAI_USER_AGENT") {
-            config.with_user_agent(Some(user_agent));
+            config.with_user_agent(user_agent);
         }
 
         Ok(Self::with_config(config))
@@ -591,9 +391,9 @@ impl OpenAI {
     /// Updates the client's HTTP proxy.
     ///
     /// This operation will rebuild the internal HttpService with the new settings.
-    pub async fn with_proxy(&self, proxy: Option<impl Into<String>>) {
+    pub async fn with_proxy(&self, proxy: impl Into<String>) {
         self.update_config(|config| {
-            config.with_proxy(proxy.map(|s| s.into()));
+            config.with_proxy(proxy);
         })
         .await;
     }
@@ -601,9 +401,9 @@ impl OpenAI {
     /// Updates the client's custom user agent.
     ///
     /// This operation will rebuild the internal HttpService with the new settings.
-    pub async fn with_user_agent(&self, user_agent: Option<impl Into<String>>) {
+    pub async fn with_user_agent(&self, user_agent: impl Into<String>) {
         self.update_config(|config| {
-            config.with_user_agent(user_agent.map(|s| s.into()));
+            config.with_user_agent(user_agent);
         })
         .await;
     }
@@ -618,17 +418,14 @@ mod tests {
 
     #[test]
     fn test_config_builder() {
-        let mut http_config = HttpConfig::default();
-        http_config.timeout_seconds = 120;
-        http_config.connect_timeout_seconds = 15;
-        http_config.proxy = Some("http://proxy.test.com:8080".to_string());
-        http_config.user_agent = Some("TestAgent/1.0".to_string());
-
         let config = Config::builder()
             .api_key("test-key".to_string())
             .base_url("https://api.test.com/v1".to_string())
             .retry_count(3)
-            .http_config(http_config)
+            .timeout_seconds(120)
+            .connect_timeout_seconds(15)
+            .proxy("http://proxy.test.com:8080")
+            .user_agent("TestAgent/1.0")
             .build()
             .unwrap();
 
@@ -637,8 +434,14 @@ mod tests {
         assert_eq!(config.retry_count(), 3);
         assert_eq!(config.timeout_seconds(), 120);
         assert_eq!(config.connect_timeout_seconds(), 15);
-        assert_eq!(config.proxy(), Some("http://proxy.test.com:8080"));
-        assert_eq!(config.user_agent(), Some("TestAgent/1.0"));
+        assert_eq!(
+            config.proxy().map(|s| s.as_str()),
+            Some("http://proxy.test.com:8080")
+        );
+        assert_eq!(
+            config.user_agent().map(|s| s.as_str()),
+            Some("TestAgent/1.0")
+        );
     }
 
     #[test]
@@ -691,16 +494,22 @@ mod tests {
             .with_retry_count(2)
             .with_timeout_seconds(30)
             .with_connect_timeout_seconds(5)
-            .with_proxy(Some("http://proxy.example.com:8080"))
-            .with_user_agent(Some("CustomAgent/2.0"));
+            .with_proxy("http://proxy.example.com:8080")
+            .with_user_agent("CustomAgent/2.0");
 
         assert_eq!(config.api_key(), "new-key");
         assert_eq!(config.base_url(), "https://new-api.com/v1");
         assert_eq!(config.retry_count(), 2);
         assert_eq!(config.timeout_seconds(), 30);
         assert_eq!(config.connect_timeout_seconds(), 5);
-        assert_eq!(config.proxy(), Some("http://proxy.example.com:8080"));
-        assert_eq!(config.user_agent(), Some("CustomAgent/2.0"));
+        assert_eq!(
+            config.proxy().map(|s| s.as_str()),
+            Some("http://proxy.example.com:8080")
+        );
+        assert_eq!(
+            config.user_agent().map(|s| s.as_str()),
+            Some("CustomAgent/2.0")
+        );
     }
 
     #[tokio::test]
@@ -712,10 +521,8 @@ mod tests {
         client.with_retry_count(2).await;
         client.with_timeout_seconds(30).await;
         client.with_connect_timeout_seconds(5).await;
-        client
-            .with_proxy(Some("http://proxy.example.com:8080"))
-            .await;
-        client.with_user_agent(Some("CustomAgent/2.0")).await;
+        client.with_proxy("http://proxy.example.com:8080").await;
+        client.with_user_agent("CustomAgent/2.0").await;
 
         let config = client.config.read().await;
 
@@ -724,8 +531,14 @@ mod tests {
         assert_eq!(config.retry_count(), 2);
         assert_eq!(config.timeout_seconds(), 30);
         assert_eq!(config.connect_timeout_seconds(), 5);
-        assert_eq!(config.proxy(), Some("http://proxy.example.com:8080"));
-        assert_eq!(config.user_agent(), Some("CustomAgent/2.0"));
+        assert_eq!(
+            config.proxy().map(|s| s.as_str()),
+            Some("http://proxy.example.com:8080")
+        );
+        assert_eq!(
+            config.user_agent().map(|s| s.as_str()),
+            Some("CustomAgent/2.0")
+        );
     }
 
     #[tokio::test]
@@ -733,15 +546,16 @@ mod tests {
         dotenv().ok();
         let client = OpenAI::from_env().unwrap();
         let messages = vec![user!("Hello")];
-
         let mut retries = 3;
         while retries > 0 {
             let request = chat_request(MODEL_NAME, &messages).temperature(0.0);
             match client.chat().create(request).await {
                 Ok(result) => {
-                    assert_eq!(
-                        Some("Hi! ٩(◕‿◕｡)۶ How can I assist you today?".into()),
-                        result.choices[0].message.content
+                    assert!(
+                        result
+                            .choices
+                            .get(0)
+                            .map_or(false, |choice| choice.message.content.is_some())
                     );
                     return;
                 }

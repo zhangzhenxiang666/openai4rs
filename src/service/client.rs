@@ -1,4 +1,4 @@
-use crate::client::Config;
+use crate::Config;
 use crate::error::OpenAIError;
 use crate::service::transport::Transport;
 use reqwest::{IntoUrl, RequestBuilder};

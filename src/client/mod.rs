@@ -49,4 +49,4 @@
 //! - [`OpenAI::models()`] for listing and retrieving model information
 
 pub mod core;
-pub use core::{Config, OpenAI};
+pub use core::OpenAI;

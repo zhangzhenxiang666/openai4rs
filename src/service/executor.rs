@@ -1,8 +1,7 @@
-use super::config::HttpConfig;
 use crate::Config;
 use crate::error::{ApiError, ApiErrorKind, OpenAIError, RequestError};
 use crate::utils::traits::AsyncFrom;
-use reqwest::{Client, ClientBuilder, IntoUrl, Proxy, RequestBuilder, Response};
+use reqwest::{Client, IntoUrl, RequestBuilder, Response};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -38,7 +37,7 @@ impl HttpExecutor {
     /// # Returns
     /// A new HttpExecutor instance
     pub fn new(config: Config) -> HttpExecutor {
-        let reqwest_client = Self::build_reqwest_client(config.http_config());
+        let reqwest_client = config.http().build_reqwest_client();
         HttpExecutor {
             config: Arc::new(RwLock::new(config)),
             reqwest_client: RwLock::new(reqwest_client),
@@ -59,7 +58,7 @@ impl HttpExecutor {
     pub async fn rebuild_reqwest_client(&self) {
         let new_client = {
             let config_guard = self.config.read().await;
-            Self::build_reqwest_client(config_guard.http_config())
+            config_guard.http().build_reqwest_client()
         };
         let mut client_guard = self.reqwest_client.write().await;
         *client_guard = new_client;
@@ -173,34 +172,6 @@ impl HttpExecutor {
 }
 
 impl HttpExecutor {
-    /// Builds a `reqwest::Client` with the configured settings.
-    ///
-    /// This method creates a new reqwest client with the specified timeouts,
-    /// proxy settings, and user agent.
-    ///
-    /// # Parameters
-    /// * `config` - The HTTP configuration to use for building the client
-    ///
-    /// # Returns
-    /// A new reqwest::Client instance
-    fn build_reqwest_client(config: &HttpConfig) -> Client {
-        let mut client_builder = ClientBuilder::new()
-            .timeout(Duration::from_secs(config.timeout_seconds))
-            .connect_timeout(Duration::from_secs(config.connect_timeout_seconds));
-
-        if let Some(proxy_url) = &config.proxy {
-            if let Ok(proxy) = Proxy::all(proxy_url) {
-                client_builder = client_builder.proxy(proxy);
-            }
-        }
-
-        if let Some(user_agent) = &config.user_agent {
-            client_builder = client_builder.user_agent(user_agent);
-        }
-
-        client_builder.build().unwrap_or_else(|_| Client::new())
-    }
-
     /// Executes an HTTP request with retry logic.
     ///
     /// This method implements the core retry logic for HTTP requests, handling

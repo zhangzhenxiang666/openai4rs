@@ -62,6 +62,9 @@ pub mod chat;
 /// Core client implementation, configuration, and entry point.
 pub mod client;
 
+/// Configuration for the OpenAI client.
+pub mod config;
+
 /// Common types and utilities shared within the library.
 pub mod common;
 /// Legacy text completion functionality.
@@ -84,12 +87,12 @@ pub mod utils;
 
 // Re-export core types and functions
 pub use chat::*;
-pub use client::{Config, OpenAI};
+pub use client::OpenAI;
 pub use completions::completions_request;
+pub use config::{Config, HttpConfig};
 pub use error::OpenAIError;
 pub use models::models_request;
 pub use serde_json;
-pub use service::config::HttpConfig;
 pub use utils::Apply;
 
 // Import and re-export the new procedural macros

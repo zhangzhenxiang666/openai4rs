@@ -21,12 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy_config = Config::builder()
         .api_key(api_key.clone())
         .base_url(base_url.clone())
-        .http_config(
-            HttpConfig::builder()
-                .proxy("http://proxy.example.com:8080".to_string())
-                .build()
-                .unwrap(),
-        )
+        .proxy("http://proxy.example.com:8080")
         .build()?;
     let _proxy_client = OpenAI::with_config(proxy_config);
 
@@ -34,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let timeout_config = Config::builder()
         .api_key(api_key)
         .base_url(base_url.clone())
-        .http_config(HttpConfig::builder().timeout_seconds(120).build().unwrap())
+        .timeout_seconds(120)
         .build()?;
     let _timeout_client = OpenAI::with_config(timeout_config);
 
