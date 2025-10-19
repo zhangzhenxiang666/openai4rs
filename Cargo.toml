@@ -7,12 +7,12 @@ version = "0.1.6"
 edition = "2024"
 repository = "https://github.com/zhangzhenxiang666/openai4rs"
 documentation = "https://docs.rs/openai4rs"
-authors = ["Zhang Zhenxiang <zhangzhenxiang@example.com>"]
+authors = ["Zhang Zhenxiang 401303740@qq.com"]
 description = "A non-official Rust crate for calling the OpenAI service"
 license = "Apache-2.0"
 keywords = ["ai", "openai", "machine-learning", "library"]
 exclude = [".vscode/", "docs/", ".git/", ".github/", "*.log", ".env*"]
-categories = ["api-bindings", "asynchronous", "science"]
+categories = ["openai", "llm", "api-bindings", "asynchronous", "science"]
 
 [dependencies]
 derive_builder = "0.20.2"

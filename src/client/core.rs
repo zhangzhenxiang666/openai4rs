@@ -1,6 +1,9 @@
-use crate::{chat::Chat, completions::Completions, config::Config, models::Models, service::client::HttpClient};
+use crate::{
+    chat::Chat, completions::Completions, config::Config, models::Models,
+    service::client::HttpClient,
+};
 use std::sync::{Arc, OnceLock};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, RwLockReadGuard};
 
 /// OpenAI client for interacting with OpenAI-compatible APIs
 ///
@@ -347,6 +350,11 @@ impl OpenAI {
         self.config.read().await.api_key().to_string()
     }
 
+    /// Returns the current configuration.
+    pub async fn config(&self) -> RwLockReadGuard<'_, Config> {
+        self.config.read().await
+    }
+
     /// Updates the client's base URL.
     ///
     /// This operation does not rebuild the HTTP client, as it is used in each request.
@@ -406,200 +414,5 @@ impl OpenAI {
             config.with_user_agent(user_agent);
         })
         .await;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{chat::*, models_request, user};
-    use dotenvy::dotenv;
-    const MODEL_NAME: &str = "Qwen/Qwen3-235B-A22B-Instruct-2507";
-
-    #[test]
-    fn test_config_builder() {
-        let config = Config::builder()
-            .api_key("test-key".to_string())
-            .base_url("https://api.test.com/v1".to_string())
-            .retry_count(3)
-            .timeout_seconds(120)
-            .connect_timeout_seconds(15)
-            .proxy("http://proxy.test.com:8080")
-            .user_agent("TestAgent/1.0")
-            .build()
-            .unwrap();
-
-        assert_eq!(config.api_key(), "test-key");
-        assert_eq!(config.base_url(), "https://api.test.com/v1");
-        assert_eq!(config.retry_count(), 3);
-        assert_eq!(config.timeout_seconds(), 120);
-        assert_eq!(config.connect_timeout_seconds(), 15);
-        assert_eq!(
-            config.proxy().map(|s| s.as_str()),
-            Some("http://proxy.test.com:8080")
-        );
-        assert_eq!(
-            config.user_agent().map(|s| s.as_str()),
-            Some("TestAgent/1.0")
-        );
-    }
-
-    #[test]
-    fn test_config_builder_defaults() {
-        let config = Config::builder()
-            .api_key("test-key".to_string())
-            .base_url("https://api.test.com/v1".to_string())
-            .build()
-            .unwrap();
-
-        assert_eq!(config.retry_count(), 5); // default value
-        assert_eq!(config.timeout_seconds(), 300); // default value
-        assert_eq!(config.connect_timeout_seconds(), 10); // default value
-        assert_eq!(config.proxy(), None); // default value
-        assert_eq!(config.user_agent(), None); // default value
-    }
-
-    #[tokio::test]
-    async fn test_build_openai() {
-        let client = Config::builder()
-            .api_key("test-key".to_string())
-            .base_url("https://api.test.com/v1".to_string())
-            .build_openai()
-            .unwrap();
-
-        let config = client.config.read().await;
-
-        assert_eq!(config.api_key(), "test-key");
-        assert_eq!(config.base_url(), "https://api.test.com/v1");
-    }
-
-    #[test]
-    fn test_config_new() {
-        let config = Config::new(
-            "test-key".to_string(),
-            "https://api.test.com/v1".to_string(),
-        );
-
-        assert_eq!(config.api_key(), "test-key");
-        assert_eq!(config.base_url(), "https://api.test.com/v1");
-    }
-
-    #[test]
-    fn test_config_setters() {
-        let mut config = Config::new("old-key".to_string(), "https://old-api.com/v1".to_string());
-
-        config
-            .with_api_key("new-key")
-            .with_base_url("https://new-api.com/v1")
-            .with_retry_count(2)
-            .with_timeout_seconds(30)
-            .with_connect_timeout_seconds(5)
-            .with_proxy("http://proxy.example.com:8080")
-            .with_user_agent("CustomAgent/2.0");
-
-        assert_eq!(config.api_key(), "new-key");
-        assert_eq!(config.base_url(), "https://new-api.com/v1");
-        assert_eq!(config.retry_count(), 2);
-        assert_eq!(config.timeout_seconds(), 30);
-        assert_eq!(config.connect_timeout_seconds(), 5);
-        assert_eq!(
-            config.proxy().map(|s| s.as_str()),
-            Some("http://proxy.example.com:8080")
-        );
-        assert_eq!(
-            config.user_agent().map(|s| s.as_str()),
-            Some("CustomAgent/2.0")
-        );
-    }
-
-    #[tokio::test]
-    async fn test_openai_setters() {
-        let client = OpenAI::new("old-key", "https://old-api.com/v1");
-
-        client.with_api_key("new-key").await;
-        client.with_base_url("https://new-api.com/v1").await;
-        client.with_retry_count(2).await;
-        client.with_timeout_seconds(30).await;
-        client.with_connect_timeout_seconds(5).await;
-        client.with_proxy("http://proxy.example.com:8080").await;
-        client.with_user_agent("CustomAgent/2.0").await;
-
-        let config = client.config.read().await;
-
-        assert_eq!(config.api_key(), "new-key");
-        assert_eq!(config.base_url(), "https://new-api.com/v1");
-        assert_eq!(config.retry_count(), 2);
-        assert_eq!(config.timeout_seconds(), 30);
-        assert_eq!(config.connect_timeout_seconds(), 5);
-        assert_eq!(
-            config.proxy().map(|s| s.as_str()),
-            Some("http://proxy.example.com:8080")
-        );
-        assert_eq!(
-            config.user_agent().map(|s| s.as_str()),
-            Some("CustomAgent/2.0")
-        );
-    }
-
-    #[tokio::test]
-    async fn test_chat() {
-        dotenv().ok();
-        let client = OpenAI::from_env().unwrap();
-        let messages = vec![user!("Hello")];
-        let mut retries = 3;
-        while retries > 0 {
-            let request = chat_request(MODEL_NAME, &messages).temperature(0.0);
-            match client.chat().create(request).await {
-                Ok(result) => {
-                    assert!(
-                        result
-                            .choices
-                            .get(0)
-                            .map_or(false, |choice| choice.message.content.is_some())
-                    );
-                    return;
-                }
-                Err(e) if e.is_retryable() => {
-                    retries -= 1;
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                }
-                Err(e) => {
-                    panic!("Non-retryable error: {:#?}", e);
-                }
-            }
-        }
-        panic!("Test failed after multiple retries");
-    }
-
-    #[tokio::test]
-    async fn test_openai_error_authentication() {
-        let base_url = "https://openrouter.ai/api/v1";
-        let api_key = "******";
-        let client = OpenAI::new(api_key, base_url);
-        let messages = vec![user!("hello world")];
-        let result = client
-            .chat()
-            .create(
-                chat_request(MODEL_NAME, &messages)
-                    .temperature(0.0)
-                    .max_completion_tokens(512),
-            )
-            .await;
-        match result {
-            Ok(_) => panic!("Unexpected success response"),
-            Err(err) => {
-                if !err.is_authentication() {
-                    panic!("Unexpected error: {:#?}", err);
-                }
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn test_models_list() {
-        dotenv().ok();
-        let client = OpenAI::from_env().unwrap();
-        let models = client.models().list(models_request()).await;
-        assert!(models.is_ok())
     }
 }
