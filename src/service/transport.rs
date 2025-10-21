@@ -1,9 +1,9 @@
+use super::request::RequestBuilder;
 use crate::Config;
 use crate::error::{OpenAIError, ProcessingError};
 use crate::service::executor::HttpExecutor;
 use eventsource_stream::{Event, EventStreamError, Eventsource};
 use futures::StreamExt;
-use reqwest::{IntoUrl, RequestBuilder};
 use std::any::type_name;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -73,30 +73,26 @@ impl Transport {
     /// JSON response into the specified type.
     ///
     /// # Parameters
-    /// * `url_fn` - Function that generates the URL based on the current configuration.
-    ///              The function can return any type that implements `IntoUrl`, providing
-    ///              more flexibility than simple string-based URLs.
+    /// * `url_fn` - Function that generates the URL based on the current configuration, returning a String
     /// * `builder_fn` - Function that builds the request with headers and body
     /// * `retry_count` - Number of retry attempts (0 means use config default)
     ///
     /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a type that implements `IntoUrl`
-    /// * `E` - The type returned by `url_fn` that implements `IntoUrl`
+    /// * `U` - Function type for generating the URL, returning a String
     /// * `F` - Function type for building the request
     /// * `T` - The expected response type that implements DeserializeOwned
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn post_json<U, E, F, T>(
+    pub async fn post_json<U, F, T>(
         &self,
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
     ) -> Result<T, OpenAIError>
     where
-        U: Fn(&Config) -> E,
-        E: IntoUrl,
-        F: Fn(&Config, RequestBuilder) -> RequestBuilder,
+        U: Fn(&Config) -> String,
+        F: Fn(&Config, &mut RequestBuilder),
         T: serde::de::DeserializeOwned,
     {
         let res = self.executor.post(url_fn, builder_fn, retry_count).await?;
@@ -116,30 +112,26 @@ impl Transport {
     /// JSON response into the specified type.
     ///
     /// # Parameters
-    /// * `url_fn` - Function that generates the URL based on the current configuration.
-    ///              The function can return any type that implements `IntoUrl`, providing
-    ///              more flexibility than simple string-based URLs.
+    /// * `url_fn` - Function that generates the URL based on the current configuration, returning a String
     /// * `builder_fn` - Function that builds the request with headers and query parameters
     /// * `retry_count` - Number of retry attempts (0 means use config default)
     ///
     /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a type that implements `IntoUrl`
-    /// * `E` - The type returned by `url_fn` that implements `IntoUrl`
+    /// * `U` - Function type for generating the URL, returning a String
     /// * `F` - Function type for building the request
     /// * `T` - The expected response type that implements DeserializeOwned
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn get_json<U, E, F, T>(
+    pub async fn get_json<U, F, T>(
         &self,
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
     ) -> Result<T, OpenAIError>
     where
-        U: Fn(&Config) -> E,
-        E: IntoUrl,
-        F: Fn(&Config, RequestBuilder) -> RequestBuilder,
+        U: Fn(&Config) -> String,
+        F: Fn(&Config, &mut RequestBuilder),
         T: serde::de::DeserializeOwned,
     {
         let res = self.executor.get(url_fn, builder_fn, retry_count).await?;
@@ -160,30 +152,26 @@ impl Transport {
     /// response chunks.
     ///
     /// # Parameters
-    /// * `url_fn` - Function that generates the URL based on the current configuration.
-    ///              The function can return any type that implements `IntoUrl`, providing
-    ///              more flexibility than simple string-based URLs.
+    /// * `url_fn` - Function that generates the URL based on the current configuration, returning a String
     /// * `builder_fn` - Function that builds the request with headers and body
     /// * `retry_count` - Number of retry attempts (0 means use config default)
     ///
     /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a type that implements `IntoUrl`
-    /// * `E` - The type returned by `url_fn` that implements `IntoUrl`
+    /// * `U` - Function type for generating the URL, returning a String
     /// * `F` - Function type for building the request
     /// * `T` - The expected response chunk type that implements DeserializeOwned
     ///
     /// # Returns
     /// A Result containing a stream of response chunks or an OpenAIError
-    pub async fn post_json_stream<U, E, F, T>(
+    pub async fn post_json_stream<U, F, T>(
         &self,
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
     ) -> Result<tokio_stream::wrappers::ReceiverStream<Result<T, OpenAIError>>, OpenAIError>
     where
-        U: Fn(&Config) -> E,
-        E: IntoUrl,
-        F: Fn(&Config, RequestBuilder) -> RequestBuilder,
+        U: Fn(&Config) -> String,
+        F: Fn(&Config, &mut RequestBuilder),
         T: serde::de::DeserializeOwned + Send + 'static,
     {
         let res = self.executor.post(url_fn, builder_fn, retry_count).await?;

@@ -1,4 +1,5 @@
 use dotenvy::dotenv;
+use futures::StreamExt;
 use openai4rs::*;
 use std::io::{Write, stdin, stdout};
 
@@ -26,13 +27,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let request = chat_request(model, &messages);
 
-        let response = client.chat().create(request).await?;
-        if let Some(content) = response.content() {
-            println!("Assistant: {}\n", content);
-            messages.push(assistant!(content));
-        } else {
-            println!("Assistant: No response.\n");
+        let mut stream = client.chat().create_stream(request).await?;
+        let mut first_content = true;
+
+        while let Some(chunk_result) = stream.next().await {
+            match chunk_result {
+                Ok(chunk) => {
+                    if chunk.has_content() {
+                        if first_content {
+                            print!("Assistant: ");
+                            first_content = false;
+                        }
+                        if let Some(content) = chunk.content() {
+                            print!("{}", content);
+                            std::io::stdout().flush()?;
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("\nAn error occurred during streaming: {}", e);
+                    break;
+                }
+            }
         }
+        println!();
     }
 
     Ok(())

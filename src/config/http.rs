@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use derive_builder::Builder;
 
 /// HTTP client configuration for connecting to an API service.
@@ -39,7 +41,24 @@ pub struct HttpConfig {
     /// If not set, the default reqwest User-Agent will be used.
     #[builder(default = None)]
     user_agent: Option<String>,
-    // NOTE: pool_idle_timeout and other reqwest-specific settings can be added here in the future.
+
+    /// Global headers to be included in all requests
+    ///
+    /// These headers will be automatically added to every HTTP request made with this configuration.
+    #[builder(default = HashMap::new())]
+    headers: HashMap<String, String>,
+
+    /// Global query parameters to be appended to all request URLs
+    ///
+    /// These query parameters will be automatically appended to every request URL.
+    #[builder(default = HashMap::new())]
+    querys: HashMap<String, String>,
+
+    /// Global body fields to be included in all requests that have a body
+    ///
+    /// These fields will be automatically merged into the body of every request that includes a body.
+    #[builder(default = HashMap::new())]
+    bodys: HashMap<String, serde_json::Value>,
 }
 
 impl HttpConfig {
@@ -98,6 +117,160 @@ impl HttpConfig {
     #[inline]
     pub fn user_agent(&self) -> Option<&String> {
         self.user_agent.as_ref()
+    }
+
+    /// Returns a reference to the global headers map.
+    ///
+    /// This map contains headers that will be automatically added to all requests.
+    #[inline]
+    pub fn headers(&self) -> &HashMap<String, String> {
+        &self.headers
+    }
+
+    /// Returns a reference to the global query parameters map.
+    ///
+    /// This map contains query parameters that will be automatically appended to all request URLs.
+    #[inline]
+    pub fn querys(&self) -> &HashMap<String, String> {
+        &self.querys
+    }
+
+    /// Returns a reference to the global body fields map.
+    ///
+    /// This map contains body fields that will be automatically included in all request bodies.
+    #[inline]
+    pub fn bodys(&self) -> &HashMap<String, serde_json::Value> {
+        &self.bodys
+    }
+
+    /// Gets a specific global body field by key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key of the body field to retrieve
+    ///
+    /// # Returns
+    ///
+    /// An Option containing a reference to the global body field value if it exists, or None otherwise
+    #[inline]
+    pub fn get_body(&self, key: &str) -> Option<&serde_json::Value> {
+        self.bodys.get(key)
+    }
+
+    /// Gets a specific global header by key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key of the header to retrieve
+    ///
+    /// # Returns
+    ///
+    /// An Option containing a reference to the global header value if it exists, or None otherwise
+    #[inline]
+    pub fn get_header(&self, key: &str) -> Option<&String> {
+        self.headers.get(key)
+    }
+
+    /// Gets a specific global query parameter by key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key of the query parameter to retrieve
+    ///
+    /// # Returns
+    ///
+    /// An Option containing a reference to the global query parameter value if it exists, or None otherwise
+    #[inline]
+    pub fn get_query(&self, key: &str) -> Option<&String> {
+        self.querys.get(key)
+    }
+
+    /// Adds a global header to the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The header name
+    /// * `value` - The header value
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to self for method chaining
+    pub fn add_header(&mut self, key: impl Into<String>, value: impl Into<String>) -> &mut Self {
+        self.headers.insert(key.into(), value.into());
+        self
+    }
+
+    /// Removes a global header from the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The header name to remove
+    ///
+    /// # Returns
+    ///
+    /// An Option containing the removed header value if it existed, or None otherwise
+    pub fn remove_header(&mut self, key: &str) -> Option<String> {
+        self.headers.remove(key)
+    }
+
+    /// Adds a global query parameter to the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The query parameter name
+    /// * `value` - The query parameter value
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to self for method chaining
+    pub fn add_query(&mut self, key: impl Into<String>, value: impl Into<String>) -> &mut Self {
+        self.querys.insert(key.into(), value.into());
+        self
+    }
+
+    /// Removes a global query parameter from the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The query parameter name to remove
+    ///
+    /// # Returns
+    ///
+    /// An Option containing the removed query parameter value if it existed, or None otherwise
+    pub fn remove_query(&mut self, key: &str) -> Option<String> {
+        self.querys.remove(key)
+    }
+
+    /// Adds a global body field to the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The body field name
+    /// * `value` - The body field value
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to self for method chaining
+    pub fn add_body(
+        &mut self,
+        key: impl Into<String>,
+        value: impl Into<serde_json::Value>,
+    ) -> &mut Self {
+        self.bodys.insert(key.into(), value.into());
+        self
+    }
+
+    /// Removes a global body field from the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The body field name to remove
+    ///
+    /// # Returns
+    ///
+    /// An Option containing the removed body field value if it existed, or None otherwise
+    pub fn remove_body(&mut self, key: &str) -> Option<serde_json::Value> {
+        self.bodys.remove(key)
     }
 
     /// Sets the request timeout in seconds.
@@ -212,6 +385,59 @@ impl Default for HttpConfig {
             connect_timeout_seconds: 10,
             proxy: None,
             user_agent: None,
+            headers: HashMap::new(),
+            querys: HashMap::new(),
+            bodys: HashMap::new(),
         }
+    }
+}
+
+impl HttpConfigBuilder {
+    /// Adds a global header to the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The header name
+    /// * `value` - The header value
+    ///
+    /// # Returns
+    ///
+    /// The builder instance for method chaining
+    pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        let headers_map = self.headers.get_or_insert_with(HashMap::new);
+        headers_map.insert(key.into(), value.into());
+        self
+    }
+
+    /// Adds a global query parameter to the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The query parameter name
+    /// * `value` - The query parameter value
+    ///
+    /// # Returns
+    ///
+    /// The builder instance for method chaining
+    pub fn query(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        let query_map = self.querys.get_or_insert_with(HashMap::new);
+        query_map.insert(key.into(), value.into());
+        self
+    }
+
+    /// Adds a global body field to the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The body field name
+    /// * `value` - The body field value
+    ///
+    /// # Returns
+    ///
+    /// The builder instance for method chaining
+    pub fn body(mut self, key: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
+        let body_map = self.bodys.get_or_insert_with(HashMap::new);
+        body_map.insert(key.into(), value.into());
+        self
     }
 }

@@ -3,7 +3,7 @@ use super::{
     http::{HttpConfig, HttpConfigBuilder},
 };
 use crate::OpenAI;
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 #[derive(Debug)]
 pub enum ConfigBuildError {
@@ -92,24 +92,26 @@ impl Config {
         self.retry_count
     }
 
-    #[inline]
-
     /// Returns the request timeout in seconds
+    #[inline]
     pub fn timeout_seconds(&self) -> u64 {
         self.http.timeout_seconds()
     }
 
     /// Returns an optional proxy URL
+    #[inline]
     pub fn proxy(&self) -> Option<&String> {
         self.http.proxy()
     }
 
     /// Returns an optional custom user agent string
+    #[inline]
     pub fn user_agent(&self) -> Option<&String> {
         self.http.user_agent()
     }
 
     /// Returns the connection timeout in seconds
+    #[inline]
     pub fn connect_timeout_seconds(&self) -> u64 {
         self.http.connect_timeout_seconds()
     }
@@ -356,6 +358,93 @@ impl ConfigBuilder {
     /// The builder instance for method chaining
     pub fn user_agent(mut self, user_agent: impl Into<String>) -> Self {
         self.http_builder = self.http_builder.user_agent(user_agent.into());
+        self
+    }
+
+    /// Adds a global header to the HTTP configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The header name
+    /// * `value` - The header value
+    ///
+    /// # Returns
+    ///
+    /// The builder instance for method chaining
+    pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.http_builder = self.http_builder.header(key.into(), value.into());
+        self
+    }
+
+    /// Adds a global query parameter to the HTTP configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The query parameter name
+    /// * `value` - The query parameter value
+    ///
+    /// # Returns
+    ///
+    /// The builder instance for method chaining
+    pub fn query(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.http_builder = self.http_builder.query(key.into(), value.into());
+        self
+    }
+
+    /// Adds a global body field to the HTTP configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The body field name
+    /// * `value` - The body field value
+    ///
+    /// # Returns
+    ///
+    /// The builder instance for method chaining
+    pub fn body(mut self, key: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
+        self.http_builder = self.http_builder.body(key.into(), value.into());
+        self
+    }
+
+    /// Sets multiple global headers in the HTTP configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `headers` - A map of header names to values
+    ///
+    /// # Returns
+    ///
+    /// The builder instance for method chaining
+    pub fn headers(mut self, headers: HashMap<String, String>) -> Self {
+        self.http_builder = self.http_builder.headers(headers);
+        self
+    }
+
+    /// Sets multiple global query parameters in the HTTP configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `queries` - A map of query parameter names to values
+    ///
+    /// # Returns
+    ///
+    /// The builder instance for method chaining
+    pub fn querys(mut self, queries: HashMap<String, String>) -> Self {
+        self.http_builder = self.http_builder.querys(queries);
+        self
+    }
+
+    /// Sets multiple global body fields in the HTTP configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `bodys` - A map of body field names to values
+    ///
+    /// # Returns
+    ///
+    /// The builder instance for method chaining
+    pub fn bodys(mut self, bodys: HashMap<String, serde_json::Value>) -> Self {
+        self.http_builder = self.http_builder.bodys(bodys);
         self
     }
 }

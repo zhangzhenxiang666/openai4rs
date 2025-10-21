@@ -197,17 +197,15 @@ pub struct RequestParams<'a> {
 
     /// Send additional headers with the request.
     ///
-    /// This field will not be serialized in the request body.
     #[builder(default)]
     #[serde(skip_serializing)]
-    pub extra_headers: Option<HashMap<String, serde_json::Value>>,
+    pub extra_headers: Option<HashMap<String, String>>,
 
     /// Add additional query parameters to the request.
     ///
-    /// This field will not be serialized in the request body.
     #[builder(default)]
     #[serde(skip_serializing)]
-    pub extra_query: Option<HashMap<String, serde_json::Value>>,
+    pub extra_query: Option<HashMap<String, String>>,
 
     /// Add additional JSON properties to the request.
     ///
@@ -260,6 +258,41 @@ impl<'a> IntoRequestParams<'a> for RequestParams<'a> {
 impl<'a> IntoRequestParams<'a> for RequestParamsBuilder<'a> {
     fn into_request_params(self) -> RequestParams<'a> {
         self.build().unwrap()
+    }
+}
+
+impl RequestParamsBuilder<'_> {
+    /// Adds an HTTP header to the request.
+    /// This allows adding custom headers to the API request, such as authentication tokens or custom metadata.
+    pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        let headers_map = self
+            .extra_headers
+            .get_or_insert_with(|| Some(HashMap::new()))
+            .get_or_insert_with(HashMap::new);
+        headers_map.insert(key.into(), value.into());
+        self
+    }
+
+    /// Adds a query parameter to the request.
+    /// This allows adding custom query parameters to the API request URL, such as additional filtering or configuration options.
+    pub fn query(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        let query_map = self
+            .extra_query
+            .get_or_insert_with(|| Some(HashMap::new()))
+            .get_or_insert_with(HashMap::new);
+        query_map.insert(key.into(), value.into());
+        self
+    }
+
+    /// Adds a field to the request body.
+    /// This allows adding custom fields to the JSON request body, such as additional parameters not directly supported by the builder.
+    pub fn body(mut self, key: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
+        let body_map = self
+            .extra_body
+            .get_or_insert_with(|| Some(HashMap::new()))
+            .get_or_insert_with(HashMap::new);
+        body_map.insert(key.into(), value.into());
+        self
     }
 }
 

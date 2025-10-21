@@ -1,7 +1,8 @@
 use crate::Config;
 use crate::error::{ApiError, ApiErrorKind, OpenAIError, RequestError};
+use crate::service::request::RequestBuilder;
 use crate::utils::traits::AsyncFrom;
-use reqwest::{Client, IntoUrl, RequestBuilder, Response};
+use reqwest::{Client, RequestBuilder as ReqwestRequestBuilder, Response};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -64,6 +65,31 @@ impl HttpExecutor {
         *client_guard = new_client;
     }
 
+    /// Applies global HTTP settings (headers, query params, body fields) to the request builder
+    /// Only applies global settings if they are not already set locally (local has higher priority)
+    fn apply_global_http_settings(&self, config: &Config, request_builder: &mut RequestBuilder) {
+        // Apply global query params only if not already set locally
+        config.http().querys().iter().for_each(|(k, v)| {
+            if !request_builder.has_query(k) {
+                request_builder.query(k, v);
+            }
+        });
+
+        // Apply global headers only if not already set locally
+        config.http().headers().iter().for_each(|(k, v)| {
+            if !request_builder.has_header(k) {
+                request_builder.header(k, v);
+            }
+        });
+
+        // Apply global body fields only if not already set locally
+        config.http().bodys().iter().for_each(|(k, v)| {
+            if !request_builder.has_body_field(k) {
+                request_builder.body_field(k, v.clone());
+            }
+        });
+    }
+
     /// Sends a POST request and returns the raw HTTP response.
     ///
     /// This method handles the complete request lifecycle including:
@@ -72,29 +98,25 @@ impl HttpExecutor {
     /// - Handling errors and retries
     ///
     /// # Parameters
-    /// * `url_fn` - Function that generates the URL based on the current configuration.
-    ///              The function can return any type that implements `IntoUrl`, providing
-    ///              more flexibility than simple string-based URLs.
+    /// * `url_fn` - Function that generates the URL based on the current configuration, returning a String
     /// * `builder_fn` - Function that builds the request with headers and body
     /// * `retry_count` - Number of retry attempts (0 means use config default)
     ///
     /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a type that implements `IntoUrl`
-    /// * `E` - The type returned by `url_fn` that implements `IntoUrl`
+    /// * `U` - Function type for generating the URL, returning a String
     /// * `F` - Function type for building the request
     ///
     /// # Returns
     /// A Result containing the raw HTTP response or an OpenAIError
-    pub async fn post<U, E, F>(
+    pub async fn post<U, F>(
         &self,
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
     ) -> Result<Response, OpenAIError>
     where
-        U: Fn(&Config) -> E,
-        E: IntoUrl,
-        F: Fn(&Config, RequestBuilder) -> RequestBuilder,
+        U: Fn(&Config) -> String,
+        F: Fn(&Config, &mut RequestBuilder),
     {
         let client_guard = self.reqwest_client.read().await;
         let config_guard = self.config.read().await;
@@ -107,10 +129,11 @@ impl HttpExecutor {
 
         HttpExecutor::execute(
             || {
-                builder_fn(
-                    &config_guard,
-                    client_guard.request(reqwest::Method::POST, url_fn(&config_guard)),
-                )
+                let mut request_builder =
+                    RequestBuilder::new(reqwest::Method::POST, url_fn(&config_guard).as_str());
+                builder_fn(&config_guard, &mut request_builder);
+                self.apply_global_http_settings(&config_guard, &mut request_builder);
+                request_builder.build_reqwest_builder(&client_guard)
             },
             retry_count,
         )
@@ -125,29 +148,25 @@ impl HttpExecutor {
     /// - Handling errors and retries
     ///
     /// # Parameters
-    /// * `url_fn` - Function that generates the URL based on the current configuration.
-    ///              The function can return any type that implements `IntoUrl`, providing
-    ///              more flexibility than simple string-based URLs.
+    /// * `url_fn` - Function that generates the URL based on the current configuration, returning a String
     /// * `builder_fn` - Function that builds the request with headers and query parameters
     /// * `retry_count` - Number of retry attempts (0 means use config default)
     ///
     /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a type that implements `IntoUrl`
-    /// * `E` - The type returned by `url_fn` that implements `IntoUrl`
+    /// * `U` - Function type for generating the URL, returning a String
     /// * `F` - Function type for building the request
     ///
     /// # Returns
     /// A Result containing the raw HTTP response or an OpenAIError
-    pub async fn get<U, E, F>(
+    pub async fn get<U, F>(
         &self,
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
     ) -> Result<Response, OpenAIError>
     where
-        U: Fn(&Config) -> E,
-        E: IntoUrl,
-        F: Fn(&Config, RequestBuilder) -> RequestBuilder,
+        U: Fn(&Config) -> String,
+        F: Fn(&Config, &mut RequestBuilder),
     {
         let client_guard = self.reqwest_client.read().await;
         let config_guard = self.config.read().await;
@@ -160,10 +179,11 @@ impl HttpExecutor {
 
         HttpExecutor::execute(
             || {
-                builder_fn(
-                    &config_guard,
-                    client_guard.request(reqwest::Method::GET, url_fn(&config_guard)),
-                )
+                let mut request_builder =
+                    RequestBuilder::new(reqwest::Method::GET, url_fn(&config_guard).as_str());
+                builder_fn(&config_guard, &mut request_builder);
+                self.apply_global_http_settings(&config_guard, &mut request_builder);
+                request_builder.build_reqwest_builder(&client_guard)
             },
             retry_count,
         )
@@ -189,7 +209,7 @@ impl HttpExecutor {
     /// A Result containing the HTTP response or an OpenAIError
     async fn execute<F>(builder_fn: F, retry_count: u32) -> Result<Response, OpenAIError>
     where
-        F: Fn() -> RequestBuilder,
+        F: Fn() -> ReqwestRequestBuilder,
     {
         let mut attempts = 0;
         let max_attempts = retry_count.max(1);

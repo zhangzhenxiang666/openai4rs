@@ -1,10 +1,11 @@
+use std::time::Duration;
+
 use super::params::{IntoRequestParams, RequestParams};
 use super::types::Completion;
 use crate::error::OpenAIError;
 use crate::service::client::HttpClient;
-use reqwest::RequestBuilder;
-use std::collections::HashMap;
-use std::time::Duration;
+use crate::service::request::RequestBuilder;
+
 use tokio_stream::wrappers::ReceiverStream;
 
 pub struct Completions {
@@ -28,10 +29,9 @@ impl Completions {
         self.http_client
             .post_json(
                 |config| format!("{}/completions", config.base_url()),
-                |config, mut builder| {
-                    builder = Self::apply_request_settings(builder, &params);
-                    builder = builder.bearer_auth(config.api_key());
-                    builder
+                |config, builder| {
+                    Self::apply_request_settings(builder, &params);
+                    builder.bearer_auth(config.api_key());
                 },
                 retry_count,
             )
@@ -53,10 +53,9 @@ impl Completions {
         self.http_client
             .post_json_stream(
                 |config| format!("{}/completions", config.base_url()),
-                |config, mut builder| {
-                    builder = Self::apply_request_settings(builder, &params);
-                    builder = builder.bearer_auth(config.api_key());
-                    builder
+                |config, builder| {
+                    Self::apply_request_settings(builder, &params);
+                    builder.bearer_auth(config.api_key());
                 },
                 retry_count,
             )
@@ -65,42 +64,34 @@ impl Completions {
 }
 
 impl Completions {
-    fn apply_request_settings(
-        builder: RequestBuilder,
-        params: &RequestParams<'_>,
-    ) -> RequestBuilder {
-        let mut builder = builder;
-
+    fn apply_request_settings(builder: &mut RequestBuilder, params: &RequestParams) {
         if let Some(headers) = &params.extra_headers {
-            for (k, v) in headers {
-                builder = builder.header(k, v.to_string());
-            }
+            headers.iter().for_each(|(k, v)| {
+                builder.header(k, v);
+            });
         }
 
         if let Some(query) = &params.extra_query {
-            builder = builder.query(query);
+            query.iter().for_each(|(k, v)| {
+                builder.query(k, v);
+            });
         }
 
-        let mut body_map = HashMap::new();
-
         if let Ok(serde_json::Value::Object(obj)) = serde_json::to_value(params) {
-            body_map.extend(obj);
+            builder.body_fields(obj.into_iter().collect());
         }
 
         if let Some(extra_body) = &params.extra_body {
-            body_map.extend(extra_body.iter().map(|(k, v)| (k.clone(), v.clone())));
+            extra_body.iter().for_each(|(k, v)| {
+                builder.body_field(k, v.clone());
+            });
         }
-
-        builder = builder.json(&body_map);
-
-        if let Some(timeout_seconds) = params.timeout_seconds {
-            builder = builder.timeout(Duration::from_secs(timeout_seconds));
+        if let Some(timeout) = params.timeout_seconds {
+            builder.timeout(Duration::from_secs(timeout));
         }
 
         if let Some(user_agent) = &params.user_agent {
-            builder = builder.header(reqwest::header::USER_AGENT, user_agent);
+            builder.header("user-agent", user_agent);
         }
-
-        builder
     }
 }
