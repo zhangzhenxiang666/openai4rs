@@ -30,6 +30,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut stream = client.chat().create_stream(request).await?;
         let mut first_content = true;
 
+        let mut assistant_message = String::new();
+
         while let Some(chunk_result) = stream.next().await {
             match chunk_result {
                 Ok(chunk) => {
@@ -40,6 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         if let Some(content) = chunk.content() {
                             print!("{}", content);
+                            assistant_message.push_str(content);
                             std::io::stdout().flush()?;
                         }
                     }
@@ -49,6 +52,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
             }
+        }
+        if !assistant_message.is_empty() {
+            messages.push(assistant!(assistant_message));
         }
         println!();
     }
