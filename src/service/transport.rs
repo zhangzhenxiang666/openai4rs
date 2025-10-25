@@ -1,4 +1,4 @@
-use super::request::RequestBuilder;
+use super::request::{HttpParams, RequestBuilder};
 use crate::Config;
 use crate::error::{OpenAIError, ProcessingError};
 use crate::service::executor::HttpExecutor;
@@ -67,15 +67,13 @@ impl Transport {
         self.executor.config()
     }
 
-    /// Sends a POST request with JSON payload and deserializes the response.
+    /// Sends a POST request with JSON payload and deserializes the response using HttpParams.
     ///
     /// This method sends a POST request and automatically deserializes the
     /// JSON response into the specified type.
     ///
     /// # Parameters
-    /// * `url_fn` - Function that generates the URL based on the current configuration, returning a String
-    /// * `builder_fn` - Function that builds the request with headers and body
-    /// * `retry_count` - Number of retry attempts (0 means use config default)
+    /// * `params` - The HttpParams structure containing all necessary request parameters
     ///
     /// # Type Parameters
     /// * `U` - Function type for generating the URL, returning a String
@@ -84,18 +82,13 @@ impl Transport {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn post_json<U, F, T>(
-        &self,
-        url_fn: U,
-        builder_fn: F,
-        retry_count: u32,
-    ) -> Result<T, OpenAIError>
+    pub async fn post_json<U, F, T>(&self, params: HttpParams<'_, U, F>) -> Result<T, OpenAIError>
     where
-        U: Fn(&Config) -> String,
-        F: Fn(&Config, &mut RequestBuilder),
+        U: FnOnce(&Config) -> String,
+        F: FnOnce(&Config, &mut RequestBuilder),
         T: serde::de::DeserializeOwned,
     {
-        let res = self.executor.post(url_fn, builder_fn, retry_count).await?;
+        let res = self.executor.post(params).await?;
         let raw = res.text().await.map_err(ProcessingError::TextRead)?;
         serde_json::from_str(&raw).map_err(|_| {
             ProcessingError::Conversion {
@@ -106,15 +99,13 @@ impl Transport {
         })
     }
 
-    /// Sends a GET request and deserializes the JSON response.
+    /// Sends a GET request and deserializes the JSON response using HttpParams.
     ///
     /// This method sends a GET request and automatically deserializes the
     /// JSON response into the specified type.
     ///
     /// # Parameters
-    /// * `url_fn` - Function that generates the URL based on the current configuration, returning a String
-    /// * `builder_fn` - Function that builds the request with headers and query parameters
-    /// * `retry_count` - Number of retry attempts (0 means use config default)
+    /// * `params` - The HttpParams structure containing all necessary request parameters
     ///
     /// # Type Parameters
     /// * `U` - Function type for generating the URL, returning a String
@@ -123,18 +114,13 @@ impl Transport {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn get_json<U, F, T>(
-        &self,
-        url_fn: U,
-        builder_fn: F,
-        retry_count: u32,
-    ) -> Result<T, OpenAIError>
+    pub async fn get_json<U, F, T>(&self, params: HttpParams<'_, U, F>) -> Result<T, OpenAIError>
     where
-        U: Fn(&Config) -> String,
-        F: Fn(&Config, &mut RequestBuilder),
+        U: FnOnce(&Config) -> String,
+        F: FnOnce(&Config, &mut RequestBuilder),
         T: serde::de::DeserializeOwned,
     {
-        let res = self.executor.get(url_fn, builder_fn, retry_count).await?;
+        let res = self.executor.get(params).await?;
         let raw = res.text().await.map_err(ProcessingError::TextRead)?;
         serde_json::from_str(&raw).map_err(|_| {
             ProcessingError::Conversion {
@@ -145,16 +131,14 @@ impl Transport {
         })
     }
 
-    /// Sends a POST request expecting a streaming JSON response.
+    /// Sends a POST request expecting a streaming JSON response using HttpParams.
     ///
     /// This method sends a POST request and handles streaming responses
     /// using Server-Sent Events (SSE). It returns a stream of deserialized
     /// response chunks.
     ///
     /// # Parameters
-    /// * `url_fn` - Function that generates the URL based on the current configuration, returning a String
-    /// * `builder_fn` - Function that builds the request with headers and body
-    /// * `retry_count` - Number of retry attempts (0 means use config default)
+    /// * `params` - The HttpParams structure containing all necessary request parameters
     ///
     /// # Type Parameters
     /// * `U` - Function type for generating the URL, returning a String
@@ -165,16 +149,14 @@ impl Transport {
     /// A Result containing a stream of response chunks or an OpenAIError
     pub async fn post_json_stream<U, F, T>(
         &self,
-        url_fn: U,
-        builder_fn: F,
-        retry_count: u32,
+        params: HttpParams<'_, U, F>,
     ) -> Result<tokio_stream::wrappers::ReceiverStream<Result<T, OpenAIError>>, OpenAIError>
     where
-        U: Fn(&Config) -> String,
-        F: Fn(&Config, &mut RequestBuilder),
+        U: FnOnce(&Config) -> String,
+        F: FnOnce(&Config, &mut RequestBuilder),
         T: serde::de::DeserializeOwned + Send + 'static,
     {
-        let res = self.executor.post(url_fn, builder_fn, retry_count).await?;
+        let res = self.executor.post(params).await?;
         let mut event_stream = res.bytes_stream().eventsource();
         let (tx, rx) = tokio::sync::mpsc::channel(32);
 

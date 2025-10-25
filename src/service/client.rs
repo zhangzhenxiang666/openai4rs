@@ -1,6 +1,7 @@
 use super::request::RequestBuilder;
 use crate::Config;
 use crate::error::OpenAIError;
+use crate::service::request::HttpParams;
 use crate::service::transport::Transport;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -53,15 +54,13 @@ impl HttpClient {
         self.transport.update().await;
     }
 
-    /// Sends a POST request with JSON payload to the OpenAI API.
+    /// Sends a POST request with JSON payload to the OpenAI API using HttpParams.
     ///
-    /// This method is used for API endpoints that expect a JSON request body and
-    /// return a JSON response.
+    /// This method uses the HttpParams structure to encapsulate all request parameters,
+    /// making it easier to add new parameters in the future without changing function signatures.
     ///
     /// # Parameters
-    /// * `url_fn` - A function that generates the URL based on the current configuration, returning a String
-    /// * `builder_fn` - A function that builds the request with headers and body
-    /// * `retry_count` - Number of retry attempts for failed requests (0 means use config default)
+    /// * `params` - The HttpParams structure containing all necessary request parameters
     ///
     /// # Type Parameters
     /// * `U` - Function type for generating the URL, returning a String
@@ -70,30 +69,22 @@ impl HttpClient {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn post_json<U, F, T>(
-        &self,
-        url_fn: U,
-        builder_fn: F,
-        retry_count: u32,
-    ) -> Result<T, OpenAIError>
+    pub async fn post_json<U, F, T>(&self, params: HttpParams<'_, U, F>) -> Result<T, OpenAIError>
     where
-        U: Fn(&Config) -> String,
-        F: Fn(&Config, &mut RequestBuilder),
+        U: FnOnce(&Config) -> String,
+        F: FnOnce(&Config, &mut RequestBuilder),
         T: serde::de::DeserializeOwned,
     {
-        self.transport
-            .post_json(url_fn, builder_fn, retry_count)
-            .await
+        self.transport.post_json(params).await
     }
 
-    /// Sends a GET request expecting a JSON response from the OpenAI API.
+    /// Sends a GET request expecting a JSON response from the OpenAI API using HttpParams.
     ///
-    /// This method is used for API endpoints that use the GET method and return JSON responses.
+    /// This method uses the HttpParams structure to encapsulate all request parameters,
+    /// making it easier to add new parameters in the future without changing function signatures.
     ///
     /// # Parameters
-    /// * `url_fn` - A function that generates the URL based on the current configuration, returning a String
-    /// * `builder_fn` - A function that builds the request with headers and query parameters
-    /// * `retry_count` - Number of retry attempts for failed requests (0 means use config default)
+    /// * `params` - The HttpParams structure containing all necessary request parameters
     ///
     /// # Type Parameters
     /// * `U` - Function type for generating the URL, returning a String
@@ -102,31 +93,22 @@ impl HttpClient {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn get_json<U, F, T>(
-        &self,
-        url_fn: U,
-        builder_fn: F,
-        retry_count: u32,
-    ) -> Result<T, OpenAIError>
+    pub async fn get_json<U, F, T>(&self, params: HttpParams<'_, U, F>) -> Result<T, OpenAIError>
     where
-        U: Fn(&Config) -> String,
-        F: Fn(&Config, &mut RequestBuilder),
+        U: FnOnce(&Config) -> String,
+        F: FnOnce(&Config, &mut RequestBuilder),
         T: serde::de::DeserializeOwned,
     {
-        self.transport
-            .get_json(url_fn, builder_fn, retry_count)
-            .await
+        self.transport.get_json(params).await
     }
 
-    /// Sends a POST request expecting a streaming JSON response from the OpenAI API.
+    /// Sends a POST request expecting a streaming JSON response from the OpenAI API using HttpParams.
     ///
-    /// This method is used for API endpoints that return streaming responses using
-    /// Server-Sent Events (SSE), such as the chat completions streaming endpoint.
+    /// This method uses the HttpParams structure to encapsulate all request parameters,
+    /// making it easier to add new parameters in the future without changing function signatures.
     ///
     /// # Parameters
-    /// * `url_fn` - A function that generates the URL based on the current configuration, returning a String
-    /// * `builder_fn` - A function that builds the request with headers and body
-    /// * `retry_count` - Number of retry attempts for failed requests (0 means use config default)
+    /// * `params` - The HttpParams structure containing all necessary request parameters
     ///
     /// # Type Parameters
     /// * `U` - Function type for generating the URL, returning a String
@@ -137,18 +119,14 @@ impl HttpClient {
     /// A Result containing a stream of response chunks or an OpenAIError
     pub async fn post_json_stream<U, F, T>(
         &self,
-        url_fn: U,
-        builder_fn: F,
-        retry_count: u32,
+        params: HttpParams<'_, U, F>,
     ) -> Result<ReceiverStream<Result<T, OpenAIError>>, OpenAIError>
     where
-        U: Fn(&Config) -> String,
-        F: Fn(&Config, &mut RequestBuilder),
+        U: FnOnce(&Config) -> String,
+        F: FnOnce(&Config, &mut RequestBuilder),
         T: serde::de::DeserializeOwned + Send + 'static,
     {
-        self.transport
-            .post_json_stream(url_fn, builder_fn, retry_count)
-            .await
+        self.transport.post_json_stream(params).await
     }
 }
 

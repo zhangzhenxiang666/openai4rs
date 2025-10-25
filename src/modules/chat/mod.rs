@@ -108,12 +108,12 @@
 //! }
 //! ```
 
-pub mod core;
+pub mod handler;
 pub mod params;
 pub mod tool_parameters;
 pub mod types;
 
-pub use core::Chat;
+pub use handler::Chat;
 pub use params::chat_request;
 pub use tool_parameters::Parameters;
 pub use types::*;

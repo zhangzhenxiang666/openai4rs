@@ -1,8 +1,6 @@
-use super::{
-    base::{BaseConfig, BaseConfigBuilder},
-    http::{HttpConfig, HttpConfigBuilder},
-};
-use crate::OpenAI;
+use super::base::{BaseConfig, BaseConfigBuilder};
+use super::http::{HttpConfig, HttpConfigBuilder};
+use crate::{Interceptor, OpenAI, interceptor::InterceptorChain};
 use std::{collections::HashMap, fmt};
 
 #[derive(Debug)]
@@ -49,6 +47,8 @@ pub struct Config {
     http: HttpConfig,
     /// Number of retry attempts for failed requests
     retry_count: u32,
+    /// Global interceptors for all requests
+    global_interceptors: InterceptorChain,
 }
 impl Config {
     /// Creates a new Config with the specified API key and base URL
@@ -62,6 +62,7 @@ impl Config {
             base: BaseConfig::new(api_key.into(), base_url.into()),
             http: HttpConfig::default(),
             retry_count: 5,
+            global_interceptors: InterceptorChain::new(),
         }
     }
 
@@ -71,6 +72,7 @@ impl Config {
             retry_count: 5,
             base_builder: BaseConfigBuilder::default(),
             http_builder: HttpConfigBuilder::default(),
+            global_interceptors: InterceptorChain::new(),
         }
     }
 
@@ -126,6 +128,18 @@ impl Config {
     #[inline]
     pub fn base(&self) -> &super::base::BaseConfig {
         &self.base
+    }
+
+    /// Returns a reference to the global interceptors
+    #[inline]
+    pub fn global_interceptors(&self) -> &InterceptorChain {
+        &self.global_interceptors
+    }
+
+    /// Returns a mutable reference to the global interceptors
+    #[inline]
+    pub fn global_interceptors_mut(&mut self) -> &mut InterceptorChain {
+        &mut self.global_interceptors
     }
 
     /// Sets a new base URL for this configuration
@@ -226,12 +240,28 @@ impl Config {
         self.http.with_user_agent(user_agent);
         self
     }
+
+    /// Adds a global interceptor
+    ///
+    /// # Arguments
+    ///
+    /// * `interceptor` - The interceptor to add
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to self for method chaining
+    pub fn add_global_interceptor(&mut self, interceptor: impl Interceptor + 'static) -> &mut Self {
+        self.global_interceptors.add_interceptor(interceptor);
+        self
+    }
 }
 
 /// Builder for creating Config instances with fluent API
 pub struct ConfigBuilder {
     /// Number of retry attempts for failed requests
     retry_count: u32,
+    /// Global interceptors for all requests
+    global_interceptors: InterceptorChain,
     /// Builder for BaseConfig
     base_builder: BaseConfigBuilder,
     /// Builder for HttpConfig
@@ -249,6 +279,7 @@ impl ConfigBuilder {
             base: self.base_builder.build()?,
             http: self.http_builder.build()?,
             retry_count: self.retry_count,
+            global_interceptors: self.global_interceptors,
         })
     }
 
@@ -403,6 +434,20 @@ impl ConfigBuilder {
     /// The builder instance for method chaining
     pub fn body(mut self, key: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
         self.http_builder = self.http_builder.body(key.into(), value.into());
+        self
+    }
+
+    /// Adds a global interceptor to the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `interceptor` - The interceptor to add
+    ///
+    /// # Returns
+    ///
+    /// The builder instance for method chaining
+    pub fn global_interceptor(mut self, interceptor: impl Interceptor + 'static) -> Self {
+        self.global_interceptors.add_interceptor(interceptor);
         self
     }
 

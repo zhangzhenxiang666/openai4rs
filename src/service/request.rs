@@ -1,7 +1,83 @@
+use crate::Config;
+use crate::common::types::{Bodys, Headers, Querys};
+use crate::interceptor::InterceptorChain;
 use reqwest::{Method, RequestBuilder as ReqwestRequestBuilder};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
+
+/// Parameters for HTTP requests that encapsulate all necessary information
+/// for making a request through the HTTP pipeline.
+///
+/// This structure holds the functions and configuration needed to build and execute
+/// an HTTP request, including URL generation, request building, retry logic, and interceptors.
+///
+/// # Type Parameters
+/// * `U` - A function type that takes a Config reference and returns a String (for URL generation)
+/// * `F` - A function type that takes a Config reference and a mutable RequestBuilder reference
+///
+/// # Lifetime
+/// * `'a` - The lifetime of the InterceptorChain reference
+pub struct HttpParams<'a, U, F>
+where
+    U: FnOnce(&Config) -> String,
+    F: FnOnce(&Config, &mut RequestBuilder),
+{
+    /// Function that generates the URL based on the provided configuration
+    /// Takes a Config reference and returns the complete URL string for the request
+    pub url_fn: U,
+    /// Function that configures the RequestBuilder with specific parameters
+    /// Takes the Config and a mutable reference to RequestBuilder to set up headers, body, etc.
+    pub builder_fn: F,
+    /// Number of times to retry the request in case of failure
+    pub retry_count: u32,
+    /// Optional interceptors specific to the calling module
+    /// These interceptors will be applied in addition to any global interceptors
+    pub module_interceptors: Option<&'a InterceptorChain>,
+}
+
+impl<'a, U, F> HttpParams<'a, U, F>
+where
+    U: FnOnce(&Config) -> String,
+    F: FnOnce(&Config, &mut RequestBuilder),
+{
+    /// Creates a new HttpParams instance
+    pub fn new(
+        url_fn: U,
+        builder_fn: F,
+        retry_count: u32,
+        module_interceptors: Option<&'a InterceptorChain>,
+    ) -> Self {
+        Self {
+            url_fn,
+            builder_fn,
+            retry_count,
+            module_interceptors,
+        }
+    }
+
+    /// Creates a new HttpParams instance with default retry count (0)
+    pub fn new_with_defaults(url_fn: U, builder_fn: F) -> Self {
+        Self {
+            url_fn,
+            builder_fn,
+            retry_count: 0,
+            module_interceptors: None,
+        }
+    }
+
+    /// Sets the retry count
+    pub fn with_retry_count(mut self, retry_count: u32) -> Self {
+        self.retry_count = retry_count;
+        self
+    }
+
+    /// Sets the module interceptors
+    pub fn with_interceptors(mut self, interceptors: Option<&'a InterceptorChain>) -> Self {
+        self.module_interceptors = interceptors;
+        self
+    }
+}
 
 #[derive(Debug, Clone)]
 /// Represents an HTTP request with all its components.
@@ -11,69 +87,141 @@ pub struct Request {
     /// The URL for the request
     url: String,
     /// Headers to be included in the request
-    headers: HashMap<String, String>,
+    headers: Headers,
     /// Query parameters to be appended to the URL
-    query_params: HashMap<String, String>,
+    query_params: Querys,
     /// Optional body fields to be included in the request body
-    body_fields: Option<HashMap<String, Value>>,
+    body_fields: Option<Bodys>,
     /// Optional timeout for the request
     timeout: Option<Duration>,
 }
 
 impl Request {
+    /// Gets a reference to the HTTP method of this request
+    ///
+    /// # Returns
+    /// A reference to the Method enum representing the HTTP method (GET, POST, etc.)
     #[inline]
     pub fn method(&self) -> &Method {
         &self.method
     }
 
+    /// Gets a reference to the URL of this request
+    ///
+    /// # Returns
+    /// A string slice containing the request URL
     #[inline]
     pub fn url(&self) -> &str {
         &self.url
     }
 
+    /// Gets a reference to the headers of this request
+    ///
+    /// # Returns
+    /// A reference to the HashMap containing request headers
     #[inline]
-    pub fn headers(&self) -> &HashMap<String, String> {
+    pub fn headers(&self) -> &Headers {
         &self.headers
     }
 
+    /// Gets a reference to the query parameters of this request
+    ///
+    /// # Returns
+    /// A reference to the HashMap containing query parameters
     #[inline]
-    pub fn query_params(&self) -> &HashMap<String, String> {
+    pub fn query_params(&self) -> &Querys {
         &self.query_params
     }
 
+    /// Gets a reference to the body fields of this request
+    ///
+    /// # Returns
+    /// An Option containing a reference to the HashMap of body fields, or None if no body is set
     #[inline]
-    pub fn body(&self) -> Option<&HashMap<String, Value>> {
+    pub fn body(&self) -> Option<&Bodys> {
         self.body_fields.as_ref()
     }
 
+    /// Gets a mutable reference to the URL of this request
+    ///
+    /// # Returns
+    /// A mutable reference to the URL string for modification
     #[inline]
     pub fn url_mut(&mut self) -> &mut String {
         &mut self.url
     }
 
+    /// Gets a mutable reference to the headers of this request
+    ///
+    /// # Returns
+    /// A mutable reference to the HashMap containing request headers
     #[inline]
-    pub fn headers_mut(&mut self) -> &mut HashMap<String, String> {
+    pub fn headers_mut(&mut self) -> &mut Headers {
         &mut self.headers
     }
 
+    /// Gets a mutable reference to the query parameters of this request
+    ///
+    /// # Returns
+    /// A mutable reference to the HashMap containing query parameters
     #[inline]
-    pub fn query_params_mut(&mut self) -> &mut HashMap<String, String> {
+    pub fn query_params_mut(&mut self) -> &mut Querys {
         &mut self.query_params
     }
 
+    /// Gets a mutable reference to the body fields of this request
+    ///
+    /// # Returns
+    /// A mutable reference to the Option containing the HashMap of body fields
     #[inline]
-    pub fn body_mut(&mut self) -> &mut Option<HashMap<String, Value>> {
+    pub fn body_mut(&mut self) -> &mut Option<Bodys> {
         &mut self.body_fields
     }
 
+    /// Gets a reference to the timeout duration of this request
+    ///
+    /// # Returns
+    /// An Option containing a reference to the Duration if a timeout is set, or None
     #[inline]
     pub fn timeout(&self) -> Option<&Duration> {
         self.timeout.as_ref()
     }
 
+    /// Gets a mutable reference to the timeout duration of this request
+    ///
+    /// # Returns
+    /// A mutable reference to the Option containing the timeout Duration
     #[inline]
     pub fn timeout_mut(&mut self) -> &mut Option<Duration> {
         &mut self.timeout
+    }
+
+    /// Converts this Request to a reqwest::RequestBuilder
+    ///
+    /// This method creates a reqwest RequestBuilder from the current Request,
+    /// applying all headers, body fields, and timeout settings.
+    ///
+    /// # Parameters
+    /// * `client` - A reference to the reqwest client to use for building the request
+    ///
+    /// # Returns
+    /// A new ReqwestRequestBuilder instance with all the properties from this Request
+    pub fn to_reqwest(&self, client: &reqwest::Client) -> ReqwestRequestBuilder {
+        let mut builder = client.request(self.method.clone(), &self.url);
+
+        for (k, v) in &self.headers {
+            builder = builder.header(k, v);
+        }
+
+        if let Some(body) = &self.body_fields {
+            builder = builder.json(body);
+        }
+
+        if let Some(timeout_val) = self.timeout {
+            builder = builder.timeout(timeout_val);
+        }
+
+        builder
     }
 }
 
@@ -212,7 +360,7 @@ impl RequestBuilder {
     /// # Returns
     ///
     /// A mutable reference to self for method chaining
-    pub fn body_fields(&mut self, fields: HashMap<String, Value>) -> &mut Self {
+    pub fn body_fields(&mut self, fields: Bodys) -> &mut Self {
         self.request
             .body_mut()
             .get_or_insert_with(HashMap::new)
@@ -229,7 +377,7 @@ impl RequestBuilder {
     /// # Returns
     ///
     /// A mutable reference to self for method chaining
-    pub fn body_fields_map(&mut self, body_map: HashMap<String, Value>) -> &mut Self {
+    pub fn body_fields_map(&mut self, body_map: Bodys) -> &mut Self {
         *self.request.body_mut() = Some(body_map);
         self
     }
@@ -365,43 +513,5 @@ impl RequestBuilder {
             }
         }
         self.request
-    }
-
-    /// Builds a reqwest::RequestBuilder from this RequestBuilder.
-    ///
-    /// This method creates a reqwest::RequestBuilder instance that can be used
-    /// to send the HTTP request.
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - The reqwest client to use for building the request
-    ///
-    /// # Returns
-    ///
-    /// A reqwest::RequestBuilder instance ready to send the request
-    pub fn build_reqwest_builder(self, client: &reqwest::Client) -> ReqwestRequestBuilder {
-        let Request {
-            method,
-            url,
-            headers,
-            body_fields,
-            timeout,
-            ..
-        } = self.build();
-        let mut builder = client.request(method, url);
-
-        for (k, v) in headers {
-            builder = builder.header(k, v);
-        }
-
-        if let Some(body) = body_fields {
-            builder = builder.json(&body);
-        }
-
-        if let Some(timeout_val) = timeout {
-            builder = builder.timeout(timeout_val);
-        }
-
-        builder
     }
 }

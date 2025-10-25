@@ -51,6 +51,10 @@ pub enum ServiceTier {
     Default,
 }
 
+pub type Headers = HashMap<String, String>;
+pub type Querys = HashMap<String, String>;
+pub type Bodys = HashMap<String, serde_json::Value>;
+
 pub(crate) fn extract_optional<T, E>(
     map: &mut HashMap<String, serde_json::Value>,
     key: &str,

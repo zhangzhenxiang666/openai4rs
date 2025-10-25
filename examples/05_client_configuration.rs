@@ -27,11 +27,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 4. Client with custom timeout
     let timeout_config = Config::builder()
-        .api_key(api_key)
+        .api_key(api_key.clone())
         .base_url(base_url.clone())
         .timeout_seconds(120)
         .build()?;
     let _timeout_client = OpenAI::with_config(timeout_config);
+
+    // 5. Add global request headers, query parameters, and request body
+    let _global_http_params_client = Config::builder()
+        .api_key(api_key.clone())
+        .base_url(base_url.clone())
+        .header("test-header", "test-value")
+        .query("name", "openai4rs")
+        .body("global_body_key", "global_body_value")
+        .build()?;
+    let _global_http_params_client = OpenAI::with_config(_global_http_params_client);
 
     // For demonstration, we'll use the basic client to make a simple request.
     // In a real application, you would use the client that best fits your needs.

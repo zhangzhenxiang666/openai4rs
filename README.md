@@ -34,7 +34,14 @@
 - ✅ 可配置的连接超时
 - ✅ HTTP 代理支持
 - ✅ 自定义 User-Agent
-- ✅ 自定义 Headers
+- ✅ 全局请求头
+- ✅ 全局查询参数
+- ✅ 全局请求体
+
+### 🎯 拦截器
+
+- ✅ 全局拦截器
+- ✅ 模块拦截器
 
 ## 🚀 快速开始
 
@@ -44,7 +51,7 @@
 
 ```toml
 [dependencies]
-openai4rs = "0.1.6"
+openai4rs = "0.1.7"
 tokio = { version = "1.45.1", features = ["full"] }
 futures = "0.3.31"
 dotenvy = "0.15"
@@ -384,6 +391,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - [05. 客户端配置](examples/05_client_configuration.rs)
 - [06. 视觉（Vision）API](examples/06_vision.rs) (如果模型支持)
 - [07. 思维模型（Thinking Model）](examples/07_thinking_model.rs) (如果模型支持复杂推理)
+- [08. 全局拦截器](examples/08_interceptor_example.rs)
+- [09. 模块拦截器](examples/09_module_interceptor_example.rs)
 
 你可以通过以下命令运行示例：
 

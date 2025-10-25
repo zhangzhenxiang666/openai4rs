@@ -23,7 +23,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! openai4rs = "0.1.6"
+//! openai4rs = "0.1.7"
 //! tokio = { version = "1", features = ["full"] }
 //! dotenvy = "0.15"
 //! ```
@@ -55,45 +55,56 @@
 //! ```
 //!
 //! For more examples and detailed usage, refer to the documentation of each module.
-//!
 
-/// Handles chat completions, including streaming and tool calling.
-pub mod chat;
-/// Core client implementation, configuration, and entry point.
+/// API modules for different OpenAI functionality.
+/// Contains chat, completions, and models modules for interacting with various API endpoints.
+pub mod modules;
+
+/// Core client implementation and entry point for the OpenAI API.
+/// Provides the main OpenAI struct for interacting with OpenAI-compatible APIs.
 pub mod client;
 
 /// Configuration for the OpenAI client.
+/// Handles API keys, base URLs, timeouts, and other client settings.
 pub mod config;
 
 /// Common types and utilities shared within the library.
+/// Contains shared data structures and utility functions used across modules.
 pub mod common;
-/// Legacy text completion functionality.
-pub mod completions;
+
 /// Error handling and custom error types.
+/// Defines the error hierarchy and error handling utilities for the library.
 pub mod error;
-/// Model management for listing and retrieving model information.
-pub mod models;
-/// A generic HTTP service layer with retry logic, error handling, and flexible URL generation.
+
+/// Interceptor functionality for modifying requests and responses.
+/// Allows middleware-style processing of API requests and responses.
+pub mod interceptor;
+
+/// HTTP service layer with retry logic, error handling, and flexible request processing.
 ///
 /// This module provides a robust HTTP transport layer for making requests to OpenAI-compatible APIs.
 /// It features configurable timeouts, proxy support, automatic retry logic with exponential backoff,
 /// and support for both regular JSON responses and streaming Server-Sent Events (SSE).
 ///
-/// The service module has been optimized to use generic closures for URL generation, allowing
-/// for more flexible URL construction compared to simple string-based approaches.
+/// The service module includes components for request execution, transport handling, and response processing.
 pub mod service;
+
 /// Utility functions and traits.
+/// Contains helper functions and common traits used throughout the library.
 pub mod utils;
 
 // Re-export core types and functions
-pub use chat::*;
 pub use client::OpenAI;
-pub use completions::completions_request;
-pub use config::{Config, HttpConfig};
+pub use config::{Config, ConfigBuilder};
 pub use error::OpenAIError;
-pub use models::models_request;
+pub use interceptor::*;
+pub use modules::*;
 pub use serde_json;
+pub use service::{HttpClient, Request, RequestBuilder, Response};
 pub use utils::Apply;
-
 // Import and re-export the new procedural macros
-pub use openai4rs_macro::{assistant, content, system, tool, user};
+pub mod macros {
+    pub use async_trait::async_trait;
+    pub use openai4rs_macro::{assistant, content, system, tool, user};
+}
+pub use macros::*;

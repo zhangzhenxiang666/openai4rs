@@ -48,5 +48,5 @@
 //! - [`OpenAI::completions()`] for legacy text completions
 //! - [`OpenAI::models()`] for listing and retrieving model information
 
-pub mod core;
-pub use core::OpenAI;
+pub mod base;
+pub use base::OpenAI;

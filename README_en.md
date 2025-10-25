@@ -35,6 +35,13 @@ An asynchronous Rust crate based on `tokio` and `reqwest` for interacting with l
 - ✅ HTTP proxy support
 - ✅ Custom User-Agent
 - ✅ Custom Headers
+- ✅ Global Request Body
+- ✅ Global Query Parameters
+
+### 🎯 Interceptors
+
+- ✅ Global Interceptors
+- ✅ Module Interceptors
 
 ## 🚀 Quick Start
 
@@ -44,7 +51,7 @@ Add the dependencies to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-openai4rs = "0.1.6"
+openai4rs = "0.1.7"
 tokio = { version = "1.45.1", features = ["full"] }
 futures = "0.3.31"
 dotenvy = "0.15"
@@ -383,6 +390,8 @@ Check the [examples](examples/) directory for more usage examples:
 - [05. Client Configuration](examples/05_client_configuration.rs)
 - [06. Vision API](examples/06_vision.rs) (if supported by the model)
 - [07. Thinking Model](examples/07_thinking_model.rs) (if the model supports complex reasoning)
+- [08. Global Interceptor](examples/08_interceptor_example.rs)
+- [09. Module Interceptor](examples/09_module_interceptor_example.rs)
 
 You can run the examples with the following commands:
 

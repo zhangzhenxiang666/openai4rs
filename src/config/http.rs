@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-
+use crate::common::types::{Bodys, Headers, Querys};
 use derive_builder::Builder;
+use std::collections::HashMap;
 
 /// HTTP client configuration for connecting to an API service.
 ///
@@ -46,19 +46,19 @@ pub struct HttpConfig {
     ///
     /// These headers will be automatically added to every HTTP request made with this configuration.
     #[builder(default = HashMap::new())]
-    headers: HashMap<String, String>,
+    headers: Headers,
 
     /// Global query parameters to be appended to all request URLs
     ///
     /// These query parameters will be automatically appended to every request URL.
     #[builder(default = HashMap::new())]
-    querys: HashMap<String, String>,
+    querys: Querys,
 
     /// Global body fields to be included in all requests that have a body
     ///
     /// These fields will be automatically merged into the body of every request that includes a body.
     #[builder(default = HashMap::new())]
-    bodys: HashMap<String, serde_json::Value>,
+    bodys: Bodys,
 }
 
 impl HttpConfig {
@@ -70,7 +70,7 @@ impl HttpConfig {
     /// # Examples
     ///
     /// ```
-    /// use openai4rs::HttpConfig;
+    /// use openai4rs::config::HttpConfig;
     ///
     /// let config = HttpConfig::builder()
     ///     .timeout_seconds(60)
@@ -123,7 +123,7 @@ impl HttpConfig {
     ///
     /// This map contains headers that will be automatically added to all requests.
     #[inline]
-    pub fn headers(&self) -> &HashMap<String, String> {
+    pub fn headers(&self) -> &Headers {
         &self.headers
     }
 
@@ -131,7 +131,7 @@ impl HttpConfig {
     ///
     /// This map contains query parameters that will be automatically appended to all request URLs.
     #[inline]
-    pub fn querys(&self) -> &HashMap<String, String> {
+    pub fn querys(&self) -> &Querys {
         &self.querys
     }
 
@@ -139,7 +139,7 @@ impl HttpConfig {
     ///
     /// This map contains body fields that will be automatically included in all request bodies.
     #[inline]
-    pub fn bodys(&self) -> &HashMap<String, serde_json::Value> {
+    pub fn bodys(&self) -> &Bodys {
         &self.bodys
     }
 

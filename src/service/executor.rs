@@ -1,8 +1,9 @@
+use super::request::{HttpParams, RequestBuilder};
 use crate::Config;
 use crate::error::{ApiError, ApiErrorKind, OpenAIError, RequestError};
-use crate::service::request::RequestBuilder;
+use crate::interceptor::InterceptorChain;
 use crate::utils::traits::AsyncFrom;
-use reqwest::{Client, RequestBuilder as ReqwestRequestBuilder, Response};
+use reqwest::{Client, Response};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -65,9 +66,111 @@ impl HttpExecutor {
         *client_guard = new_client;
     }
 
+    /// Sends a POST request and returns the raw HTTP response using HttpParams.
+    ///
+    /// This method handles the complete request lifecycle including:
+    /// - Building the request using the provided functions
+    /// - Executing the request with retry logic
+    /// - Handling errors and retries
+    ///
+    /// # Parameters
+    /// * `params` - The HttpParams structure containing all necessary request parameters
+    ///
+    /// # Type Parameters
+    /// * `U` - Function type for generating the URL, returning a String
+    /// * `F` - Function type for building the request
+    ///
+    /// # Returns
+    /// A Result containing the raw HTTP response or an OpenAIError
+    pub async fn post<U, F>(&self, params: HttpParams<'_, U, F>) -> Result<Response, OpenAIError>
+    where
+        U: FnOnce(&Config) -> String,
+        F: FnOnce(&Config, &mut RequestBuilder),
+    {
+        let client_guard = self.reqwest_client.read().await;
+        let config_guard = self.config.read().await;
+
+        let retry_count = if params.retry_count != 0 {
+            params.retry_count
+        } else {
+            config_guard.retry_count()
+        };
+
+        let global_interceptors = config_guard.global_interceptors();
+
+        HttpExecutor::executor(
+            || {
+                let mut request_builder = RequestBuilder::new(
+                    reqwest::Method::POST,
+                    (params.url_fn)(&config_guard).as_str(),
+                );
+                (params.builder_fn)(&config_guard, &mut request_builder);
+                HttpExecutor::apply_global_http_settings(&config_guard, &mut request_builder);
+                request_builder
+            },
+            retry_count,
+            global_interceptors,
+            params.module_interceptors,
+            &client_guard,
+        )
+        .await
+    }
+
+    /// Sends a GET request and returns the raw HTTP response using HttpParams.
+    ///
+    /// This method handles the complete request lifecycle including:
+    /// - Building the request using the provided functions
+    /// - Executing the request with retry logic
+    /// - Handling errors and retries
+    ///
+    /// # Parameters
+    /// * `params` - The HttpParams structure containing all necessary request parameters
+    ///
+    /// # Type Parameters
+    /// * `U` - Function type for generating the URL, returning a String
+    /// * `F` - Function type for building the request
+    ///
+    /// # Returns
+    /// A Result containing the raw HTTP response or an OpenAIError
+    pub async fn get<U, F>(&self, params: HttpParams<'_, U, F>) -> Result<Response, OpenAIError>
+    where
+        U: FnOnce(&Config) -> String,
+        F: FnOnce(&Config, &mut RequestBuilder),
+    {
+        let client_guard = self.reqwest_client.read().await;
+        let config_guard = self.config.read().await;
+
+        let retry_count = if params.retry_count != 0 {
+            params.retry_count
+        } else {
+            config_guard.retry_count()
+        };
+
+        let global_interceptors = config_guard.global_interceptors();
+
+        HttpExecutor::executor(
+            || {
+                let mut request_builder = RequestBuilder::new(
+                    reqwest::Method::GET,
+                    (params.url_fn)(&config_guard).as_str(),
+                );
+                (params.builder_fn)(&config_guard, &mut request_builder);
+                HttpExecutor::apply_global_http_settings(&config_guard, &mut request_builder);
+                request_builder
+            },
+            retry_count,
+            global_interceptors,
+            params.module_interceptors,
+            &client_guard,
+        )
+        .await
+    }
+}
+
+impl HttpExecutor {
     /// Applies global HTTP settings (headers, query params, body fields) to the request builder
     /// Only applies global settings if they are not already set locally (local has higher priority)
-    fn apply_global_http_settings(&self, config: &Config, request_builder: &mut RequestBuilder) {
+    fn apply_global_http_settings(config: &Config, request_builder: &mut RequestBuilder) {
         // Apply global query params only if not already set locally
         config.http().querys().iter().for_each(|(k, v)| {
             if !request_builder.has_query(k) {
@@ -90,134 +193,83 @@ impl HttpExecutor {
         });
     }
 
-    /// Sends a POST request and returns the raw HTTP response.
-    ///
-    /// This method handles the complete request lifecycle including:
-    /// - Building the request using the provided functions
-    /// - Executing the request with retry logic
-    /// - Handling errors and retries
-    ///
-    /// # Parameters
-    /// * `url_fn` - Function that generates the URL based on the current configuration, returning a String
-    /// * `builder_fn` - Function that builds the request with headers and body
-    /// * `retry_count` - Number of retry attempts (0 means use config default)
-    ///
-    /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a String
-    /// * `F` - Function type for building the request
-    ///
-    /// # Returns
-    /// A Result containing the raw HTTP response or an OpenAIError
-    pub async fn post<U, F>(
-        &self,
-        url_fn: U,
-        builder_fn: F,
-        retry_count: u32,
-    ) -> Result<Response, OpenAIError>
-    where
-        U: Fn(&Config) -> String,
-        F: Fn(&Config, &mut RequestBuilder),
-    {
-        let client_guard = self.reqwest_client.read().await;
-        let config_guard = self.config.read().await;
+    /// Helper function to apply request interceptors in the correct order (global -> module)
+    async fn apply_request_interceptors(
+        mut request: crate::service::request::Request,
+        global_interceptors: &InterceptorChain,
+        module_interceptors: Option<&InterceptorChain>,
+    ) -> Result<crate::service::request::Request, OpenAIError> {
+        request = global_interceptors
+            .execute_request_interceptors(request)
+            .await?;
 
-        let retry_count = if retry_count != 0 {
-            retry_count
-        } else {
-            config_guard.retry_count()
-        };
+        if let Some(module_chain) = module_interceptors {
+            request = module_chain.execute_request_interceptors(request).await?;
+        }
 
-        HttpExecutor::execute(
-            || {
-                let mut request_builder =
-                    RequestBuilder::new(reqwest::Method::POST, url_fn(&config_guard).as_str());
-                builder_fn(&config_guard, &mut request_builder);
-                self.apply_global_http_settings(&config_guard, &mut request_builder);
-                request_builder.build_reqwest_builder(&client_guard)
-            },
-            retry_count,
-        )
-        .await
+        Ok(request)
     }
 
-    /// Sends a GET request and returns the raw HTTP response.
-    ///
-    /// This method handles the complete request lifecycle including:
-    /// - Building the request using the provided functions
-    /// - Executing the request with retry logic
-    /// - Handling errors and retries
-    ///
-    /// # Parameters
-    /// * `url_fn` - Function that generates the URL based on the current configuration, returning a String
-    /// * `builder_fn` - Function that builds the request with headers and query parameters
-    /// * `retry_count` - Number of retry attempts (0 means use config default)
-    ///
-    /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a String
-    /// * `F` - Function type for building the request
-    ///
-    /// # Returns
-    /// A Result containing the raw HTTP response or an OpenAIError
-    pub async fn get<U, F>(
-        &self,
-        url_fn: U,
+    /// Helper function to apply response interceptors in the correct order (module -> global)
+    async fn apply_response_interceptors(
+        mut response: Response,
+        module_interceptors: Option<&InterceptorChain>,
+        global_interceptors: &InterceptorChain,
+    ) -> Result<Response, OpenAIError> {
+        if let Some(module_chain) = module_interceptors {
+            response = module_chain.execute_response_interceptors(response).await?;
+        }
+
+        response = global_interceptors
+            .execute_response_interceptors(response)
+            .await?;
+        Ok(response)
+    }
+
+    /// Helper function to apply error interceptors in the correct order (module -> global)
+    async fn apply_error_interceptors(
+        mut error: OpenAIError,
+        module_interceptors: Option<&InterceptorChain>,
+        global_interceptors: &InterceptorChain,
+    ) -> Result<OpenAIError, OpenAIError> {
+        if let Some(module_chain) = module_interceptors {
+            error = module_chain.execute_error_interceptors(error).await?;
+        }
+
+        error = global_interceptors
+            .execute_error_interceptors(error)
+            .await?;
+        Ok(error)
+    }
+
+    async fn executor<F>(
         builder_fn: F,
         retry_count: u32,
+        global_interceptors: &InterceptorChain,
+        module_interceptors: Option<&InterceptorChain>,
+        client: &reqwest::Client,
     ) -> Result<Response, OpenAIError>
     where
-        U: Fn(&Config) -> String,
-        F: Fn(&Config, &mut RequestBuilder),
-    {
-        let client_guard = self.reqwest_client.read().await;
-        let config_guard = self.config.read().await;
-
-        let retry_count = if retry_count != 0 {
-            retry_count
-        } else {
-            config_guard.retry_count()
-        };
-
-        HttpExecutor::execute(
-            || {
-                let mut request_builder =
-                    RequestBuilder::new(reqwest::Method::GET, url_fn(&config_guard).as_str());
-                builder_fn(&config_guard, &mut request_builder);
-                self.apply_global_http_settings(&config_guard, &mut request_builder);
-                request_builder.build_reqwest_builder(&client_guard)
-            },
-            retry_count,
-        )
-        .await
-    }
-}
-
-impl HttpExecutor {
-    /// Executes an HTTP request with retry logic.
-    ///
-    /// This method implements the core retry logic for HTTP requests, handling
-    /// both API errors and network-level request errors with appropriate
-    /// backoff strategies.
-    ///
-    /// # Parameters
-    /// * `builder_fn` - Function that builds the request
-    /// * `retry_count` - Maximum number of retry attempts
-    ///
-    /// # Type Parameters
-    /// * `F` - Function type for building the request
-    ///
-    /// # Returns
-    /// A Result containing the HTTP response or an OpenAIError
-    async fn execute<F>(builder_fn: F, retry_count: u32) -> Result<Response, OpenAIError>
-    where
-        F: Fn() -> ReqwestRequestBuilder,
+        F: FnOnce() -> RequestBuilder,
     {
         let mut attempts = 0;
         let max_attempts = retry_count.max(1);
 
+        // Build the initial request
+        let request = builder_fn().build();
+
+        // Apply request interceptors: global -> module
+        let processed_request = HttpExecutor::apply_request_interceptors(
+            request,
+            global_interceptors,
+            module_interceptors,
+        )
+        .await?;
         loop {
             attempts += 1;
 
-            let request_builder = builder_fn();
+            // Convert to reqwest RequestBuilder
+            let request_builder = processed_request.to_reqwest(client);
 
             match request_builder.send().await {
                 Ok(response) => {
@@ -230,12 +282,30 @@ impl HttpExecutor {
                         .map(Duration::from_secs);
 
                     if response.status().is_success() {
-                        return Ok(response);
+                        // Apply response interceptors: module -> global
+                        let processed_response = HttpExecutor::apply_response_interceptors(
+                            response,
+                            module_interceptors,
+                            global_interceptors,
+                        )
+                        .await?;
+
+                        return Ok(processed_response);
                     } else {
                         let api_error = ApiError::async_from(response).await;
+
+                        // Check if we should retry or return error with interceptors applied
                         if attempts >= max_attempts || !api_error.is_retryable() {
-                            return Err(api_error.into());
+                            let error = HttpExecutor::apply_error_interceptors(
+                                api_error.into(),
+                                module_interceptors,
+                                global_interceptors,
+                            )
+                            .await?;
+
+                            return Err(error);
                         }
+
                         tracing::debug!(
                             "Attempt {}/{}: Retrying after API error: {:?}",
                             attempts,
@@ -252,9 +322,19 @@ impl HttpExecutor {
                 }
                 Err(e) => {
                     let request_error: RequestError = e.into();
+
+                    // Check if we should retry or return error with interceptors applied
                     if attempts >= max_attempts || !request_error.is_retryable() {
-                        return Err(request_error.into());
+                        let error = HttpExecutor::apply_error_interceptors(
+                            request_error.into(),
+                            module_interceptors,
+                            global_interceptors,
+                        )
+                        .await?;
+
+                        return Err(error);
                     }
+
                     tracing::debug!(
                         "Attempt {}/{}: Retrying after request error: {:?}",
                         attempts,

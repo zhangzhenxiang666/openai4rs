@@ -1,8 +1,6 @@
-use crate::{
-    chat::Chat, completions::Completions, config::Config, models::Models,
-    service::client::HttpClient,
-};
-use std::sync::{Arc, OnceLock};
+use crate::modules::{chat::Chat, completions::Completions, models::Models};
+use crate::{config::Config, service::client::HttpClient};
+use std::sync::Arc;
 use tokio::sync::{RwLock, RwLockReadGuard};
 
 /// OpenAI client for interacting with OpenAI-compatible APIs
@@ -23,7 +21,7 @@ use tokio::sync::{RwLock, RwLockReadGuard};
 ///
 /// ## Basic Usage
 ///
-/// ```rust
+/// ```rust,no_run
 /// use openai4rs::OpenAI;
 /// use dotenvy::dotenv;
 /// #[tokio::main]
@@ -39,9 +37,9 @@ use tokio::sync::{RwLock, RwLockReadGuard};
 pub struct OpenAI {
     config: Arc<RwLock<Config>>,
     http_client: HttpClient,
-    chat: OnceLock<Chat>,
-    completions: OnceLock<Completions>,
-    models: OnceLock<Models>,
+    chat: Chat,
+    completions: Completions,
+    models: Models,
 }
 
 impl OpenAI {
@@ -64,11 +62,11 @@ impl OpenAI {
         let http_client = HttpClient::new(config);
 
         OpenAI {
+            chat: Chat::new(http_client.clone()),
+            completions: Completions::new(http_client.clone()),
+            models: Models::new(http_client.clone()),
             config: http_client.config(),
             http_client,
-            chat: OnceLock::new(),
-            completions: OnceLock::new(),
-            models: OnceLock::new(),
         }
     }
 
@@ -96,48 +94,12 @@ impl OpenAI {
         let http_client = HttpClient::new(config);
 
         OpenAI {
+            chat: Chat::new(http_client.clone()),
+            completions: Completions::new(http_client.clone()),
+            models: Models::new(http_client.clone()),
             config: http_client.config(),
             http_client,
-            chat: OnceLock::new(),
-            completions: OnceLock::new(),
-            models: OnceLock::new(),
         }
-    }
-
-    /// Updates the client configuration and recreates the HTTP client.
-    ///
-    /// This method allows you to modify the configuration of an existing client and automatically recreate the internal HTTP client with the new settings.
-    ///
-    /// # Parameters
-    ///
-    /// * `update_fn` - A function to update the configuration
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use openai4rs::OpenAI;
-    /// #[tokio::main]
-    /// async fn main() {
-    /// let client = OpenAI::new("key", "https://api.openai.com/v1");
-    ///
-    /// // Update multiple settings at once
-    /// client.update_config(|config| {
-    ///     config.with_timeout_seconds(120)
-    ///           .with_retry_count(3)
-    ///           .with_proxy("http://localhost:8080");
-    /// }).await;
-    /// }
-    /// ```
-    pub async fn update_config<F>(&self, update_fn: F)
-    where
-        F: FnOnce(&mut Config),
-    {
-        {
-            let mut config_guard = self.config.write().await;
-            update_fn(&mut config_guard);
-        }
-
-        self.http_client.update().await;
     }
 
     /// Creates a new OpenAI client from environment variables.
@@ -217,6 +179,42 @@ impl OpenAI {
 }
 
 impl OpenAI {
+    /// Updates the client configuration and recreates the HTTP client.
+    ///
+    /// This method allows you to modify the configuration of an existing client and automatically recreate the internal HTTP client with the new settings.
+    ///
+    /// # Parameters
+    ///
+    /// * `update_fn` - A function to update the configuration
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use openai4rs::OpenAI;
+    /// #[tokio::main]
+    /// async fn main() {
+    /// let client = OpenAI::new("key", "https://api.openai.com/v1");
+    ///
+    /// // Update multiple settings at once
+    /// client.update_config(|config| {
+    ///     config.with_timeout_seconds(120)
+    ///           .with_retry_count(3)
+    ///           .with_proxy("http://localhost:8080");
+    /// }).await;
+    /// }
+    /// ```
+    pub async fn update_config<F>(&self, update_fn: F)
+    where
+        F: FnOnce(&mut Config),
+    {
+        {
+            let mut config_guard = self.config.write().await;
+            update_fn(&mut config_guard);
+        }
+
+        self.http_client.update().await;
+    }
+
     /// Returns a reference to the chat completion client.
     ///
     /// Use this client to perform chat completions, including streaming responses, tool calling, and reasoning mode interactions.
@@ -277,8 +275,7 @@ impl OpenAI {
     /// ```
     #[inline]
     pub fn chat(&self) -> &Chat {
-        self.chat
-            .get_or_init(|| Chat::new(self.http_client.clone()))
+        &self.chat
     }
 
     /// Returns a reference to the completion client.
@@ -305,8 +302,7 @@ impl OpenAI {
     /// ```
     #[inline]
     pub fn completions(&self) -> &Completions {
-        self.completions
-            .get_or_init(|| Completions::new(self.http_client.clone()))
+        &self.completions
     }
 
     /// Returns a reference to the model client.
@@ -336,8 +332,7 @@ impl OpenAI {
     /// ```
     #[inline]
     pub fn models(&self) -> &Models {
-        self.models
-            .get_or_init(|| Models::new(self.http_client.clone()))
+        &self.models
     }
 
     /// Returns the current base URL.
@@ -414,5 +409,115 @@ impl OpenAI {
             config.with_user_agent(user_agent);
         })
         .await;
+    }
+
+    /// Adds a global interceptor to the client.
+    ///
+    /// Global interceptors are applied to all requests made by this client, regardless of the module.
+    /// They are executed in the order they were added.
+    ///
+    /// # Parameters
+    ///
+    /// * `interceptor` - The interceptor to add
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use openai4rs::{OpenAI, Interceptor, Request, Response, OpenAIError, Config, async_trait};
+    /// use std::sync::Arc;
+    ///
+    /// struct LoggingInterceptor;
+    /// #[async_trait]
+    /// impl Interceptor for LoggingInterceptor {
+    ///     async fn on_request(&self, request: Request) -> Result<Request, OpenAIError> {
+    ///         println!("Sending request to: {}", request.url());
+    ///         Ok(request)
+    ///     }
+    ///
+    ///     async fn on_response(&self, response: Response) -> Result<Response, OpenAIError> {
+    ///         println!("Received response with status: {}", response.status());
+    ///         Ok(response)
+    ///     }
+    ///
+    ///     async fn on_error(&self, error: OpenAIError) -> Result<OpenAIError, OpenAIError> {
+    ///         eprintln!("Request failed: {:?}", error);
+    ///         Err(error)
+    ///     }
+    /// }
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut config = Config::new("key", "https://api.openai.com/v1");
+    ///     config.add_global_interceptor(LoggingInterceptor);
+    ///     let client = OpenAI::with_config(config);
+    /// }
+    /// ```
+    pub async fn add_global_interceptor(
+        &self,
+        interceptor: impl crate::interceptor::Interceptor + 'static,
+    ) {
+        self.config
+            .write()
+            .await
+            .add_global_interceptor(interceptor);
+    }
+
+    /// Adds an interceptor to the chat module.
+    ///
+    /// This allows adding module-specific interceptors to the chat functionality.
+    ///
+    /// # Parameters
+    ///
+    /// * `interceptor` - The interceptor to add to the chat module
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use openai4rs::{OpenAI, Interceptor};
+    /// struct TestInterceptor;
+    /// impl Interceptor for TestInterceptor {}
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut client = OpenAI::new("key", "https://api.openai.com/v1");
+    ///     // Add a chat-specific interceptor
+    ///     client.add_chat_interceptor(TestInterceptor);
+    /// }
+    /// ```
+    pub fn add_chat_interceptor(
+        &mut self,
+        interceptor: impl crate::interceptor::Interceptor + 'static,
+    ) {
+        self.chat.interceptors_mut().add_interceptor(interceptor);
+    }
+
+    /// Adds an interceptor to the completions module.
+    ///
+    /// This allows adding module-specific interceptors to the completions functionality.
+    ///
+    /// # Parameters
+    ///
+    /// * `interceptor` - The interceptor to add to the completions module
+    pub fn add_completions_interceptor(
+        &mut self,
+        interceptor: impl crate::interceptor::Interceptor + 'static,
+    ) {
+        self.completions
+            .interceptors_mut()
+            .add_interceptor(interceptor);
+    }
+
+    /// Adds an interceptor to the models module.
+    ///
+    /// This allows adding module-specific interceptors to the models functionality.
+    ///
+    /// # Parameters
+    ///
+    /// * `interceptor` - The interceptor to add to the models module
+    pub fn add_models_interceptor(
+        &mut self,
+        interceptor: impl crate::interceptor::Interceptor + 'static,
+    ) {
+        self.models.interceptors_mut().add_interceptor(interceptor);
     }
 }

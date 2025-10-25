@@ -1,20 +1,34 @@
-use std::time::Duration;
-
 use super::params::{IntoRequestParams, RequestParams};
 use super::types::{ChatCompletion, ChatCompletionChunk};
+use crate::InterceptorChain;
 use crate::error::OpenAIError;
 use crate::service::client::HttpClient;
-use crate::service::request::RequestBuilder;
+use crate::service::request::{HttpParams, RequestBuilder};
+use std::time::Duration;
 use tokio_stream::wrappers::ReceiverStream;
 
 /// Handles chat completion requests, including both streaming and non-streaming modes.
 pub struct Chat {
     http_client: HttpClient,
+    interceptors: InterceptorChain,
 }
 
 impl Chat {
     pub fn new(http_client: HttpClient) -> Chat {
-        Chat { http_client }
+        Chat {
+            http_client,
+            interceptors: InterceptorChain::new(),
+        }
+    }
+
+    /// Returns a reference to the module interceptors
+    pub fn interceptors(&self) -> &InterceptorChain {
+        &self.interceptors
+    }
+
+    /// Returns a mutable reference to the module interceptors
+    pub fn interceptors_mut(&mut self) -> &mut InterceptorChain {
+        &mut self.interceptors
     }
 
     /// Creates a chat completion.
@@ -52,16 +66,17 @@ impl Chat {
 
         let retry_count = params.retry_count.unwrap_or(0);
 
-        self.http_client
-            .post_json(
-                |config| format!("{}/chat/completions", config.base_url()),
-                |config, builder| {
-                    Self::apply_request_settings(builder, &params);
-                    builder.bearer_auth(config.api_key());
-                },
-                retry_count,
-            )
-            .await
+        let http_params = HttpParams::new(
+            |config| format!("{}/chat/completions", config.base_url()),
+            |config, builder| {
+                Self::apply_request_settings(builder, params);
+                builder.bearer_auth(config.api_key());
+            },
+            retry_count,
+            Some(&self.interceptors),
+        );
+
+        self.http_client.post_json(http_params).await
     }
 
     /// Creates a streaming chat completion.
@@ -111,40 +126,40 @@ impl Chat {
 
         let retry_count = params.retry_count.unwrap_or(0);
 
-        self.http_client
-            .post_json_stream(
-                |config| format!("{}/chat/completions", config.base_url()),
-                |config, builder| {
-                    Self::apply_request_settings(builder, &params);
-                    builder.bearer_auth(config.api_key());
-                },
-                retry_count,
-            )
-            .await
+        let http_params = HttpParams::new(
+            |config| format!("{}/chat/completions", config.base_url()),
+            |config, builder| {
+                Self::apply_request_settings(builder, params);
+                builder.bearer_auth(config.api_key());
+            },
+            retry_count,
+            Some(&self.interceptors),
+        );
+        self.http_client.post_json_stream(http_params).await
     }
 }
 
 impl Chat {
-    fn apply_request_settings(builder: &mut RequestBuilder, params: &RequestParams) {
-        if let Some(headers) = &params.extra_headers {
-            headers.iter().for_each(|(k, v)| {
+    fn apply_request_settings(builder: &mut RequestBuilder, params: RequestParams) {
+        if let Ok(serde_json::Value::Object(obj)) = serde_json::to_value(&params) {
+            builder.body_fields(obj.into_iter().collect());
+        }
+
+        if let Some(headers) = params.extra_headers {
+            headers.into_iter().for_each(|(k, v)| {
                 builder.header(k, v);
             });
         }
 
-        if let Some(query) = &params.extra_query {
-            query.iter().for_each(|(k, v)| {
+        if let Some(query) = params.extra_query {
+            query.into_iter().for_each(|(k, v)| {
                 builder.query(k, v);
             });
         }
 
-        if let Ok(serde_json::Value::Object(obj)) = serde_json::to_value(params) {
-            builder.body_fields(obj.into_iter().collect());
-        }
-
-        if let Some(extra_body) = &params.extra_body {
-            extra_body.iter().for_each(|(k, v)| {
-                builder.body_field(k, v.clone());
+        if let Some(extra_body) = params.extra_body {
+            extra_body.into_iter().for_each(|(k, v)| {
+                builder.body_field(k, v);
             });
         }
 
@@ -152,7 +167,7 @@ impl Chat {
             builder.timeout(Duration::from_secs(timeout));
         }
 
-        if let Some(user_agent) = &params.user_agent {
+        if let Some(user_agent) = params.user_agent {
             builder.header("user-agent", user_agent);
         }
     }

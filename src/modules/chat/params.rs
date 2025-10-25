@@ -2,7 +2,7 @@ use super::types::{
     ChatCompletionMessageParam, ChatCompletionPredictionContentParam, ChatCompletionToolParam,
     Modality, ReasoningEffort, ToolChoice,
 };
-use crate::common::types::ServiceTier;
+use crate::common::types::{Bodys, Headers, Querys, ServiceTier};
 use derive_builder::Builder;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -199,20 +199,20 @@ pub struct RequestParams<'a> {
     ///
     #[builder(default)]
     #[serde(skip_serializing)]
-    pub extra_headers: Option<HashMap<String, String>>,
+    pub extra_headers: Option<Headers>,
 
     /// Add additional query parameters to the request.
     ///
     #[builder(default)]
     #[serde(skip_serializing)]
-    pub extra_query: Option<HashMap<String, String>>,
+    pub extra_query: Option<Querys>,
 
     /// Add additional JSON properties to the request.
     ///
     /// This field will not be serialized in the request body.
     #[builder(default)]
     #[serde(skip_serializing)]
-    pub extra_body: Option<HashMap<String, serde_json::Value>>,
+    pub extra_body: Option<Bodys>,
 
     /// HTTP request retry count, overriding the client's global setting.
     ///

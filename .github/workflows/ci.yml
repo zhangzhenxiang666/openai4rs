@@ -2,9 +2,9 @@ name: Rust CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -13,38 +13,41 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-     
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        components: clippy
-     
-    - name: Cache Cargo registry
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-     
-    - name: Build project
-      run: cargo build --verbose --all-features
-     
-    - name: Run tests
-      run: cargo test --verbose --all-features --lib
-      env:
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
-     
-    - name: Run doc tests
-      run: cargo test --doc --all-features
-      env:
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build project
+        run: cargo build --verbose --all-features
+
+      - name: Run clippy
+        run: cargo clippy --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --verbose --all-features --lib
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+
+      - name: Run doc tests
+        run: cargo test --doc --all-features
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
