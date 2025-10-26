@@ -82,36 +82,51 @@ impl HttpExecutor {
     ///
     /// # Returns
     /// A Result containing the raw HTTP response or an OpenAIError
-    pub async fn post<U, F>(&self, params: HttpParams<'_, U, F>) -> Result<Response, OpenAIError>
+    pub async fn post<U, F>(&self, params: HttpParams<U, F>) -> Result<Response, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
         F: FnOnce(&Config, &mut RequestBuilder),
     {
-        let client_guard = self.reqwest_client.read().await;
-        let config_guard = self.config.read().await;
-
-        let retry_count = if params.retry_count != 0 {
-            params.retry_count
-        } else {
-            config_guard.retry_count()
+        // Snapshot client and config-derived values to avoid holding locks across await
+        let client = {
+            let client_guard = self.reqwest_client.read().await;
+            client_guard.clone()
         };
 
-        let global_interceptors = config_guard.global_interceptors();
+        let (retry_count, global_interceptors, request, module_interceptors) = {
+            let config_guard = self.config.read().await;
+
+            let retry_count = if params.retry_count != 0 {
+                params.retry_count
+            } else {
+                config_guard.retry_count()
+            };
+
+            let mut request_builder = RequestBuilder::new(
+                reqwest::Method::POST,
+                (params.url_fn)(&config_guard).as_str(),
+            );
+            (params.builder_fn)(&config_guard, &mut request_builder);
+            HttpExecutor::apply_global_http_settings(&config_guard, &mut request_builder);
+            let request = request_builder.build();
+
+            let global_interceptors = config_guard.global_interceptors().clone();
+            let module_interceptors = params.module_interceptors;
+
+            (
+                retry_count,
+                global_interceptors,
+                request,
+                module_interceptors,
+            )
+        };
 
         HttpExecutor::executor(
-            || {
-                let mut request_builder = RequestBuilder::new(
-                    reqwest::Method::POST,
-                    (params.url_fn)(&config_guard).as_str(),
-                );
-                (params.builder_fn)(&config_guard, &mut request_builder);
-                HttpExecutor::apply_global_http_settings(&config_guard, &mut request_builder);
-                request_builder
-            },
+            request,
             retry_count,
             global_interceptors,
-            params.module_interceptors,
-            &client_guard,
+            module_interceptors,
+            client,
         )
         .await
     }
@@ -132,36 +147,51 @@ impl HttpExecutor {
     ///
     /// # Returns
     /// A Result containing the raw HTTP response or an OpenAIError
-    pub async fn get<U, F>(&self, params: HttpParams<'_, U, F>) -> Result<Response, OpenAIError>
+    pub async fn get<U, F>(&self, params: HttpParams<U, F>) -> Result<Response, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
         F: FnOnce(&Config, &mut RequestBuilder),
     {
-        let client_guard = self.reqwest_client.read().await;
-        let config_guard = self.config.read().await;
-
-        let retry_count = if params.retry_count != 0 {
-            params.retry_count
-        } else {
-            config_guard.retry_count()
+        // Snapshot client and config-derived values to avoid holding locks across await
+        let client = {
+            let client_guard = self.reqwest_client.read().await;
+            client_guard.clone()
         };
 
-        let global_interceptors = config_guard.global_interceptors();
+        let (retry_count, global_interceptors, request, module_interceptors) = {
+            let config_guard = self.config.read().await;
+
+            let retry_count = if params.retry_count != 0 {
+                params.retry_count
+            } else {
+                config_guard.retry_count()
+            };
+
+            let mut request_builder = RequestBuilder::new(
+                reqwest::Method::GET,
+                (params.url_fn)(&config_guard).as_str(),
+            );
+            (params.builder_fn)(&config_guard, &mut request_builder);
+            HttpExecutor::apply_global_http_settings(&config_guard, &mut request_builder);
+            let request = request_builder.build();
+
+            let global_interceptors = config_guard.global_interceptors().clone();
+            let module_interceptors = params.module_interceptors;
+
+            (
+                retry_count,
+                global_interceptors,
+                request,
+                module_interceptors,
+            )
+        };
 
         HttpExecutor::executor(
-            || {
-                let mut request_builder = RequestBuilder::new(
-                    reqwest::Method::GET,
-                    (params.url_fn)(&config_guard).as_str(),
-                );
-                (params.builder_fn)(&config_guard, &mut request_builder);
-                HttpExecutor::apply_global_http_settings(&config_guard, &mut request_builder);
-                request_builder
-            },
+            request,
             retry_count,
             global_interceptors,
-            params.module_interceptors,
-            &client_guard,
+            module_interceptors,
+            client,
         )
         .await
     }
@@ -242,34 +272,28 @@ impl HttpExecutor {
         Ok(error)
     }
 
-    async fn executor<F>(
-        builder_fn: F,
+    async fn executor(
+        request: crate::service::request::Request,
         retry_count: u32,
-        global_interceptors: &InterceptorChain,
-        module_interceptors: Option<&InterceptorChain>,
-        client: &reqwest::Client,
-    ) -> Result<Response, OpenAIError>
-    where
-        F: FnOnce() -> RequestBuilder,
-    {
+        global_interceptors: InterceptorChain,
+        module_interceptors: Option<InterceptorChain>,
+        client: reqwest::Client,
+    ) -> Result<Response, OpenAIError> {
         let mut attempts = 0;
         let max_attempts = retry_count.max(1);
-
-        // Build the initial request
-        let request = builder_fn().build();
 
         // Apply request interceptors: global -> module
         let processed_request = HttpExecutor::apply_request_interceptors(
             request,
-            global_interceptors,
-            module_interceptors,
+            &global_interceptors,
+            module_interceptors.as_ref(),
         )
         .await?;
         loop {
             attempts += 1;
 
             // Convert to reqwest RequestBuilder
-            let request_builder = processed_request.to_reqwest(client);
+            let request_builder = processed_request.to_reqwest(&client);
 
             match request_builder.send().await {
                 Ok(response) => {
@@ -285,8 +309,8 @@ impl HttpExecutor {
                         // Apply response interceptors: module -> global
                         let processed_response = HttpExecutor::apply_response_interceptors(
                             response,
-                            module_interceptors,
-                            global_interceptors,
+                            module_interceptors.as_ref(),
+                            &global_interceptors,
                         )
                         .await?;
 
@@ -298,8 +322,8 @@ impl HttpExecutor {
                         if attempts >= max_attempts || !api_error.is_retryable() {
                             let error = HttpExecutor::apply_error_interceptors(
                                 api_error.into(),
-                                module_interceptors,
-                                global_interceptors,
+                                module_interceptors.as_ref(),
+                                &global_interceptors,
                             )
                             .await?;
 
@@ -327,8 +351,8 @@ impl HttpExecutor {
                     if attempts >= max_attempts || !request_error.is_retryable() {
                         let error = HttpExecutor::apply_error_interceptors(
                             request_error.into(),
-                            module_interceptors,
-                            global_interceptors,
+                            module_interceptors.as_ref(),
+                            &global_interceptors,
                         )
                         .await?;
 

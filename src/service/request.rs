@@ -16,9 +16,7 @@ use std::time::Duration;
 /// * `U` - A function type that takes a Config reference and returns a String (for URL generation)
 /// * `F` - A function type that takes a Config reference and a mutable RequestBuilder reference
 ///
-/// # Lifetime
-/// * `'a` - The lifetime of the InterceptorChain reference
-pub struct HttpParams<'a, U, F>
+pub struct HttpParams<U, F>
 where
     U: FnOnce(&Config) -> String,
     F: FnOnce(&Config, &mut RequestBuilder),
@@ -33,10 +31,10 @@ where
     pub retry_count: u32,
     /// Optional interceptors specific to the calling module
     /// These interceptors will be applied in addition to any global interceptors
-    pub module_interceptors: Option<&'a InterceptorChain>,
+    pub module_interceptors: Option<InterceptorChain>,
 }
 
-impl<'a, U, F> HttpParams<'a, U, F>
+impl<U, F> HttpParams<U, F>
 where
     U: FnOnce(&Config) -> String,
     F: FnOnce(&Config, &mut RequestBuilder),
@@ -46,7 +44,7 @@ where
         url_fn: U,
         builder_fn: F,
         retry_count: u32,
-        module_interceptors: Option<&'a InterceptorChain>,
+        module_interceptors: Option<InterceptorChain>,
     ) -> Self {
         Self {
             url_fn,
@@ -73,7 +71,7 @@ where
     }
 
     /// Sets the module interceptors
-    pub fn with_interceptors(mut self, interceptors: Option<&'a InterceptorChain>) -> Self {
+    pub fn with_interceptors(mut self, interceptors: Option<InterceptorChain>) -> Self {
         self.module_interceptors = interceptors;
         self
     }

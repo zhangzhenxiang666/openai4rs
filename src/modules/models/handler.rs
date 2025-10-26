@@ -43,7 +43,7 @@ impl Models {
                 builder.bearer_auth(config.api_key());
             },
             retry_count,
-            Some(&self.interceptors),
+            Some(self.interceptors.clone()),
         );
 
         self.http_client.get_json(http_params).await
@@ -63,7 +63,7 @@ impl Models {
                 builder.bearer_auth(config.api_key());
             },
             retry_count,
-            Some(&self.interceptors),
+            Some(self.interceptors.clone()),
         );
 
         self.http_client.get_json(http_params).await

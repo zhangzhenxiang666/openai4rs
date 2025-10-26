@@ -73,7 +73,7 @@ impl Chat {
                 builder.bearer_auth(config.api_key());
             },
             retry_count,
-            Some(&self.interceptors),
+            Some(self.interceptors.clone()),
         );
 
         self.http_client.post_json(http_params).await
@@ -133,7 +133,7 @@ impl Chat {
                 builder.bearer_auth(config.api_key());
             },
             retry_count,
-            Some(&self.interceptors),
+            Some(self.interceptors.clone()),
         );
         self.http_client.post_json_stream(http_params).await
     }

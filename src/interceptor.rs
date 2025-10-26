@@ -163,6 +163,7 @@ impl Ord for InterceptorPriority {
 }
 
 /// A prioritized interceptor that combines an interceptor with its priority
+#[derive(Clone)]
 pub struct PrioritizedInterceptor {
     /// The interceptor instance
     interceptor: Arc<dyn Interceptor>,
@@ -224,7 +225,7 @@ impl PrioritizedInterceptor {
 }
 
 /// A chain of interceptors that can be executed in a specific order
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct InterceptorChain(Vec<PrioritizedInterceptor>);
 
 impl InterceptorChain {

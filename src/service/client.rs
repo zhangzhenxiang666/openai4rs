@@ -69,7 +69,7 @@ impl HttpClient {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn post_json<U, F, T>(&self, params: HttpParams<'_, U, F>) -> Result<T, OpenAIError>
+    pub async fn post_json<U, F, T>(&self, params: HttpParams<U, F>) -> Result<T, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
         F: FnOnce(&Config, &mut RequestBuilder),
@@ -93,7 +93,7 @@ impl HttpClient {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn get_json<U, F, T>(&self, params: HttpParams<'_, U, F>) -> Result<T, OpenAIError>
+    pub async fn get_json<U, F, T>(&self, params: HttpParams<U, F>) -> Result<T, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
         F: FnOnce(&Config, &mut RequestBuilder),
@@ -119,7 +119,7 @@ impl HttpClient {
     /// A Result containing a stream of response chunks or an OpenAIError
     pub async fn post_json_stream<U, F, T>(
         &self,
-        params: HttpParams<'_, U, F>,
+        params: HttpParams<U, F>,
     ) -> Result<ReceiverStream<Result<T, OpenAIError>>, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
