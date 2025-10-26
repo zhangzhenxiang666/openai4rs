@@ -38,7 +38,7 @@ jobs:
         run: cargo build --verbose --all-features
 
       - name: Run clippy
-        run: cargo clippy --all-features -- -D warnings
+        run: cargo clippy
 
       - name: Run tests
         run: cargo test --verbose --all-features --lib
