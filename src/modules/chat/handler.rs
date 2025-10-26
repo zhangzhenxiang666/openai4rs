@@ -3,7 +3,7 @@ use super::types::{ChatCompletion, ChatCompletionChunk};
 use crate::InterceptorChain;
 use crate::error::OpenAIError;
 use crate::service::client::HttpClient;
-use crate::service::request::{HttpParams, RequestBuilder};
+use crate::service::request::{RequestSpec, RequestBuilder};
 use std::time::Duration;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -66,7 +66,7 @@ impl Chat {
 
         let retry_count = params.retry_count.unwrap_or(0);
 
-        let http_params = HttpParams::new(
+        let http_params = RequestSpec::new(
             |config| format!("{}/chat/completions", config.base_url()),
             |config, builder| {
                 Self::apply_request_settings(builder, params);
@@ -126,7 +126,7 @@ impl Chat {
 
         let retry_count = params.retry_count.unwrap_or(0);
 
-        let http_params = HttpParams::new(
+        let http_params = RequestSpec::new(
             |config| format!("{}/chat/completions", config.base_url()),
             |config, builder| {
                 Self::apply_request_settings(builder, params);

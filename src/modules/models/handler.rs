@@ -3,7 +3,7 @@ use super::types::{Model, ModelsData};
 use crate::error::OpenAIError;
 use crate::interceptor::InterceptorChain;
 use crate::service::client::HttpClient;
-use crate::service::request::{HttpParams, RequestBuilder};
+use crate::service::request::{RequestSpec, RequestBuilder};
 use std::time::Duration;
 
 pub struct Models {
@@ -36,7 +36,7 @@ impl Models {
         let params = params.into_request_params();
         let retry_count = params.retry_count.unwrap_or(0);
 
-        let http_params = HttpParams::new(
+        let http_params = RequestSpec::new(
             |config| format!("{}/models/{}", config.base_url(), model),
             |config, builder| {
                 Self::apply_request_settings(builder, params);
@@ -56,7 +56,7 @@ impl Models {
         let params = params.into_request_params();
         let retry_count = params.retry_count.unwrap_or(0);
 
-        let http_params = HttpParams::new(
+        let http_params = RequestSpec::new(
             |config| format!("{}/models", config.base_url()),
             |config, builder| {
                 Self::apply_request_settings(builder, params);

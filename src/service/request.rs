@@ -1,5 +1,5 @@
 use crate::Config;
-use crate::common::types::{Bodys, Headers, Querys};
+use crate::common::types::{Bodies, Headers, QueryParams};
 use crate::interceptor::InterceptorChain;
 use reqwest::{Method, RequestBuilder as ReqwestRequestBuilder};
 use serde_json::Value;
@@ -16,7 +16,7 @@ use std::time::Duration;
 /// * `U` - A function type that takes a Config reference and returns a String (for URL generation)
 /// * `F` - A function type that takes a Config reference and a mutable RequestBuilder reference
 ///
-pub struct HttpParams<U, F>
+pub struct RequestSpec<U, F>
 where
     U: FnOnce(&Config) -> String,
     F: FnOnce(&Config, &mut RequestBuilder),
@@ -34,7 +34,7 @@ where
     pub module_interceptors: Option<InterceptorChain>,
 }
 
-impl<U, F> HttpParams<U, F>
+impl<U, F> RequestSpec<U, F>
 where
     U: FnOnce(&Config) -> String,
     F: FnOnce(&Config, &mut RequestBuilder),
@@ -87,9 +87,9 @@ pub struct Request {
     /// Headers to be included in the request
     headers: Headers,
     /// Query parameters to be appended to the URL
-    query_params: Querys,
+    query_params: QueryParams,
     /// Optional body fields to be included in the request body
-    body_fields: Option<Bodys>,
+    body_fields: Option<Bodies>,
     /// Optional timeout for the request
     timeout: Option<Duration>,
 }
@@ -127,7 +127,7 @@ impl Request {
     /// # Returns
     /// A reference to the HashMap containing query parameters
     #[inline]
-    pub fn query_params(&self) -> &Querys {
+    pub fn query_params(&self) -> &QueryParams {
         &self.query_params
     }
 
@@ -136,7 +136,7 @@ impl Request {
     /// # Returns
     /// An Option containing a reference to the HashMap of body fields, or None if no body is set
     #[inline]
-    pub fn body(&self) -> Option<&Bodys> {
+    pub fn body(&self) -> Option<&Bodies> {
         self.body_fields.as_ref()
     }
 
@@ -163,7 +163,7 @@ impl Request {
     /// # Returns
     /// A mutable reference to the HashMap containing query parameters
     #[inline]
-    pub fn query_params_mut(&mut self) -> &mut Querys {
+    pub fn query_params_mut(&mut self) -> &mut QueryParams {
         &mut self.query_params
     }
 
@@ -172,7 +172,7 @@ impl Request {
     /// # Returns
     /// A mutable reference to the Option containing the HashMap of body fields
     #[inline]
-    pub fn body_mut(&mut self) -> &mut Option<Bodys> {
+    pub fn body_mut(&mut self) -> &mut Option<Bodies> {
         &mut self.body_fields
     }
 
@@ -358,7 +358,7 @@ impl RequestBuilder {
     /// # Returns
     ///
     /// A mutable reference to self for method chaining
-    pub fn body_fields(&mut self, fields: Bodys) -> &mut Self {
+    pub fn body_fields(&mut self, fields: Bodies) -> &mut Self {
         self.request
             .body_mut()
             .get_or_insert_with(HashMap::new)
@@ -375,7 +375,7 @@ impl RequestBuilder {
     /// # Returns
     ///
     /// A mutable reference to self for method chaining
-    pub fn body_fields_map(&mut self, body_map: Bodys) -> &mut Self {
+    pub fn body_fields_map(&mut self, body_map: Bodies) -> &mut Self {
         *self.request.body_mut() = Some(body_map);
         self
     }

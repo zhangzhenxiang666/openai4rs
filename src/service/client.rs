@@ -1,8 +1,8 @@
 use super::request::RequestBuilder;
 use crate::Config;
 use crate::error::OpenAIError;
-use crate::service::request::HttpParams;
-use crate::service::transport::Transport;
+use crate::service::request::RequestSpec;
+use crate::service::transport::HttpTransport;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
@@ -20,7 +20,7 @@ pub struct HttpClient {
     ///
     /// This transport handles the actual HTTP communication, including request building,
     /// response processing, retry logic, and connection management.
-    transport: Arc<Transport>,
+    transport: Arc<HttpTransport>,
 }
 
 impl HttpClient {
@@ -35,7 +35,7 @@ impl HttpClient {
     /// A new HttpClient instance ready for making API requests
     pub fn new(config: Config) -> HttpClient {
         HttpClient {
-            transport: Arc::new(Transport::new(config)),
+            transport: Arc::new(HttpTransport::new(config)),
         }
     }
 
@@ -50,8 +50,8 @@ impl HttpClient {
     ///
     /// This method rebuilds the underlying HTTP client with any updated configuration
     /// settings, such as new proxy settings or timeout values.
-    pub async fn update(&self) {
-        self.transport.update().await;
+    pub async fn refresh_client(&self) {
+        self.transport.refresh_client().await;
     }
 
     /// Sends a POST request with JSON payload to the OpenAI API using HttpParams.
@@ -69,7 +69,7 @@ impl HttpClient {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn post_json<U, F, T>(&self, params: HttpParams<U, F>) -> Result<T, OpenAIError>
+    pub async fn post_json<U, F, T>(&self, params: RequestSpec<U, F>) -> Result<T, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
         F: FnOnce(&Config, &mut RequestBuilder),
@@ -93,7 +93,7 @@ impl HttpClient {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn get_json<U, F, T>(&self, params: HttpParams<U, F>) -> Result<T, OpenAIError>
+    pub async fn get_json<U, F, T>(&self, params: RequestSpec<U, F>) -> Result<T, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
         F: FnOnce(&Config, &mut RequestBuilder),
@@ -119,7 +119,7 @@ impl HttpClient {
     /// A Result containing a stream of response chunks or an OpenAIError
     pub async fn post_json_stream<U, F, T>(
         &self,
-        params: HttpParams<U, F>,
+        params: RequestSpec<U, F>,
     ) -> Result<ReceiverStream<Result<T, OpenAIError>>, OpenAIError>
     where
         U: FnOnce(&Config) -> String,

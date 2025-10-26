@@ -212,7 +212,7 @@ impl OpenAI {
             update_fn(&mut config_guard);
         }
 
-        self.http_client.update().await;
+        self.http_client.refresh_client().await;
     }
 
     /// Returns a reference to the chat completion client.

@@ -5,7 +5,7 @@ use super::types::Completion;
 use crate::error::OpenAIError;
 use crate::interceptor::InterceptorChain;
 use crate::service::client::HttpClient;
-use crate::service::request::{HttpParams, RequestBuilder};
+use crate::service::request::{RequestSpec, RequestBuilder};
 
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -41,7 +41,7 @@ impl Completions {
 
         let retry_count = params.retry_count.unwrap_or(0);
 
-        let http_params = HttpParams::new(
+        let http_params = RequestSpec::new(
             |config| format!("{}/completions", config.base_url()),
             |config, builder| {
                 Self::apply_request_settings(builder, params);
@@ -66,7 +66,7 @@ impl Completions {
 
         let retry_count = params.retry_count.unwrap_or(0);
 
-        let http_params = HttpParams::new(
+        let http_params = RequestSpec::new(
             |config| format!("{}/completions", config.base_url()),
             |config, builder| {
                 Self::apply_request_settings(builder, params);

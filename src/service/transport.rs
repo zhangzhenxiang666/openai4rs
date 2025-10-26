@@ -1,4 +1,4 @@
-use super::request::{HttpParams, RequestBuilder};
+use super::request::{RequestSpec, RequestBuilder};
 use crate::Config;
 use crate::error::{OpenAIError, ProcessingError};
 use crate::service::executor::HttpExecutor;
@@ -16,7 +16,7 @@ use tokio_stream::wrappers::ReceiverStream;
 /// - Data: The event contains valid data that should be forwarded
 /// - Done: The stream has completed
 /// - Error: An error occurred while processing the event
-enum ProcessEventResult<T>
+enum SseEventResult<T>
 where
     T: serde::de::DeserializeOwned,
 {
@@ -41,12 +41,12 @@ where
 /// - Converting raw HTTP responses to strongly-typed objects
 /// - Handling streaming responses using Server-Sent Events (SSE)
 /// - Managing the request/response lifecycle
-pub struct Transport {
+pub struct HttpTransport {
     /// The underlying HTTP executor responsible for sending requests
     executor: HttpExecutor,
 }
 
-impl Transport {
+impl HttpTransport {
     /// Creates a new `Transport` with the given configuration.
     ///
     /// # Parameters
@@ -54,8 +54,8 @@ impl Transport {
     ///
     /// # Returns
     /// A new Transport instance
-    pub fn new(config: Config) -> Transport {
-        Transport {
+    pub fn new(config: Config) -> HttpTransport {
+        HttpTransport {
             executor: HttpExecutor::new(config),
         }
     }
@@ -82,7 +82,7 @@ impl Transport {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn post_json<U, F, T>(&self, params: HttpParams<U, F>) -> Result<T, OpenAIError>
+    pub async fn post_json<U, F, T>(&self, params: RequestSpec<U, F>) -> Result<T, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
         F: FnOnce(&Config, &mut RequestBuilder),
@@ -114,7 +114,7 @@ impl Transport {
     ///
     /// # Returns
     /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn get_json<U, F, T>(&self, params: HttpParams<U, F>) -> Result<T, OpenAIError>
+    pub async fn get_json<U, F, T>(&self, params: RequestSpec<U, F>) -> Result<T, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
         F: FnOnce(&Config, &mut RequestBuilder),
@@ -149,7 +149,7 @@ impl Transport {
     /// A Result containing a stream of response chunks or an OpenAIError
     pub async fn post_json_stream<U, F, T>(
         &self,
-        params: HttpParams<U, F>,
+        params: RequestSpec<U, F>,
     ) -> Result<tokio_stream::wrappers::ReceiverStream<Result<T, OpenAIError>>, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
@@ -164,14 +164,14 @@ impl Transport {
             while let Some(event_result) = event_stream.next().await {
                 let process_result = Self::process_stream_event(event_result).await;
                 match process_result {
-                    ProcessEventResult::Skip => continue,
-                    ProcessEventResult::Data(chunk) => {
+                    SseEventResult::Skip => continue,
+                    SseEventResult::Data(chunk) => {
                         if tx.send(Ok(chunk)).await.is_err() {
                             break;
                         }
                     }
-                    ProcessEventResult::Done => break,
-                    ProcessEventResult::Error(error) => {
+                    SseEventResult::Done => break,
+                    SseEventResult::Error(error) => {
                         if tx.send(Err(error)).await.is_err() {
                             break;
                         }
@@ -200,7 +200,7 @@ impl Transport {
     /// A ProcessEventResult indicating how to handle this event
     async fn process_stream_event<T>(
         event_result: Result<Event, EventStreamError<reqwest::Error>>,
-    ) -> ProcessEventResult<T>
+    ) -> SseEventResult<T>
     where
         T: serde::de::DeserializeOwned + Send + 'static,
     {
@@ -208,17 +208,17 @@ impl Transport {
             Ok(event) => {
                 // Skip empty events
                 if event.data.is_empty() {
-                    return ProcessEventResult::Skip;
+                    return SseEventResult::Skip;
                 }
 
                 // Check for stream completion marker
                 if event.data == "[DONE]" {
-                    ProcessEventResult::Done
+                    SseEventResult::Done
                 } else {
                     // Try to deserialize the event data
                     match serde_json::from_str::<T>(&event.data) {
-                        Ok(chunk) => ProcessEventResult::Data(chunk),
-                        Err(_) => ProcessEventResult::Error(
+                        Ok(chunk) => SseEventResult::Data(chunk),
+                        Err(_) => SseEventResult::Error(
                             ProcessingError::Conversion {
                                 raw: event.data,
                                 target_type: type_name::<T>().to_string(),
@@ -228,7 +228,7 @@ impl Transport {
                     }
                 }
             }
-            Err(e) => ProcessEventResult::Error(OpenAIError::from_eventsource_stream_error(e)),
+            Err(e) => SseEventResult::Error(OpenAIError::from_eventsource_stream_error(e)),
         }
     }
 
@@ -236,7 +236,7 @@ impl Transport {
     ///
     /// This method triggers a rebuild of the underlying HTTP client with
     /// any updated configuration settings.
-    pub async fn update(&self) {
+    pub async fn refresh_client(&self) {
         self.executor.rebuild_reqwest_client().await;
     }
 }

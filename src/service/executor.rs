@@ -1,4 +1,4 @@
-use super::request::{HttpParams, RequestBuilder};
+use super::request::{RequestSpec, RequestBuilder};
 use crate::Config;
 use crate::error::{ApiError, ApiErrorKind, OpenAIError, RequestError};
 use crate::interceptor::InterceptorChain;
@@ -82,7 +82,7 @@ impl HttpExecutor {
     ///
     /// # Returns
     /// A Result containing the raw HTTP response or an OpenAIError
-    pub async fn post<U, F>(&self, params: HttpParams<U, F>) -> Result<Response, OpenAIError>
+    pub async fn post<U, F>(&self, params: RequestSpec<U, F>) -> Result<Response, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
         F: FnOnce(&Config, &mut RequestBuilder),
@@ -121,7 +121,7 @@ impl HttpExecutor {
             )
         };
 
-        HttpExecutor::executor(
+        HttpExecutor::send_with_retries(
             request,
             retry_count,
             global_interceptors,
@@ -147,7 +147,7 @@ impl HttpExecutor {
     ///
     /// # Returns
     /// A Result containing the raw HTTP response or an OpenAIError
-    pub async fn get<U, F>(&self, params: HttpParams<U, F>) -> Result<Response, OpenAIError>
+    pub async fn get<U, F>(&self, params: RequestSpec<U, F>) -> Result<Response, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
         F: FnOnce(&Config, &mut RequestBuilder),
@@ -186,7 +186,7 @@ impl HttpExecutor {
             )
         };
 
-        HttpExecutor::executor(
+        HttpExecutor::send_with_retries(
             request,
             retry_count,
             global_interceptors,
@@ -272,7 +272,7 @@ impl HttpExecutor {
         Ok(error)
     }
 
-    async fn executor(
+    async fn send_with_retries(
         request: crate::service::request::Request,
         retry_count: u32,
         global_interceptors: InterceptorChain,

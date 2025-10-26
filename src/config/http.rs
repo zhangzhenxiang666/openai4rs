@@ -1,4 +1,4 @@
-use crate::common::types::{Bodys, Headers, Querys};
+use crate::common::types::{Bodies, Headers, QueryParams};
 use derive_builder::Builder;
 use std::collections::HashMap;
 
@@ -52,13 +52,13 @@ pub struct HttpConfig {
     ///
     /// These query parameters will be automatically appended to every request URL.
     #[builder(default = HashMap::new())]
-    querys: Querys,
+    querys: QueryParams,
 
     /// Global body fields to be included in all requests that have a body
     ///
     /// These fields will be automatically merged into the body of every request that includes a body.
     #[builder(default = HashMap::new())]
-    bodys: Bodys,
+    bodys: Bodies,
 }
 
 impl HttpConfig {
@@ -131,7 +131,7 @@ impl HttpConfig {
     ///
     /// This map contains query parameters that will be automatically appended to all request URLs.
     #[inline]
-    pub fn querys(&self) -> &Querys {
+    pub fn querys(&self) -> &QueryParams {
         &self.querys
     }
 
@@ -139,7 +139,7 @@ impl HttpConfig {
     ///
     /// This map contains body fields that will be automatically included in all request bodies.
     #[inline]
-    pub fn bodys(&self) -> &Bodys {
+    pub fn bodys(&self) -> &Bodies {
         &self.bodys
     }
 
