@@ -1,8 +1,9 @@
-use super::request::{RequestSpec, RequestBuilder};
+use super::request::{RequestBuilder, RequestSpec};
 use crate::Config;
 use crate::error::{ApiError, ApiErrorKind, OpenAIError, RequestError};
 use crate::interceptor::InterceptorChain;
 use crate::utils::traits::AsyncFrom;
+use rand::Rng;
 use reqwest::{Client, Response};
 use std::sync::Arc;
 use std::time::Duration;
@@ -229,9 +230,11 @@ impl HttpExecutor {
         global_interceptors: &InterceptorChain,
         module_interceptors: Option<&InterceptorChain>,
     ) -> Result<crate::service::request::Request, OpenAIError> {
-        request = global_interceptors
-            .execute_request_interceptors(request)
-            .await?;
+        if !global_interceptors.is_empty() {
+            request = global_interceptors
+                .execute_request_interceptors(request)
+                .await?;
+        }
 
         if let Some(module_chain) = module_interceptors {
             request = module_chain.execute_request_interceptors(request).await?;
@@ -250,9 +253,12 @@ impl HttpExecutor {
             response = module_chain.execute_response_interceptors(response).await?;
         }
 
-        response = global_interceptors
-            .execute_response_interceptors(response)
-            .await?;
+        if !global_interceptors.is_empty() {
+            response = global_interceptors
+                .execute_response_interceptors(response)
+                .await?;
+        }
+
         Ok(response)
     }
 
@@ -266,9 +272,12 @@ impl HttpExecutor {
             error = module_chain.execute_error_interceptors(error).await?;
         }
 
-        error = global_interceptors
-            .execute_error_interceptors(error)
-            .await?;
+        if !global_interceptors.is_empty() {
+            error = global_interceptors
+                .execute_error_interceptors(error)
+                .await?;
+        }
+
         Ok(error)
     }
 
@@ -397,7 +406,7 @@ fn calculate_retry_delay(
 ) -> Duration {
     // If the server specified a retry delay, use that with jitter
     if let Some(duration) = retry_after {
-        let jitter = Duration::from_millis(rand::random::<u64>() % 1000);
+        let jitter = Duration::from_millis(rand::thread_rng().gen_range(0..1000));
         return duration + jitter;
     }
 
@@ -414,7 +423,7 @@ fn calculate_retry_delay(
     let base_delay = Duration::from_millis(delay_ms.min(30_000));
 
     // Add 0-10% jitter to prevent thundering herd
-    let jitter_ms = (base_delay.as_millis() as u64 * (rand::random::<u64>() % 10)) / 100;
+    let jitter_ms = (base_delay.as_millis() as u64 * (rand::thread_rng().gen_range(0..10))) / 100;
     base_delay + Duration::from_millis(jitter_ms)
 }
 

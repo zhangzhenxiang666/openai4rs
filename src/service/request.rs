@@ -207,6 +207,10 @@ impl Request {
     pub fn to_reqwest(&self, client: &reqwest::Client) -> ReqwestRequestBuilder {
         let mut builder = client.request(self.method.clone(), &self.url);
 
+        if !self.query_params.is_empty() {
+            builder = builder.query(&self.query_params);
+        }
+
         for (k, v) in &self.headers {
             builder = builder.header(k, v);
         }
@@ -221,34 +225,6 @@ impl Request {
 
         builder
     }
-}
-
-/// URL-encodes a string by percent-encoding special characters.
-///
-/// This function implements URL encoding (percent encoding) for query parameters
-/// and other URL components. It encodes all characters except unreserved characters
-/// (alphanumeric characters, hyphen, underscore, period, and tilde).
-///
-/// # Arguments
-///
-/// * `input` - The string to be URL-encoded
-///
-/// # Returns
-///
-/// A new String with special characters percent-encoded
-fn url_encode(input: &str) -> String {
-    let mut result = String::new();
-    for byte in input.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                result.push(byte as char);
-            }
-            _ => {
-                result.push_str(&format!("%{:02X}", byte));
-            }
-        }
-    }
-    result
 }
 
 /// A builder for constructing HTTP requests with various components.
@@ -275,7 +251,7 @@ impl RequestBuilder {
                 url: base_url.to_string(),
                 headers: HashMap::new(),
                 query_params: HashMap::new(),
-                body_fields: Some(HashMap::new()),
+                body_fields: None,
                 timeout: None,
             },
         }
@@ -484,32 +460,14 @@ impl RequestBuilder {
 
     /// Builds the Request from the builder.
     ///
-    /// This method finalizes the request by combining all components,
-    /// including adding query parameters to the URL if present.
+    /// This method finalizes the request by returning the internal Request instance.
+    /// The actual HTTP request construction with query parameters happens when
+    /// converting to reqwest::RequestBuilder via the to_reqwest method.
     ///
     /// # Returns
     ///
     /// The constructed Request instance
-    pub fn build(mut self) -> Request {
-        if !self.request.query_params().is_empty() {
-            let separator = if self.request.url().contains('?') {
-                "&"
-            } else {
-                "?"
-            };
-            let query_string: String = self
-                .request
-                .query_params()
-                .iter()
-                .map(|(k, v)| format!("{}={}", url_encode(k), url_encode(v)))
-                .collect::<Vec<_>>()
-                .join("&");
-
-            if !query_string.is_empty() {
-                self.request.url_mut().push_str(separator);
-                self.request.url_mut().push_str(&query_string);
-            }
-        }
+    pub fn build(self) -> Request {
         self.request
     }
 }
