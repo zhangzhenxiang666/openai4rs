@@ -1,4 +1,4 @@
-use super::request::{RequestBuilder, RequestSpec, Request};
+use super::request::{Request, RequestBuilder, RequestSpec};
 use crate::Config;
 use crate::error::{ApiError, ApiErrorKind, OpenAIError, RequestError};
 use crate::interceptor::InterceptorChain;

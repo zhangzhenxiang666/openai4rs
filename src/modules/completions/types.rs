@@ -6,7 +6,7 @@ pub type Completion = CompletionGeneric<CompletionChoice>;
 
 #[derive(Debug, Clone)]
 pub struct CompletionChoice {
-    pub index: i64,
+    pub index: usize,
     pub text: String,
     pub finish_reason: Option<FinishReason>,
     pub logprobs: Option<Logprobs>,
@@ -54,7 +54,7 @@ impl<'de> Deserialize<'de> for CompletionChoice {
     {
         let mut map = HashMap::<String, serde_json::Value>::deserialize(deserializer)?;
 
-        let index: Option<i64> = extract_optional(&mut map, "index")?;
+        let index: Option<usize> = extract_optional(&mut map, "index")?;
         let index = index.unwrap_or(0);
 
         let text: Option<String> = extract_optional(&mut map, "text")?;

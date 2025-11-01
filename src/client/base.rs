@@ -1,4 +1,6 @@
-use crate::modules::{chat::Chat, completions::Completions, models::Models};
+use crate::modules::{
+    chat::Chat, completions::Completions, embeddings::Embeddings, models::Models,
+};
 use crate::{config::Config, service::client::HttpClient};
 use std::sync::Arc;
 use tokio::sync::{RwLock, RwLockReadGuard};
@@ -40,6 +42,7 @@ pub struct OpenAI {
     chat: Chat,
     completions: Completions,
     models: Models,
+    embeddings: Embeddings,
 }
 
 impl OpenAI {
@@ -65,6 +68,7 @@ impl OpenAI {
             chat: Chat::new(http_client.clone()),
             completions: Completions::new(http_client.clone()),
             models: Models::new(http_client.clone()),
+            embeddings: Embeddings::new(http_client.clone()),
             config: http_client.config(),
             http_client,
         }
@@ -97,6 +101,7 @@ impl OpenAI {
             chat: Chat::new(http_client.clone()),
             completions: Completions::new(http_client.clone()),
             models: Models::new(http_client.clone()),
+            embeddings: Embeddings::new(http_client.clone()),
             config: http_client.config(),
             http_client,
         }
@@ -333,6 +338,63 @@ impl OpenAI {
     #[inline]
     pub fn models(&self) -> &Models {
         &self.models
+    }
+
+    /// Returns a reference to the embeddings client.
+    ///
+    /// Use this client to generate vector representations of text for search, clustering, and other machine learning tasks.
+    ///
+    /// # Examples
+    ///
+    /// ## Basic Embedding Generation
+    ///
+    /// ```rust,no_run
+    /// use openai4rs::*;
+    /// use openai4rs::embeddings::params::embeddings_request;
+    /// use dotenvy::dotenv;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     dotenv().ok();
+    ///     let client = OpenAI::from_env()?;
+    ///
+    ///     let response = client
+    ///         .embeddings()
+    ///         .create(embeddings_request("text-embedding-ada-002", "Hello, world!"))
+    ///         .await?;
+    ///
+    ///     println!("Generated {} embeddings", response.len());
+    ///     println!("Total tokens used: {}", response.total_tokens());
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
+    /// ## Multiple Text Embeddings
+    ///
+    /// ```rust,no_run
+    /// use openai4rs::*;
+    /// use openai4rs::embeddings::params::embeddings_request;
+    /// use dotenvy::dotenv;
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     dotenv().ok();
+    ///     let client = OpenAI::from_env()?;
+    ///     let texts = vec!["Hello, world!", "How are you?", "Rust is awesome!"];
+    ///
+    ///     let response = client
+    ///         .embeddings()
+    ///         .create(embeddings_request("text-embedding-ada-002", texts))
+    ///         .await?;
+    ///
+    ///     println!("Generated {} embeddings", response.len());
+    ///     for (i, embedding) in response.embeddings().iter().enumerate() {
+    ///         println!("Embedding {}: {} dimensions", i, embedding.dimensions());
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
+    #[inline]
+    pub fn embeddings(&self) -> &Embeddings {
+        &self.embeddings
     }
 
     /// Returns the current base URL.

@@ -5,7 +5,7 @@ use super::types::Completion;
 use crate::error::OpenAIError;
 use crate::interceptor::InterceptorChain;
 use crate::service::client::HttpClient;
-use crate::service::request::{RequestSpec, RequestBuilder};
+use crate::service::request::{RequestBuilder, RequestSpec};
 
 use tokio_stream::wrappers::ReceiverStream;
 

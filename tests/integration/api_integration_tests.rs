@@ -1,5 +1,5 @@
 use dotenvy::dotenv;
-use openai4rs::{OpenAI, chat::*, models_request, user};
+use openai4rs::{OpenAI, chat::*, embeddings_request, models_request, user};
 
 const MODEL_NAME: &str = "Qwen/Qwen3-235B-A22B-Instruct-2507";
 
@@ -16,8 +16,8 @@ async fn test_chat() {
                 assert!(
                     result
                         .choices
-                        .get(0)
-                        .map_or(false, |choice| choice.message.content.is_some())
+                        .first()
+                        .is_some_and(|choice| choice.message.content.is_some())
                 );
                 return;
             }
@@ -63,4 +63,18 @@ async fn test_models_list() {
     let client = OpenAI::from_env().unwrap();
     let models = client.models().list(models_request()).await;
     assert!(models.is_ok())
+}
+
+#[tokio::test]
+async fn test_embeddings() {
+    dotenv().ok();
+    let client = OpenAI::from_env().unwrap();
+    let embeddings = client
+        .embeddings()
+        .create(embeddings_request(
+            "Qwen/Qwen3-Embedding-0.6B",
+            "hello world",
+        ))
+        .await;
+    assert!(embeddings.is_ok());
 }

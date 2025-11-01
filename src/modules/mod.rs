@@ -2,6 +2,8 @@
 pub mod chat;
 /// Legacy text completion functionality.
 pub mod completions;
+/// Text embedding functionality.
+pub mod embeddings;
 /// Model management for listing and retrieving model information.
 pub mod models;
 
@@ -11,4 +13,5 @@ pub use chat::params::chat_request;
 pub use chat::tool_parameters::Parameters;
 pub use chat::types::*;
 pub use completions::completions_request;
+pub use embeddings::embeddings_request;
 pub use models::models_request;

@@ -14,7 +14,7 @@ pub type ChatCompletionChunk = CompletionGeneric<StreamChoice>;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct FinalChoice {
-    pub index: i64,
+    pub index: usize,
     pub finish_reason: FinishReason,
     pub message: ChatCompletionMessage,
     pub logprobs: Option<ChoiceLogprobs>,
@@ -22,7 +22,7 @@ pub struct FinalChoice {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct StreamChoice {
-    pub index: i64,
+    pub index: usize,
     pub delta: ChoiceDelta,
     pub finish_reason: Option<FinishReason>,
     pub logprobs: Option<ChoiceLogprobs>,
@@ -59,7 +59,7 @@ pub struct ChatCompletionMessage {
 
 #[derive(Debug, Clone)]
 pub struct ChatCompletionToolCall {
-    pub index: i64,
+    pub index: usize,
     pub function: Function,
     pub r#type: String,
 }
@@ -920,7 +920,7 @@ impl<'de> Deserialize<'de> for ChatCompletionToolCall {
                 let mut id: Option<String> = None;
                 let mut r#type: Option<String> = None;
                 let mut function_data: Option<serde_json::Value> = None;
-                let mut index: Option<i64> = None;
+                let mut index: Option<usize> = None;
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {

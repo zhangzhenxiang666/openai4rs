@@ -1,4 +1,4 @@
-use super::request::{RequestSpec, RequestBuilder};
+use super::request::{RequestBuilder, RequestSpec};
 use crate::Config;
 use crate::error::{OpenAIError, ProcessingError};
 use crate::service::executor::HttpExecutor;

@@ -22,6 +22,11 @@
 - ✅ 非流式响应
 - ✅ 流式响应
 
+### 🗺️ Embeddings 词嵌入
+
+- ✅ 生成文本向量表示
+- ✅ 单个或多个文本同时嵌入
+
 ### 🤖 Models 模型管理
 
 - ✅ 获取模型列表
@@ -51,7 +56,7 @@
 
 ```toml
 [dependencies]
-openai4rs = "0.1.7"
+openai4rs = "0.1.8"
 tokio = { version = "1.45.1", features = ["full"] }
 futures = "0.3.31"
 dotenvy = "0.15"
@@ -317,6 +322,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### **🗺️ Embeddings 词嵌入**
+
+生成文本的向量表示，用于搜索、聚类和其他机器学习任务：
+
+```rust
+use dotenvy::dotenv;
+use openai4rs::*;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv().ok();
+    let client = OpenAI::from_env()?;
+
+    // 1. 单个文本嵌入
+    let request = embeddings_request("text-embedding-ada-002", "Hello, world!");
+    let response = client.embeddings().create(request).await?;
+    println!("Generated {} embedding(s)", response.len());
+    if let Some(embedding) = response.get_embedding(0) {
+        println!("Embedding dimensions: {}", embedding.dimensions());
+    }
+
+    // 2. 多个文本嵌入
+    let texts = vec!["Hello, world!", "How are you?", "Rust is awesome!"];
+    let request = embeddings_request("text-embedding-ada-002", texts);
+    let response = client.embeddings().create(request).await?;
+    println!("Generated {} embeddings", response.len());
+    for (i, embedding) in response.embeddings().iter().enumerate() {
+        println!("Embedding {}: {} dimensions", i, embedding.dimensions());
+    }
+
+    // 3. 获取嵌入向量
+    let embedding_vectors = response.embedding_vectors();
+    println!("First vector length: {}", embedding_vectors[0].len());
+
+    Ok(())
+}
+```
+
 ### **🔧 高级配置**
 
 #### 客户端配置
@@ -393,6 +436,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - [07. 思维模型（Thinking Model）](examples/07_thinking_model.rs) (如果模型支持复杂推理)
 - [08. 全局拦截器](examples/08_interceptor_example.rs)
 - [09. 模块拦截器](examples/09_module_interceptor_example.rs)
+- [10. 词嵌入（Embeddings）](examples/10_embeddings_example.rs)
 
 你可以通过以下命令运行示例：
 

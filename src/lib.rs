@@ -23,7 +23,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! openai4rs = "0.1.7"
+//! openai4rs = "0.1.8"
 //! tokio = { version = "1", features = ["full"] }
 //! dotenvy = "0.15"
 //! ```
