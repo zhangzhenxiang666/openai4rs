@@ -1,10 +1,10 @@
 use serde_json::Value;
 use std::collections::HashMap;
 
-/// Merges `right` metadata into `left` metadata in-place.
+/// Merges `right` fields into `left` fields in-place.
 /// If `left` is `None` and `right` is `Some`, `left` will be replaced by `right`.
 /// This avoids unnecessary cloning of the left map when it already exists.
-pub fn merge_extra_metadata_in_place(
+pub fn merge_extra_fields_in_place(
     left: &mut Option<HashMap<String, Value>>,
     right: Option<HashMap<String, Value>>,
 ) {

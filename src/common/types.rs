@@ -18,7 +18,7 @@ pub struct CompletionGeneric<T> {
     pub system_fingerprint: Option<String>,
     pub usage: Option<CompletionUsage>,
     #[serde(flatten)]
-    pub extra_metadata: Option<HashMap<String, serde_json::Value>>,
+    pub extra_fields: Option<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

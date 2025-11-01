@@ -1,7 +1,7 @@
 use crate::chat::tool_parameters::{ConversionError, Parameters};
 use crate::common::types::{CompletionGeneric, extract_optional, try_deserialize_or_skip};
 use crate::content;
-use crate::utils::methods::merge_extra_metadata_in_place;
+use crate::utils::methods::merge_extra_fields_in_place;
 use derive_builder::Builder;
 use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -35,7 +35,7 @@ pub struct ChoiceDelta {
     pub reasoning: Option<String>,
     pub role: Option<String>,
     pub tool_calls: Option<Vec<ChatCompletionToolCall>>,
-    pub extra_metadata: Option<HashMap<String, serde_json::Value>>,
+    pub extra_fields: Option<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -54,7 +54,7 @@ pub struct ChatCompletionMessage {
     pub reasoning: Option<String>,
     pub annotations: Option<Vec<Annotation>>,
     pub tool_calls: Option<Vec<ChatCompletionToolCall>>,
-    pub extra_metadata: Option<HashMap<String, serde_json::Value>>,
+    pub extra_fields: Option<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone)]
@@ -482,7 +482,7 @@ impl From<ChoiceDelta> for ChatCompletionMessage {
             annotations: None,
             tool_calls: value.tool_calls,
             reasoning: value.reasoning,
-            extra_metadata: value.extra_metadata,
+            extra_fields: value.extra_fields,
         }
     }
 }
@@ -675,8 +675,8 @@ impl ChoiceDelta {
             _ => {}
         }
 
-        // Merge extra metadata in-place to avoid unnecessary cloning
-        merge_extra_metadata_in_place(&mut self.extra_metadata, delta.extra_metadata);
+        // Merge extra fields in-place to avoid unnecessary cloning
+        merge_extra_fields_in_place(&mut self.extra_fields, delta.extra_fields);
     }
 }
 
@@ -1008,7 +1008,7 @@ impl<'de> Deserialize<'de> for ChoiceDelta {
             _ => None,
         };
 
-        let extra_metadata = if map.is_empty() { None } else { Some(map) };
+        let extra_fields = if map.is_empty() { None } else { Some(map) };
 
         Ok(ChoiceDelta {
             content,
@@ -1016,7 +1016,7 @@ impl<'de> Deserialize<'de> for ChoiceDelta {
             role,
             tool_calls,
             reasoning,
-            extra_metadata,
+            extra_fields,
         })
     }
 }
@@ -1048,7 +1048,7 @@ impl<'de> Deserialize<'de> for ChatCompletionMessage {
             _ => None,
         };
 
-        let extra_metadata = if map.is_empty() { None } else { Some(map) };
+        let extra_fields = if map.is_empty() { None } else { Some(map) };
 
         Ok(ChatCompletionMessage {
             content,
@@ -1057,7 +1057,7 @@ impl<'de> Deserialize<'de> for ChatCompletionMessage {
             tool_calls,
             annotations,
             reasoning,
-            extra_metadata,
+            extra_fields,
         })
     }
 }
@@ -1217,7 +1217,7 @@ mod tests {
                 },
                 r#type: "function".to_string(),
             }]),
-            extra_metadata: None,
+            extra_fields: None,
         };
 
         let choice = FinalChoice {
@@ -1236,7 +1236,7 @@ mod tests {
             usage: None,
             service_tier: None,
             system_fingerprint: None,
-            extra_metadata: None,
+            extra_fields: None,
         };
 
         // Test content()
@@ -1267,7 +1267,7 @@ mod tests {
                 },
                 r#type: "function".to_string(),
             }]),
-            extra_metadata: None,
+            extra_fields: None,
         };
 
         let choice = StreamChoice {
@@ -1286,7 +1286,7 @@ mod tests {
             usage: None,
             service_tier: None,
             system_fingerprint: None,
-            extra_metadata: None,
+            extra_fields: None,
         };
 
         // Test content()

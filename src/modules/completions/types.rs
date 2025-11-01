@@ -11,7 +11,7 @@ pub struct CompletionChoice {
     pub finish_reason: Option<FinishReason>,
     pub logprobs: Option<Logprobs>,
     pub reasoning: Option<String>,
-    pub extra_metadata: Option<HashMap<String, serde_json::Value>>,
+    pub extra_fields: Option<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -74,7 +74,7 @@ impl<'de> Deserialize<'de> for CompletionChoice {
             _ => None,
         };
 
-        let extra_metadata = if map.is_empty() { None } else { Some(map) };
+        let extra_fields = if map.is_empty() { None } else { Some(map) };
 
         Ok(CompletionChoice {
             index,
@@ -82,7 +82,7 @@ impl<'de> Deserialize<'de> for CompletionChoice {
             finish_reason,
             logprobs,
             reasoning,
-            extra_metadata,
+            extra_fields,
         })
     }
 }
