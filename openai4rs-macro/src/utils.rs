@@ -42,12 +42,12 @@ pub fn expand_content(
         {
             let value = #root::serde_json::json!(#content_expr);
             match value {
-                #root::serde_json::Value::Object(_) => #root::chat::Content::Object(value),
-                #root::serde_json::Value::String(s) => #root::chat::Content::Text(s),
-                #root::serde_json::Value::Array(_) => #root::chat::Content::Object(value),
-                #root::serde_json::Value::Number(n) => #root::chat::Content::Text(n.to_string()),
-                #root::serde_json::Value::Bool(b) => #root::chat::Content::Text(b.to_string()),
-                #root::serde_json::Value::Null => #root::chat::Content::Text(String::from("null")),
+                #root::serde_json::Value::Object(_) => #root::modules::chat::types::Content::Object(value),
+                #root::serde_json::Value::String(s) => #root::modules::chat::types::Content::Text(s),
+                #root::serde_json::Value::Array(_) => #root::modules::chat::types::Content::Object(value),
+                #root::serde_json::Value::Number(n) => #root::modules::chat::types::Content::Text(n.to_string()),
+                #root::serde_json::Value::Bool(b) => #root::modules::chat::types::Content::Text(b.to_string()),
+                #root::serde_json::Value::Null => #root::modules::chat::types::Content::Text(String::from("null")),
             }
         }
     }

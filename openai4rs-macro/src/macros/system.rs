@@ -28,9 +28,11 @@ pub fn system_impl(input: TokenStream2) -> Result<TokenStream2> {
     );
 
     Ok(quote! {
-        #root::ChatCompletionMessageParam::System(#root::ChatCompletionSystemMessageParam {
-            content: #content,
-            name: #name,
-        })
+        #root::modules::chat::types::ChatCompletionMessageParam::System(
+            #root::modules::chat::types::ChatCompletionSystemMessageParam {
+                content: #content,
+                name: #name,
+            }
+        )
     })
 }

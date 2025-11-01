@@ -1,4 +1,4 @@
-use super::request::{RequestBuilder, RequestSpec};
+use super::request::{RequestBuilder, RequestSpec, Request};
 use crate::Config;
 use crate::error::{ApiError, ApiErrorKind, OpenAIError, RequestError};
 use crate::interceptor::InterceptorChain;
@@ -226,10 +226,10 @@ impl HttpExecutor {
 
     /// Helper function to apply request interceptors in the correct order (global -> module)
     async fn apply_request_interceptors(
-        mut request: crate::service::request::Request,
+        mut request: Request,
         global_interceptors: &InterceptorChain,
         module_interceptors: Option<&InterceptorChain>,
-    ) -> Result<crate::service::request::Request, OpenAIError> {
+    ) -> Result<Request, OpenAIError> {
         if !global_interceptors.is_empty() {
             request = global_interceptors
                 .execute_request_interceptors(request)
@@ -282,7 +282,7 @@ impl HttpExecutor {
     }
 
     async fn send_with_retries(
-        request: crate::service::request::Request,
+        request: Request,
         retry_count: u32,
         global_interceptors: InterceptorChain,
         module_interceptors: Option<InterceptorChain>,

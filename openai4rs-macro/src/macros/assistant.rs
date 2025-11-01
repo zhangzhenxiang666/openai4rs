@@ -42,8 +42,8 @@ pub fn assistant_impl(input: TokenStream2) -> Result<TokenStream2> {
     );
 
     Ok(quote! {
-        #root::ChatCompletionMessageParam::Assistant(
-            #root::ChatCompletionAssistantMessageParam {
+        #root::modules::chat::types::ChatCompletionMessageParam::Assistant(
+            #root::modules::chat::types::ChatCompletionAssistantMessageParam {
                 content: #content,
                 name: #name,
                 tool_calls: #tool_calls,

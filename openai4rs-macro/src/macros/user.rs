@@ -28,9 +28,11 @@ pub fn user_impl(input: TokenStream2) -> Result<TokenStream2> {
     );
 
     Ok(quote! {
-        #root::ChatCompletionMessageParam::User(#root::ChatCompletionUserMessageParam {
-            content: #content,
-            name: #name,
-        })
+        #root::modules::chat::types::ChatCompletionMessageParam::User(
+            #root::modules::chat::types::ChatCompletionUserMessageParam {
+                content: #content,
+                name: #name,
+            }
+        )
     })
 }

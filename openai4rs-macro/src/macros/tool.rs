@@ -27,8 +27,8 @@ pub fn tool_impl(input: TokenStream2) -> Result<TokenStream2> {
     let content = expand_content(&root, quote! {#content});
 
     Ok(quote! {
-        #root::ChatCompletionMessageParam::Tool(
-            #root::ChatCompletionToolMessageParam {
+        #root::modules::chat::types::ChatCompletionMessageParam::Tool(
+            #root::modules::chat::types::ChatCompletionToolMessageParam {
                 tool_call_id: #tool_call_id.to_string(),
                 content: #content,
             },
