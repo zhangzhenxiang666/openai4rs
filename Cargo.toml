@@ -15,6 +15,7 @@ exclude = [".vscode/", "docs/", ".git/", ".github/", "*.log", ".env*"]
 categories = ["api-bindings", "asynchronous", "science"]
 
 [dependencies]
+base64 = "0.22"
 derive_builder = "0.20.2"
 futures = "0.3.31"
 serde = { version = "1.0.219", features = ["derive"] }

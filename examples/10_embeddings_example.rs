@@ -13,10 +13,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Generated {} embedding(s)", response.len());
     if let Some(embedding) = response.get_embedding(0) {
         println!("Embedding dimensions: {}", embedding.dimensions());
-        println!(
-            "First 5 values: {:?}",
-            &embedding.vector()[..5.min(embedding.vector().len())]
-        );
+        let vector = embedding.vector().expect("failed to get embedding vector");
+        println!("First 5 values: {:?}", &vector[0..5.min(vector.len())]);
     }
 
     // 2. Multiple text embeddings

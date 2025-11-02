@@ -1,5 +1,9 @@
+use std::vec;
+
 use dotenvy::dotenv;
-use openai4rs::{OpenAI, chat::*, embeddings_request, models_request, user};
+use openai4rs::{
+    OpenAI, chat::*, embeddings::types::EncodingFormat, embeddings_request, models_request, user,
+};
 
 const MODEL_NAME: &str = "Qwen/Qwen3-235B-A22B-Instruct-2507";
 
@@ -77,4 +81,29 @@ async fn test_embeddings() {
         ))
         .await;
     assert!(embeddings.is_ok());
+}
+
+#[tokio::test]
+async fn test_embedddings_with_encoding_format() {
+    dotenv().ok();
+    let client = OpenAI::from_env().unwrap();
+    let embeddings = client
+        .embeddings()
+        .create(
+            embeddings_request("Qwen/Qwen3-Embedding-0.6B", "hello world")
+                .encoding_format(EncodingFormat::Base64),
+        )
+        .await;
+
+    assert!(embeddings.is_ok());
+
+    let embeddings = embeddings.unwrap();
+
+    for embedding in embeddings.embeddings() {
+        assert!(embedding.as_base64().is_some());
+        let vector = embedding.vector();
+        assert!(vector.is_some());
+        let vector = vector.unwrap();
+        assert!(vector.len() > 0);
+    }
 }

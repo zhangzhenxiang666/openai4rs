@@ -12,6 +12,7 @@
 //! - **Async-First**: Built on `tokio` and `reqwest` for non-blocking I/O operations.
 //! - **Chat Completions**: Full support for the Chat Completions API, including streaming and tool calling.
 //! - **Legacy Completions**: Support for legacy text completion models.
+//! - **Text Embeddings**: Generate vector representations of text for search, clustering, and other machine learning tasks.
 //! - **Model Management**: List and retrieve information about available models.
 //! - **Configurable HTTP Client**: Customize timeouts, retries, proxies, and user agents.
 //! - **Thread Safety**: The client can be safely shared across multiple threads.
@@ -30,7 +31,7 @@
 //!
 //! Then, configure the client using environment variables and make your first API call.
 //!
-//! ```rust
+//! ```rust, no_run
 //! use openai4rs::*;
 //! use dotenvy::dotenv;
 //!
@@ -50,6 +51,11 @@
 //!     let response = client.chat().create(request).await?;
 //!     println!("Response: {:#?}", response);
 //!
+//!     // Generate embeddings for text
+//!     let embedding_request = embeddings_request("text-embedding-ada-002", "Hello, world!");
+//!     let embedding_response = client.embeddings().create(embedding_request).await?;
+//!     println!("Generated {} embedding(s)", embedding_response.len());
+//!
 //!     Ok(())
 //! }
 //! ```
@@ -57,7 +63,7 @@
 //! For more examples and detailed usage, refer to the documentation of each module.
 
 /// API modules for different OpenAI functionality.
-/// Contains chat, completions, and models modules for interacting with various API endpoints.
+/// Contains chat, completions, embeddings, and models modules for interacting with various API endpoints.
 pub mod modules;
 
 /// Core client implementation and entry point for the OpenAI API.

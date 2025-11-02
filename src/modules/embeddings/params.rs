@@ -21,18 +21,22 @@ pub struct RequestParams {
     /// ID of the model to use. You can use the List models API to see all of your available models,
     /// or see our Model overview for descriptions of them.
     pub model: String,
+
     /// Input text to embed, encoded as a string or array of tokens.
     /// To embed multiple inputs in a single request, pass an array of strings or array of token arrays.
     /// Each input must not exceed the max input tokens for the model (8192 tokens for `text-embedding-ada-002`).
     /// Example: ["The quick brown fox", "jumps over the lazy dog"]
     pub input: Input,
-    /// The format to return the embeddings in. Only supported in `text-embedding-3` and later models.
+
+    /// The format to return the embeddings in. Can be either `float` or `base64`
     #[builder(default)]
     pub encoding_format: EncodingFormat,
+
     /// The number of dimensions the resulting output embeddings should have.
     /// Only supported in `text-embedding-3` and later models.
     #[builder(default)]
     pub dimensions: Option<usize>,
+
     /// A unique identifier representing your end-user, which can help OpenAI
     /// monitor and detect abuse.
     #[builder(default)]
