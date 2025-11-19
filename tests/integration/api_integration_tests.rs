@@ -1,9 +1,7 @@
 use std::vec;
 
 use dotenvy::dotenv;
-use openai4rs::{
-    OpenAI, chat::*, embeddings::types::EncodingFormat, embeddings_request, models_request, user,
-};
+use openai4rs::{EmbeddingsParam, OpenAI, chat::*, embeddings::types::EncodingFormat, user};
 
 const MODEL_NAME: &str = "Qwen/Qwen3-235B-A22B-Instruct-2507";
 
@@ -14,7 +12,7 @@ async fn test_chat() {
     let messages = vec![user!("Hello")];
     let mut retries = 3;
     while retries > 0 {
-        let request = chat_request(MODEL_NAME, &messages).temperature(0.0);
+        let request = ChatParam::new(MODEL_NAME, &messages).temperature(0.0);
         match client.chat().create(request).await {
             Ok(result) => {
                 assert!(
@@ -46,7 +44,7 @@ async fn test_openai_error_authentication() {
     let result = client
         .chat()
         .create(
-            chat_request(MODEL_NAME, &messages)
+            ChatParam::new(MODEL_NAME, &messages)
                 .temperature(0.0)
                 .max_completion_tokens(512),
         )
@@ -65,7 +63,7 @@ async fn test_openai_error_authentication() {
 async fn test_models_list() {
     dotenv().ok();
     let client = OpenAI::from_env().unwrap();
-    let models = client.models().list(models_request()).await;
+    let models = client.models().list(Default::default()).await;
     assert!(models.is_ok())
 }
 
@@ -75,7 +73,7 @@ async fn test_embeddings() {
     let client = OpenAI::from_env().unwrap();
     let embeddings = client
         .embeddings()
-        .create(embeddings_request(
+        .create(EmbeddingsParam::new(
             "Qwen/Qwen3-Embedding-0.6B",
             "hello world",
         ))
@@ -90,7 +88,7 @@ async fn test_embedddings_with_encoding_format() {
     let embeddings = client
         .embeddings()
         .create(
-            embeddings_request("Qwen/Qwen3-Embedding-0.6B", "hello world")
+            EmbeddingsParam::new("Qwen/Qwen3-Embedding-0.6B", "hello world")
                 .encoding_format(EncodingFormat::Base64),
         )
         .await;

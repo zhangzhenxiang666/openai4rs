@@ -8,7 +8,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 1. Single text embedding
     println!("=== Single Text Embedding ===");
-    let request = embeddings_request("text-embedding-ada-002", "Hello, world!");
+    let request = EmbeddingsParam::new("text-embedding-ada-002", "Hello, world!");
     let response = client.embeddings().create(request).await?;
     println!("Generated {} embedding(s)", response.len());
     if let Some(embedding) = response.get_embedding(0) {
@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Multiple text embeddings
     println!("\n=== Multiple Text Embeddings ===");
     let texts = vec!["Hello, world!", "How are you?", "Rust is awesome!"];
-    let request = embeddings_request("text-embedding-ada-002", texts);
+    let request = EmbeddingsParam::new("text-embedding-ada-002", texts);
     let response = client.embeddings().create(request).await?;
     println!("Generated {} embeddings", response.len());
     for (i, embedding) in response.embeddings().iter().enumerate() {

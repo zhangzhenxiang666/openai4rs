@@ -1,79 +1,70 @@
-use crate::common::types::{Bodies, Headers, QueryParams};
+use crate::common::types::Body;
 use derive_builder::Builder;
-use std::collections::HashMap;
+use http::{
+    HeaderMap, HeaderValue,
+    header::{IntoHeaderName, USER_AGENT},
+};
+use std::time::Duration;
 
-/// HTTP client configuration for connecting to an API service.
+/// 连接到API服务的HTTP客户端配置。
 ///
-/// This struct holds settings related to the underlying HTTP transport layer,
-/// such as timeouts, proxy settings, and user agent. It is designed to be
-/// reusable and independent of any specific API's business logic.
+/// 该结构体保存与底层HTTP传输层相关的设置，
+/// 如超时、代理设置和用户代理。它被设计为
+/// 可重用且独立于任何特定API的业务逻辑。
 ///
-/// The configuration uses the builder pattern for flexible construction, allowing
-/// users to set only the options they need while using sensible defaults for others.
+/// 该配置使用构建器模式进行灵活构建，允许
+/// 用户仅设置他们需要的选项，同时对其他选项使用合理的默认值。
 #[derive(Debug, Clone, Builder)]
 #[builder(name = "HttpConfigBuilder", pattern = "owned", setter(strip_option))]
 pub struct HttpConfig {
-    /// Request timeout in seconds. Default: 300
+    /// 请求超时时间。默认值：300秒
     ///
-    /// This is the total time allowed for a request to complete, including
-    /// DNS resolution, connection establishment, sending the request,
-    /// and receiving the response.
-    #[builder(default = 300)]
-    timeout_seconds: u64,
+    /// 这是请求完成的总允许时间，包括
+    /// DNS解析、连接建立、发送请求
+    /// 和接收响应。
+    #[builder(default = Duration::from_secs(300))]
+    timeout: Duration,
 
-    /// Connection timeout in seconds. Default: 10
+    /// 连接超时时间。默认值：10秒
     ///
-    /// This is the maximum time allowed to establish a connection to the server.
-    /// It is a subset of the overall request timeout.
-    #[builder(default = 10)]
-    connect_timeout_seconds: u64,
+    /// 这是建立与服务器连接的最大允许时间。
+    /// 它是整体请求超时的一个子集。
+    #[builder(default = Duration::from_secs(10))]
+    connect_timeout: Duration,
 
-    /// HTTP proxy URL (if any)
+    /// HTTP代理URL（如果有的话）
     ///
-    /// If set, all HTTP requests will be routed through this proxy server.
-    /// Supported proxy schemes include HTTP, HTTPS, and SOCKS.
+    /// 如果设置，所有HTTP请求将通过此代理服务器路由。
+    /// 支持的代理方案包括HTTP、HTTPS和SOCKS。
     #[builder(default = None)]
     proxy: Option<String>,
 
-    /// User agent string
+    /// 要包含在所有请求中的全局头
     ///
-    /// If set, this value will be used as the User-Agent header for all requests.
-    /// If not set, the default reqwest User-Agent will be used.
-    #[builder(default = None)]
-    user_agent: Option<String>,
+    /// 这些头将自动添加到使用此配置发出的每个HTTP请求中。
+    #[builder(default = HeaderMap::new())]
+    headers: HeaderMap,
 
-    /// Global headers to be included in all requests
+    /// 要包含在所有有请求体的请求中的全局请求体字段
     ///
-    /// These headers will be automatically added to every HTTP request made with this configuration.
-    #[builder(default = HashMap::new())]
-    headers: Headers,
-
-    /// Global query parameters to be appended to all request URLs
-    ///
-    /// These query parameters will be automatically appended to every request URL.
-    #[builder(default = HashMap::new())]
-    querys: QueryParams,
-
-    /// Global body fields to be included in all requests that have a body
-    ///
-    /// These fields will be automatically merged into the body of every request that includes a body.
-    #[builder(default = HashMap::new())]
-    bodys: Bodies,
+    /// 这些字段将自动合并到每个包含请求体的请求的请求体中。
+    #[builder(default = Body::new())]
+    bodys: Body,
 }
 
 impl HttpConfig {
-    /// Creates a new configuration builder.
+    /// 创建一个新的配置构建器。
     ///
-    /// This is the preferred way to construct an HttpConfig, allowing for
-    /// flexible configuration with sensible defaults.
+    /// 这是构建HttpConfig的首选方式，允许
+    /// 使用合理默认值进行灵活配置。
     ///
-    /// # Examples
+    /// # 示例
     ///
     /// ```
     /// use openai4rs::config::HttpConfig;
-    ///
+    /// use std::time::Duration;
     /// let config = HttpConfig::builder()
-    ///     .timeout_seconds(60)
+    ///     .timeout(Duration::from_secs(300))
     ///     .proxy("http://proxy.example.com:8080".to_string())
     ///     .build()
     ///     .unwrap();
@@ -82,175 +73,125 @@ impl HttpConfig {
         HttpConfigBuilder::default()
     }
 
-    /// Returns the request timeout in seconds.
+    /// 返回请求超时时间。
     ///
-    /// This value determines the total time allowed for a request to complete,
-    /// including DNS resolution, connection establishment, sending the request,
-    /// and receiving the response.
+    /// 此值确定请求完成的总允许时间，
+    /// 包括DNS解析、连接建立、发送请求
+    /// 和接收响应。
     #[inline]
-    pub fn timeout_seconds(&self) -> u64 {
-        self.timeout_seconds
+    pub fn timeout(&self) -> Duration {
+        self.timeout
     }
 
-    /// Returns the connection timeout in seconds.
+    /// 返回连接超时时间。
     ///
-    /// This value determines the maximum time allowed to establish a connection to the server.
-    /// It is a subset of the overall request timeout.
+    /// 此值确定建立与服务器连接的最大允许时间。
+    /// 它是整体请求超时的一个子集。
     #[inline]
-    pub fn connect_timeout_seconds(&self) -> u64 {
-        self.connect_timeout_seconds
+    pub fn connect_timeout(&self) -> Duration {
+        self.connect_timeout
     }
 
-    /// Returns an optional reference to the proxy URL.
+    /// 返回对代理URL的可选引用。
     ///
-    /// If a proxy is configured, this method returns Some containing a reference to the proxy URL.
-    /// Otherwise, it returns None.
+    /// 如果配置了代理，此方法返回包含对代理URL引用的Some。
+    /// 否则，返回None。
     #[inline]
     pub fn proxy(&self) -> Option<&String> {
         self.proxy.as_ref()
     }
 
-    /// Returns an optional reference to the user agent string.
+    /// 返回对用户代理字符串的可选引用。
     ///
-    /// If a custom user agent is configured, this method returns Some containing a reference to the user agent string.
-    /// Otherwise, it returns None, which means the default reqwest User-Agent will be used.
+    /// 如果配置了自定义用户代理，此方法返回包含对用户代理字符串引用的Some。
+    /// 否则，返回None，这意味着将使用默认的reqwest用户代理。
     #[inline]
-    pub fn user_agent(&self) -> Option<&String> {
-        self.user_agent.as_ref()
+    pub fn user_agent(&self) -> Option<&HeaderValue> {
+        self.headers.get(USER_AGENT)
     }
 
-    /// Returns a reference to the global headers map.
+    /// 返回对全局头映射的引用。
     ///
-    /// This map contains headers that will be automatically added to all requests.
+    /// 此映射包含将自动添加到所有请求的头。
     #[inline]
-    pub fn headers(&self) -> &Headers {
+    pub fn headers(&self) -> &HeaderMap {
         &self.headers
     }
 
-    /// Returns a reference to the global query parameters map.
+    /// 返回对全局请求体字段映射的引用。
     ///
-    /// This map contains query parameters that will be automatically appended to all request URLs.
+    /// 此映射包含将自动包含在所有请求体中的请求体字段。
     #[inline]
-    pub fn querys(&self) -> &QueryParams {
-        &self.querys
-    }
-
-    /// Returns a reference to the global body fields map.
-    ///
-    /// This map contains body fields that will be automatically included in all request bodies.
-    #[inline]
-    pub fn bodys(&self) -> &Bodies {
+    pub fn bodys(&self) -> &Body {
         &self.bodys
     }
 
-    /// Gets a specific global body field by key.
+    /// 按键获取特定的全局请求体字段。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `key` - The key of the body field to retrieve
+    /// * `key` - 要检索的请求体字段的键
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// An Option containing a reference to the global body field value if it exists, or None otherwise
+    /// 如果存在，则包含对全局请求体字段值的引用的Option，否则为None
     #[inline]
     pub fn get_body(&self, key: &str) -> Option<&serde_json::Value> {
         self.bodys.get(key)
     }
 
-    /// Gets a specific global header by key.
+    /// 按键获取特定的全局头。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `key` - The key of the header to retrieve
+    /// * `key` - 要检索的头的键
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// An Option containing a reference to the global header value if it exists, or None otherwise
+    /// 如果存在，则包含对全局头值的引用的Option，否则为None
     #[inline]
-    pub fn get_header(&self, key: &str) -> Option<&String> {
+    pub fn get_header(&self, key: &str) -> Option<&HeaderValue> {
         self.headers.get(key)
     }
 
-    /// Gets a specific global query parameter by key.
+    /// 向配置中添加全局头。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `key` - The key of the query parameter to retrieve
+    /// * `key` - 头名称
+    /// * `value` - 头值
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// An Option containing a reference to the global query parameter value if it exists, or None otherwise
-    #[inline]
-    pub fn get_query(&self, key: &str) -> Option<&String> {
-        self.querys.get(key)
-    }
-
-    /// Adds a global header to the configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The header name
-    /// * `value` - The header value
-    ///
-    /// # Returns
-    ///
-    /// A mutable reference to self for method chaining
-    pub fn add_header(&mut self, key: impl Into<String>, value: impl Into<String>) -> &mut Self {
-        self.headers.insert(key.into(), value.into());
+    /// 用于方法链的自引用
+    pub fn add_header<K: IntoHeaderName>(&mut self, key: K, value: HeaderValue) -> &mut Self {
+        self.headers.insert(key, value);
         self
     }
 
-    /// Removes a global header from the configuration.
+    /// 从配置中移除全局头。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `key` - The header name to remove
+    /// * `key` - 要移除的头名称
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// An Option containing the removed header value if it existed, or None otherwise
-    pub fn remove_header(&mut self, key: &str) -> Option<String> {
+    /// 如果存在，则包含移除的头值的Option，否则为None
+    pub fn remove_header(&mut self, key: &str) -> Option<HeaderValue> {
         self.headers.remove(key)
     }
 
-    /// Adds a global query parameter to the configuration.
+    /// 向配置中添加全局请求体字段。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `key` - The query parameter name
-    /// * `value` - The query parameter value
+    /// * `key` - 请求体字段名称
+    /// * `value` - 请求体字段值
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// A mutable reference to self for method chaining
-    pub fn add_query(&mut self, key: impl Into<String>, value: impl Into<String>) -> &mut Self {
-        self.querys.insert(key.into(), value.into());
-        self
-    }
-
-    /// Removes a global query parameter from the configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The query parameter name to remove
-    ///
-    /// # Returns
-    ///
-    /// An Option containing the removed query parameter value if it existed, or None otherwise
-    pub fn remove_query(&mut self, key: &str) -> Option<String> {
-        self.querys.remove(key)
-    }
-
-    /// Adds a global body field to the configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The body field name
-    /// * `value` - The body field value
-    ///
-    /// # Returns
-    ///
-    /// A mutable reference to self for method chaining
+    /// 用于方法链的自引用
     pub fn add_body(
         &mut self,
         key: impl Into<String>,
@@ -260,100 +201,100 @@ impl HttpConfig {
         self
     }
 
-    /// Removes a global body field from the configuration.
+    /// 从配置中移除全局请求体字段。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `key` - The body field name to remove
+    /// * `key` - 要移除的请求体字段名称
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// An Option containing the removed body field value if it existed, or None otherwise
+    /// 如果存在，则包含移除的请求体字段值的Option，否则为None
     pub fn remove_body(&mut self, key: &str) -> Option<serde_json::Value> {
         self.bodys.remove(key)
     }
 
-    /// Sets the request timeout in seconds.
+    /// 设置请求超时时间。
     ///
-    /// This value determines the total time allowed for a request to complete,
-    /// including DNS resolution, connection establishment, sending the request,
-    /// and receiving the response.
+    /// 此值确定请求完成的总允许时间，
+    /// 包括DNS解析、连接建立、发送请求
+    /// 和接收响应。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `timeout_seconds` - The timeout value in seconds
+    /// * `timeout` - 超时值
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// A mutable reference to self for method chaining
-    pub fn with_timeout_seconds(&mut self, timeout_seconds: u64) -> &mut Self {
-        self.timeout_seconds = timeout_seconds;
+    /// 用于方法链的自引用
+    pub fn with_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.timeout = timeout;
         self
     }
 
-    /// Sets the connection timeout in seconds.
+    /// 设置连接超时时间。
     ///
-    /// This value determines the maximum time allowed to establish a connection to the server.
-    /// It is a subset of the overall request timeout.
+    /// 此值确定建立与服务器连接的最大允许时间。
+    /// 它是整体请求超时的一个子集。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `connect_timeout_seconds` - The connection timeout value in seconds
+    /// * `connect_timeout` - 连接超时值
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// A mutable reference to self for method chaining
-    pub fn with_connect_timeout_seconds(&mut self, connect_timeout_seconds: u64) -> &mut Self {
-        self.connect_timeout_seconds = connect_timeout_seconds;
+    /// 用于方法链的自引用
+    pub fn with_connect_timeout(&mut self, connect_timeout: Duration) -> &mut Self {
+        self.connect_timeout = connect_timeout;
         self
     }
 
-    /// Sets the HTTP proxy URL.
+    /// 设置HTTP代理URL。
     ///
-    /// If set, all HTTP requests will be routed through this proxy server.
-    /// Supported proxy schemes include HTTP, HTTPS, and SOCKS.
+    /// 如果设置，所有HTTP请求将通过此代理服务器路由。
+    /// 支持的代理方案包括HTTP、HTTPS和SOCKS。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `proxy` - The proxy URL to use
+    /// * `proxy` - 要使用的代理URL
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// A mutable reference to self for method chaining
+    /// 用于方法链的自引用
     pub fn with_proxy(&mut self, proxy: impl Into<String>) -> &mut Self {
         self.proxy = Some(proxy.into());
         self
     }
 
-    /// Sets the user agent string.
+    /// 设置用户代理字符串。
     ///
-    /// If set, this value will be used as the User-Agent header for all requests.
-    /// If not set, the default reqwest User-Agent will be used.
+    /// 如果设置，此值将用作所有请求的User-Agent头。
+    /// 如果未设置，将使用默认的reqwest用户代理。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `user_agent` - The user agent string to use
+    /// * `user_agent` - 要使用的用户代理字符串
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// A mutable reference to self for method chaining
-    pub fn with_user_agent(&mut self, user_agent: impl Into<String>) -> &mut Self {
-        self.user_agent = Some(user_agent.into());
+    /// 用于方法链的自引用
+    pub fn with_user_agent(&mut self, user_agent: HeaderValue) -> &mut Self {
+        self.headers.insert(USER_AGENT, user_agent);
         self
     }
 
-    /// Builds a reqwest::Client instance based on this configuration.
+    /// 根据此配置构建reqwest::Client实例。
     ///
-    /// This method creates a new reqwest client with the configured timeouts,
-    /// proxy, and user agent settings.
+    /// 此方法使用配置的超时、
+    /// 代理和用户代理设置创建一个新的reqwest客户端。
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// A reqwest::Client instance configured according to this HttpConfig
+    /// 根据此HttpConfig配置的reqwest::Client实例
     pub fn build_reqwest_client(&self) -> reqwest::Client {
         let mut client_builder = reqwest::ClientBuilder::new()
-            .timeout(std::time::Duration::from_secs(self.timeout_seconds))
-            .connect_timeout(std::time::Duration::from_secs(self.connect_timeout_seconds));
+            .timeout(self.timeout)
+            .connect_timeout(self.connect_timeout);
 
         if let Some(ref proxy_url) = self.proxy {
             if let Ok(proxy) = reqwest::Proxy::all(proxy_url) {
@@ -361,7 +302,7 @@ impl HttpConfig {
             }
         }
 
-        if let Some(ref user_agent) = self.user_agent {
+        if let Some(user_agent) = self.headers.get(USER_AGENT) {
             client_builder = client_builder.user_agent(user_agent);
         }
 
@@ -372,72 +313,41 @@ impl HttpConfig {
 }
 
 impl Default for HttpConfig {
-    /// Returns the default HTTP configuration.
+    /// 返回默认HTTP配置。
     ///
-    /// The default configuration includes:
-    /// - 300 second request timeout
-    /// - 10 second connection timeout
-    /// - No proxy
-    /// - No custom user agent
+    /// 默认配置包括：
+    /// - 300秒请求超时
+    /// - 10秒连接超时
+    /// - 无代理
+    /// - 无自定义用户代理
     fn default() -> Self {
         Self {
-            timeout_seconds: 300,
-            connect_timeout_seconds: 10,
+            timeout: Duration::from_secs(300),
+            connect_timeout: Duration::from_secs(10),
             proxy: None,
-            user_agent: None,
-            headers: HashMap::new(),
-            querys: HashMap::new(),
-            bodys: HashMap::new(),
+            bodys: Body::new(),
+            headers: HeaderMap::new(),
         }
     }
 }
 
 impl HttpConfigBuilder {
-    /// Adds a global header to the configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The header name
-    /// * `value` - The header value
-    ///
-    /// # Returns
-    ///
-    /// The builder instance for method chaining
-    pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        let headers_map = self.headers.get_or_insert_with(HashMap::new);
-        headers_map.insert(key.into(), value.into());
+    pub fn header<K: IntoHeaderName>(mut self, key: K, value: HeaderValue) -> Self {
+        let headers_map = self.headers.get_or_insert_with(HeaderMap::new);
+        headers_map.insert(key, value);
         self
     }
 
-    /// Adds a global query parameter to the configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The query parameter name
-    /// * `value` - The query parameter value
-    ///
-    /// # Returns
-    ///
-    /// The builder instance for method chaining
-    pub fn query(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        let query_map = self.querys.get_or_insert_with(HashMap::new);
-        query_map.insert(key.into(), value.into());
-        self
-    }
-
-    /// Adds a global body field to the configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The body field name
-    /// * `value` - The body field value
-    ///
-    /// # Returns
-    ///
-    /// The builder instance for method chaining
     pub fn body(mut self, key: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
-        let body_map = self.bodys.get_or_insert_with(HashMap::new);
+        let body_map = self.bodys.get_or_insert_with(Body::new);
         body_map.insert(key.into(), value.into());
+        self
+    }
+
+    pub fn user_agent(mut self, user_agent: HeaderValue) -> Self {
+        self.headers
+            .get_or_insert_with(HeaderMap::new)
+            .insert(USER_AGENT, user_agent);
         self
     }
 }

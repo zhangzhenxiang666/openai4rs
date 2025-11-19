@@ -115,7 +115,7 @@ pub enum ChatCompletionMessageParam {
     User(ChatCompletionUserMessageParam),
     Assistant(ChatCompletionAssistantMessageParam),
     Tool(ChatCompletionToolMessageParam),
-    // TODO implement Developer
+    // TODO 实现 Developer
     // Developer,
 }
 
@@ -211,15 +211,15 @@ pub enum ReasoningEffort {
 }
 
 impl ChatCompletion {
-    /// Returns the text content of the first choice's message, if available.
-    /// This is the most common way to access the model's response.
+    /// 返回第一个选择的消息的文本内容（如果可用）。
+    /// 这是访问模型响应的最常见方式。
     pub fn content(&self) -> Option<&str> {
         self.choices
             .first()
             .and_then(|choice| choice.message.content())
     }
 
-    /// Checks if the first choice's message contains any content.
+    /// 检查第一个选择的消息是否包含任何内容。
     pub fn has_content(&self) -> bool {
         self.choices
             .first()
@@ -227,7 +227,7 @@ impl ChatCompletion {
             .unwrap_or(false)
     }
 
-    /// Checks if the first choice's message contains any tool calls.
+    /// 检查第一个选择的消息是否包含任何工具调用。
     pub fn has_tool_calls(&self) -> bool {
         self.choices
             .first()
@@ -235,31 +235,30 @@ impl ChatCompletion {
             .unwrap_or(false)
     }
 
-    /// Returns a reference to the list of tool calls from the first choice's message, if any.
+    /// 返回第一个选择的消息中工具调用列表的引用（如果有的话）。
     pub fn tool_calls(&self) -> Option<&Vec<ChatCompletionToolCall>> {
         self.choices
             .first()
             .and_then(|choice| choice.message.tool_calls())
     }
 
-    /// Returns a reference to the message object of the first choice.
-    /// This is useful when you need to access other properties of the message,
-    /// such as `role` or `refusal`.
+    /// 返回第一个选择的消息对象的引用。
+    /// 当您需要访问消息的其他属性时（如 `role` 或 `refusal`），这很有用。
     pub fn first_choice_message(&self) -> Option<&ChatCompletionMessage> {
         self.choices.first().map(|choice| &choice.message)
     }
 }
 
 impl ChatCompletionChunk {
-    /// Returns the text content from the delta of the first choice, if available.
-    /// This is a convenient way to access the streamed content chunks.
+    /// 返回第一个选择的增量中的文本内容（如果可用）。
+    /// 这是访问流式内容块的便捷方式。
     pub fn content(&self) -> Option<&str> {
         self.choices
             .first()
             .and_then(|choice| choice.delta.content())
     }
 
-    /// Checks if the first choice's delta contains any content.
+    /// 检查第一个选择的增量是否包含任何内容。
     pub fn has_content(&self) -> bool {
         self.choices
             .first()
@@ -267,7 +266,7 @@ impl ChatCompletionChunk {
             .unwrap_or(false)
     }
 
-    /// Checks if the first choice's delta contains any tool calls.
+    /// 检查第一个选择的增量是否包含任何工具调用。
     pub fn has_tool_calls(&self) -> bool {
         self.choices
             .first()
@@ -275,14 +274,14 @@ impl ChatCompletionChunk {
             .unwrap_or(false)
     }
 
-    /// Returns a reference to the list of tool calls from the delta of the first choice, if any.
+    /// 返回第一个选择的增量中工具调用列表的引用（如果有的话）。
     pub fn tool_calls(&self) -> Option<&Vec<ChatCompletionToolCall>> {
         self.choices
             .first()
             .and_then(|choice| choice.delta.tool_calls())
     }
 
-    /// Checks if the first choice's delta contains reasoning content.
+    /// 检查第一个选择的增量是否包含推理内容。
     pub fn has_reasoning(&self) -> bool {
         self.choices
             .first()
@@ -290,14 +289,14 @@ impl ChatCompletionChunk {
             .unwrap_or(false)
     }
 
-    /// Returns the reasoning content from the delta of the first choice, if available.
+    /// 返回第一个选择的增量中的推理内容（如果可用）。
     pub fn reasoning(&self) -> Option<&str> {
         self.choices
             .first()
             .and_then(|choice| choice.delta.reasoning())
     }
 
-    /// Returns an iterator over the deltas of all choices in the chunk.
+    /// 返回块中所有选择增量的迭代器。
     pub fn deltas(&self) -> impl Iterator<Item = &ChoiceDelta> {
         self.choices.iter().map(|choice| &choice.delta)
     }
@@ -358,29 +357,29 @@ impl ChoiceDelta {
 }
 
 impl FunctionDefinition {
-    /// Creates a new `FunctionDefinitionBuilder` to construct a `FunctionDefinition`.
+    /// 创建一个新的 `FunctionDefinitionBuilder` 来构建 `FunctionDefinition`。
     pub fn builder() -> FunctionDefinitionBuilder {
         FunctionDefinitionBuilder::create_empty()
     }
 
-    /// A convenient method to create a `FunctionDefinition` from a `serde_json::Value`.
+    /// 从 `serde_json::Value` 创建 `FunctionDefinition` 的便捷方法。
     ///
-    /// This method is a wrapper around `TryFrom<Value>`.
+    /// 此方法是 `TryFrom<Value>` 的包装器。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `value` - A `serde_json::Value` that should represent a FunctionDefinition.
+    /// * `value` - 应该表示 FunctionDefinition 的 `serde_json::Value`。
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// A `Result` containing either the constructed `FunctionDefinition` or a `ConversionError`.
+    /// 包含构建的 `FunctionDefinition` 或 `ConversionError` 的 `Result`。
     pub fn from_value(value: Value) -> Result<Self, ConversionError> {
         Self::try_from(value)
     }
 }
 
 impl ChatCompletionToolParam {
-    /// Creates a new function tool parameter with type-safe `Parameters`.
+    /// 使用类型安全的 `Parameters` 创建新的函数工具参数。
     pub fn function(name: &str, description: &str, parameters: Parameters) -> Self {
         Self::Function(
             FunctionDefinition::builder()
@@ -392,17 +391,17 @@ impl ChatCompletionToolParam {
         )
     }
 
-    /// A convenient method to create a `ChatCompletionToolParam` from a `serde_json::Value`.
+    /// 从 `serde_json::Value` 创建 `ChatCompletionToolParam` 的便捷方法。
     ///
-    /// This method is a wrapper around `TryFrom<Value>`.
+    /// 此方法是 `TryFrom<Value>` 的包装器。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `value` - A `serde_json::Value` that should represent a ChatCompletionToolParam.
+    /// * `value` - 应该表示 ChatCompletionToolParam 的 `serde_json::Value`。
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// A `Result` containing either the constructed `ChatCompletionToolParam` or a `ConversionError`.
+    /// 包含构建的 `ChatCompletionToolParam` 或 `ConversionError` 的 `Result`。
     pub fn from_value(value: Value) -> Result<Self, ConversionError> {
         Self::try_from(value)
     }
@@ -506,8 +505,7 @@ impl TryFrom<Value> for FunctionDefinition {
             Value::Object(map) => map,
             _ => {
                 return Err(ConversionError::ValueNotAnObject(format!(
-                    "Expected object for FunctionDefinition, got: {:?} (type: {:?})",
-                    value, value
+                    "Expected object for FunctionDefinition, got: {value:?} (type: {value:?})"
                 )));
             }
         };
@@ -566,8 +564,7 @@ impl TryFrom<Value> for ChatCompletionToolParam {
             Value::Object(map) => map,
             _ => {
                 return Err(ConversionError::ValueNotAnObject(format!(
-                    "Expected object for ChatCompletionToolParam, got: {:?} (type: {:?})",
-                    value, value
+                    "Expected object for ChatCompletionToolParam, got: {value:?} (type: {value:?})"
                 )));
             }
         };
@@ -590,8 +587,7 @@ impl TryFrom<Value> for ChatCompletionToolParam {
                 return Err(ConversionError::InvalidFieldValue(
                     "type".to_string(),
                     format!(
-                        "Expected 'function' for 'type' field, got: {} (full object: {:?})",
-                        type_str, obj
+                        "Expected 'function' for 'type' field, got: {type_str} (full object: {obj:?})"
                     ),
                 ));
             }
@@ -620,41 +616,41 @@ impl StreamChoice {
 
 impl ChoiceDelta {
     pub fn merge(&mut self, delta: Self) {
-        // Merge content
+        // 合并内容
         match (self.content.as_mut(), delta.content) {
             (Some(left), Some(right)) => left.push_str(&right),
             (None, Some(right)) => self.content = Some(right),
             _ => {}
         }
 
-        // Update refusal if present in delta
+        // 如果增量中存在拒绝内容则更新
         if delta.refusal.is_some() {
             self.refusal = delta.refusal;
         }
 
-        // Update role if present in delta
+        // 如果增量中存在角色则更新
         if delta.role.is_some() {
             self.role = delta.role;
         }
 
-        // Merge tool calls with adaptive logic
+        // 使用自适应逻辑合并工具调用
         match (self.tool_calls.as_mut(), delta.tool_calls) {
             (Some(left), Some(right)) => {
-                // Heuristic to detect non-standard, sequential tool call streams.
-                // If the incoming delta has one tool call with index 0,
-                // we assume it's a continuation of the last tool call in the `left` vector.
+                // 检测非标准、顺序的工具调用流的启发式方法。
+                // 如果传入的增量有一个索引为0的工具调用，
+                // 我们假设它是 `left` 向量中最后一个工具调用的延续。
                 if right.len() == 1 && right[0].index == 0 {
                     if let Some(last_tool_call) = left.last_mut() {
-                        // This is safe because we've checked right.len() == 1.
+                        // 这是安全的，因为我们已检查 right.len() == 1。
                         if let Some(r) = right.into_iter().next() {
                             last_tool_call.merge(r);
                         }
                     } else {
-                        // If `left` is empty, just take `right`.
+                        // 如果 `left` 为空，则直接获取 `right`。
                         *left = right;
                     }
                 } else {
-                    // Standard, index-based merging for robust handling of concurrent tool calls.
+                    // 标准的基于索引的合并，用于稳健处理并发工具调用。
                     for r in right.into_iter() {
                         if let Some(l) = left.iter_mut().find(|l| l.index == r.index) {
                             l.merge(r);
@@ -668,14 +664,14 @@ impl ChoiceDelta {
             _ => {}
         }
 
-        // Merge reasoning
+        // 合并推理
         match (self.reasoning.as_mut(), delta.reasoning) {
             (Some(left), Some(right)) => left.push_str(&right),
             (None, Some(right)) => self.reasoning = Some(right),
             _ => {}
         }
 
-        // Merge extra fields in-place to avoid unnecessary cloning
+        // 原地合并额外字段以避免不必要的克隆
         merge_extra_fields_in_place(&mut self.extra_fields, delta.extra_fields);
     }
 }
@@ -967,7 +963,7 @@ impl<'de> Deserialize<'de> for ChatCompletionToolCall {
                 let function_data = function_data.unwrap_or(default_function_data);
 
                 let mut function: Function = serde_json::from_value(function_data)
-                    .map_err(|e| de::Error::custom(format!("Failed to parse function: {}", e)))?;
+                    .map_err(|e| de::Error::custom(format!("Failed to parse function: {e}")))?;
 
                 if function.id.is_empty() {
                     function.id = id.clone();
@@ -1030,7 +1026,6 @@ impl<'de> Deserialize<'de> for ChatCompletionMessage {
 
         let content = extract_optional(&mut map, "content")?;
         let refusal = extract_optional(&mut map, "refusal")?;
-
         let role: Option<String> = extract_optional(&mut map, "role")?;
         let role = role.unwrap_or("assistant".into());
 
@@ -1066,7 +1061,7 @@ impl<'de> Deserialize<'de> for ChatCompletionMessage {
 mod tests {
     use super::*;
     use crate::chat::tool_parameters::Parameters;
-    use crate::{chat_request, system, user};
+    use crate::{ChatParam, system, user};
     use openai4rs_macro::assistant;
     use std::fs;
 
@@ -1183,20 +1178,18 @@ mod tests {
         let function_tool =
             ChatCompletionToolParam::function("function_name", "function description", tool_params);
 
-        let request = chat_request("meta-llama/llama-3.3-8b-instruct:free", &messages)
+        let request = ChatParam::new("meta-llama/llama-3.3-8b-instruct:free", &messages)
             .temperature(0.1)
             .top_logprobs(1)
             .n(1)
-            .max_tokens(1024)
             .tool_choice(ToolChoice::Auto)
-            .tools(vec![function_tool])
-            .build()
-            .unwrap();
+            .tools(vec![function_tool]);
 
-        let json = serde_json::to_string(&request).unwrap();
+        let inner = request.take();
+        let json = serde_json::to_string(&inner.body).unwrap();
         assert_eq!(
             &json,
-            r#"{"model":"meta-llama/llama-3.3-8b-instruct:free","messages":[{"content":"system message","role":"system"},{"content":"user message","role":"user"}],"max_tokens":1024,"n":1,"temperature":0.1,"top_logprobs":1,"tools":[{"function":{"description":"function description","name":"function_name","parameters":{"properties":{"name":{"description":"name of the person","type":"string"}},"required":["name"],"type":"object"}},"type":"function"}],"tool_choice":"auto"}"#
+            r#"{"messages":[{"content":"system message","role":"system"},{"content":"user message","role":"user"}],"model":"meta-llama/llama-3.3-8b-instruct:free","n":1,"temperature":0.10000000149011612,"tool_choice":"auto","tools":[{"function":{"description":"function description","name":"function_name","parameters":{"properties":{"name":{"description":"name of the person","type":"string"}},"required":["name"],"type":"object"}},"type":"function"}],"top_logprobs":1}"#
         );
     }
 

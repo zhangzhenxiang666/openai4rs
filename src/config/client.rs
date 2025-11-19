@@ -1,13 +1,18 @@
-use super::base::{BaseConfig, BaseConfigBuilder};
 use super::http::{HttpConfig, HttpConfigBuilder};
-use crate::{Interceptor, OpenAI, interceptor::InterceptorChain};
-use std::{collections::HashMap, fmt};
+use super::{Credentials, CredentialsBuilder};
+use crate::OpenAI;
+use crate::common::types::Body;
+use crate::config::CredentialsBuilderError;
+use http::header::IntoHeaderName;
+use http::{HeaderMap, HeaderValue};
+use std::fmt;
+use std::time::Duration;
 
 #[derive(Debug)]
 pub enum ConfigBuildError {
-    /// Required fields missing error
+    /// 必需字段缺失错误
     RequiredFieldMissing(String),
-    /// Validation error
+    /// 验证错误
     ValidationError(String),
 }
 
@@ -15,10 +20,10 @@ impl fmt::Display for ConfigBuildError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ConfigBuildError::RequiredFieldMissing(field) => {
-                write!(f, "Required field missing: {}", field)
+                write!(f, "Required field missing: {field}")
             }
             ConfigBuildError::ValidationError(msg) => {
-                write!(f, "Validation error: {}", msg)
+                write!(f, "Validation error: {msg}")
             }
         }
     }
@@ -26,469 +31,390 @@ impl fmt::Display for ConfigBuildError {
 
 impl std::error::Error for ConfigBuildError {}
 
-// Implement From trait to adapt builder-generated error types
+// 实现From trait以适配构建器生成的错误类型
 impl From<super::http::HttpConfigBuilderError> for ConfigBuildError {
     fn from(err: super::http::HttpConfigBuilderError) -> Self {
         ConfigBuildError::RequiredFieldMissing(err.to_string())
     }
 }
 
-impl From<super::base::BaseConfigBuilderError> for ConfigBuildError {
-    fn from(err: super::base::BaseConfigBuilderError) -> Self {
+impl From<CredentialsBuilderError> for ConfigBuildError {
+    fn from(err: CredentialsBuilderError) -> Self {
         ConfigBuildError::RequiredFieldMissing(err.to_string())
     }
 }
 
-/// Main configuration struct containing all settings for API communication
+/// 包含API通信所有设置的主配置结构
 pub struct Config {
-    /// Base configuration containing API key and URL
-    base: BaseConfig,
-    /// HTTP-specific configuration (timeouts, proxy, etc.)
+    /// 包含API密钥和URL的基础配置
+    credentials: Credentials,
+    /// HTTP特定配置（超时、代理等）
     http: HttpConfig,
-    /// Number of retry attempts for failed requests
-    retry_count: u32,
-    /// Global interceptors for all requests
-    global_interceptors: InterceptorChain,
+    /// 失败请求的重试次数
+    retry_count: usize,
 }
 impl Config {
-    /// Creates a new Config with the specified API key and base URL
+    /// 使用指定的API密钥和基础URL创建新的Config
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `api_key` - The API key for authentication
-    /// * `base_url` - The base URL for API requests
+    /// * `api_key` - 用于身份验证的API密钥
+    /// * `base_url` - API请求的基础URL
     pub fn new(api_key: impl Into<String>, base_url: impl Into<String>) -> Self {
         Self {
-            base: BaseConfig::new(api_key.into(), base_url.into()),
+            credentials: Credentials::new(api_key.into(), base_url.into()),
             http: HttpConfig::default(),
             retry_count: 5,
-            global_interceptors: InterceptorChain::new(),
         }
     }
 
-    /// Creates a new ConfigBuilder for fluent configuration
+    /// 创建用于流畅配置的ConfigBuilder
     pub fn builder() -> ConfigBuilder {
         ConfigBuilder {
             retry_count: 5,
-            base_builder: BaseConfigBuilder::default(),
+            credentials_builder: CredentialsBuilder::default(),
             http_builder: HttpConfigBuilder::default(),
-            global_interceptors: InterceptorChain::new(),
         }
     }
 
-    /// Returns the API key
+    /// 返回API密钥
     #[inline]
     pub fn api_key(&self) -> &str {
-        self.base.api_key()
+        self.credentials.api_key()
     }
 
-    /// Returns the base URL
+    /// 返回基础URL
     #[inline]
     pub fn base_url(&self) -> &str {
-        self.base.base_url()
+        self.credentials.base_url()
     }
 
-    /// Returns the retry count
+    /// 返回重试次数
     #[inline]
-    pub fn retry_count(&self) -> u32 {
+    pub fn retry_count(&self) -> usize {
         self.retry_count
     }
 
-    /// Returns the request timeout in seconds
+    /// 返回请求超时时间
     #[inline]
-    pub fn timeout_seconds(&self) -> u64 {
-        self.http.timeout_seconds()
+    pub fn timeout(&self) -> Duration {
+        self.http.timeout()
     }
 
-    /// Returns an optional proxy URL
+    /// 返回可选的代理URL
     #[inline]
     pub fn proxy(&self) -> Option<&String> {
         self.http.proxy()
     }
 
-    /// Returns an optional custom user agent string
+    /// 返回可选的自定义用户代理字符串
     #[inline]
-    pub fn user_agent(&self) -> Option<&String> {
+    pub fn user_agent(&self) -> Option<&HeaderValue> {
         self.http.user_agent()
     }
 
-    /// Returns the connection timeout in seconds
+    /// 返回连接超时时间
     #[inline]
-    pub fn connect_timeout_seconds(&self) -> u64 {
-        self.http.connect_timeout_seconds()
+    pub fn connect_timeout(&self) -> Duration {
+        self.http.connect_timeout()
     }
 
-    /// Returns a reference to the HTTP configuration
+    /// 返回对HTTP配置的引用
     #[inline]
     pub fn http(&self) -> &HttpConfig {
         &self.http
     }
 
-    /// Returns a reference to the base configuration
+    /// 返回对基础配置的引用
     #[inline]
-    pub fn base(&self) -> &super::base::BaseConfig {
-        &self.base
+    pub fn credentials(&self) -> &Credentials {
+        &self.credentials
     }
 
-    /// Returns a reference to the global interceptors
-    #[inline]
-    pub fn global_interceptors(&self) -> &InterceptorChain {
-        &self.global_interceptors
-    }
-
-    /// Returns a mutable reference to the global interceptors
-    #[inline]
-    pub fn global_interceptors_mut(&mut self) -> &mut InterceptorChain {
-        &mut self.global_interceptors
-    }
-
-    /// Sets a new base URL for this configuration
+    /// 为此配置设置新的基础URL
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `base_url` - The new base URL to use
+    /// * `base_url` - 要使用的新基础URL
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// A mutable reference to self for method chaining
+    /// 用于方法链的自引用
     pub fn with_base_url(&mut self, base_url: impl Into<String>) -> &mut Self {
-        self.base.with_base_url(base_url);
+        self.credentials.with_base_url(base_url);
         self
     }
 
-    /// Sets a new API key for this configuration
+    /// 为此配置设置新的API密钥
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `api_key` - The new API key to use
+    /// * `api_key` - 要使用的新API密钥
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// A mutable reference to self for method chaining
+    /// 用于方法链的自引用
     pub fn with_api_key(&mut self, api_key: impl Into<String>) -> &mut Self {
-        self.base.with_api_key(api_key);
+        self.credentials.with_api_key(api_key);
         self
     }
 
-    /// Sets the number of retry attempts for failed requests
+    /// 设置失败请求的重试次数
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `retry_count` - The number of retry attempts
+    /// * `retry_count` - 重试次数
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// A mutable reference to self for method chaining
-    pub fn with_retry_count(&mut self, retry_count: u32) -> &mut Self {
+    /// 用于方法链的自引用
+    pub fn with_retry_count(&mut self, retry_count: usize) -> &mut Self {
         self.retry_count = retry_count;
         self
     }
 
-    /// Sets the request timeout in seconds
+    /// 设置请求超时时间
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `timeout_seconds` - The timeout value in seconds
+    /// * `timeout` - 超时值
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// A mutable reference to self for method chaining
-    pub fn with_timeout_seconds(&mut self, timeout_seconds: u64) -> &mut Self {
-        self.http.with_timeout_seconds(timeout_seconds);
+    /// 用于方法链的自引用
+    pub fn with_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.http.with_timeout(timeout);
         self
     }
 
-    /// Sets the connection timeout in seconds
+    /// 设置连接超时时间
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `connect_timeout_seconds` - The connection timeout value in seconds
+    /// * `connect_timeout` - 连接超时值
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// A mutable reference to self for method chaining
-    pub fn with_connect_timeout_seconds(&mut self, connect_timeout_seconds: u64) -> &mut Self {
-        self.http
-            .with_connect_timeout_seconds(connect_timeout_seconds);
+    /// 用于方法链的自引用
+    pub fn with_connect_timeout(&mut self, connect_timeout: Duration) -> &mut Self {
+        self.http.with_connect_timeout(connect_timeout);
         self
     }
 
-    /// Sets an HTTP proxy for requests
+    /// 为请求设置HTTP代理
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `proxy` - The proxy URL to use
+    /// * `proxy` - 要使用的代理URL
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// A mutable reference to self for method chaining
+    /// 用于方法链的自引用
     pub fn with_proxy(&mut self, proxy: impl Into<String>) -> &mut Self {
         self.http.with_proxy(proxy);
         self
     }
 
-    /// Sets a custom user agent string
+    /// 设置自定义用户代理字符串
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `user_agent` - The user agent string to use
+    /// * `user_agent` - 要使用的用户代理字符串
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// A mutable reference to self for method chaining
-    pub fn with_user_agent(&mut self, user_agent: impl Into<String>) -> &mut Self {
+    /// 用于方法链的自引用
+    pub fn with_user_agent(&mut self, user_agent: HeaderValue) -> &mut Self {
         self.http.with_user_agent(user_agent);
-        self
-    }
-
-    /// Adds a global interceptor
-    ///
-    /// # Arguments
-    ///
-    /// * `interceptor` - The interceptor to add
-    ///
-    /// # Returns
-    ///
-    /// A mutable reference to self for method chaining
-    pub fn add_global_interceptor(&mut self, interceptor: impl Interceptor + 'static) -> &mut Self {
-        self.global_interceptors.add_interceptor(interceptor);
         self
     }
 }
 
-/// Builder for creating Config instances with fluent API
+/// 使用流畅API创建Config实例的构建器
 pub struct ConfigBuilder {
-    /// Number of retry attempts for failed requests
-    retry_count: u32,
-    /// Global interceptors for all requests
-    global_interceptors: InterceptorChain,
-    /// Builder for BaseConfig
-    base_builder: BaseConfigBuilder,
-    /// Builder for HttpConfig
+    /// 失败请求的重试次数
+    retry_count: usize,
+    /// BaseConfig的构建器
+    credentials_builder: CredentialsBuilder,
+    /// HttpConfig的构建器
     http_builder: HttpConfigBuilder,
 }
 
 impl ConfigBuilder {
-    /// Builds the Config instance from the current builder state
+    /// 从当前构建器状态构建Config实例
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// A Result containing either the Config instance or a ConfigBuildError
+    /// 包含Config实例或ConfigBuildError的Result
     pub fn build(self) -> Result<Config, ConfigBuildError> {
         Ok(Config {
-            base: self.base_builder.build()?,
+            credentials: self.credentials_builder.build()?,
             http: self.http_builder.build()?,
             retry_count: self.retry_count,
-            global_interceptors: self.global_interceptors,
         })
     }
 
-    /// Builds an OpenAI client instance from the current configuration
+    /// 从当前配置构建OpenAI客户端实例
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// A Result containing either the OpenAI client instance or a ConfigBuildError
+    /// 包含OpenAI客户端实例或ConfigBuildError的Result
     pub fn build_openai(self) -> Result<OpenAI, ConfigBuildError> {
         Ok(OpenAI::with_config(self.build()?))
     }
 
-    /// Sets the API key for the configuration
+    /// 设置配置的API密钥
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `api_key` - The API key to use
+    /// * `api_key` - 要使用的API密钥
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// The builder instance for method chaining
+    /// 用于方法链的构建器实例
     pub fn api_key(mut self, api_key: impl Into<String>) -> Self {
-        self.base_builder = self.base_builder.api_key(api_key.into());
+        self.credentials_builder = self.credentials_builder.api_key(api_key.into());
         self
     }
 
-    /// Sets the base URL for the configuration
+    /// 设置配置的基础URL
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `base_url` - The base URL to use
+    /// * `base_url` - 要使用的基础URL
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// The builder instance for method chaining
+    /// 用于方法链的构建器实例
     pub fn base_url(mut self, base_url: impl Into<String>) -> Self {
-        self.base_builder = self.base_builder.base_url(base_url.into());
+        self.credentials_builder = self.credentials_builder.base_url(base_url.into());
         self
     }
 
-    /// Sets the retry count for the configuration
+    /// 设置配置的重试次数
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `retry_count` - The number of retry attempts
+    /// * `retry_count` - 重试次数
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// The builder instance for method chaining
-    pub fn retry_count(mut self, retry_count: u32) -> Self {
+    /// 用于方法链的构建器实例
+    pub fn retry_count(mut self, retry_count: usize) -> Self {
         self.retry_count = retry_count;
         self
     }
 
-    /// Sets the request timeout in seconds for the configuration
+    /// 设置配置的请求超时时间
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `timeout_seconds` - The timeout value in seconds
+    /// * `timeout` - 超时值
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// The builder instance for method chaining
-    pub fn timeout_seconds(mut self, timeout_seconds: u64) -> Self {
-        self.http_builder = self.http_builder.timeout_seconds(timeout_seconds);
+    /// 用于方法链的构建器实例
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.http_builder = self.http_builder.timeout(timeout);
         self
     }
 
-    /// Sets the connection timeout in seconds for the configuration
+    /// 设置配置的连接超时时间
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `connect_timeout_seconds` - The connection timeout value in seconds
+    /// * `connect_timeout` - 连接超时值
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// The builder instance for method chaining
-    pub fn connect_timeout_seconds(mut self, connect_timeout_seconds: u64) -> Self {
-        self.http_builder = self
-            .http_builder
-            .connect_timeout_seconds(connect_timeout_seconds);
+    /// 用于方法链的构建器实例
+    pub fn connect_timeout(mut self, connect_timeout: Duration) -> Self {
+        self.http_builder = self.http_builder.connect_timeout(connect_timeout);
         self
     }
 
-    /// Sets an HTTP proxy for the configuration
+    /// 为配置设置HTTP代理
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `proxy` - The proxy URL to use
+    /// * `proxy` - 要使用的代理URL
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// The builder instance for method chaining
+    /// 用于方法链的构建器实例
     pub fn proxy(mut self, proxy: impl Into<String>) -> Self {
         self.http_builder = self.http_builder.proxy(proxy.into());
         self
     }
 
-    /// Sets a custom user agent string for the configuration
+    /// 为配置设置自定义用户代理字符串
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `user_agent` - The user agent string to use
+    /// * `user_agent` - 要使用的用户代理字符串
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// The builder instance for method chaining
-    pub fn user_agent(mut self, user_agent: impl Into<String>) -> Self {
-        self.http_builder = self.http_builder.user_agent(user_agent.into());
+    /// 用于方法链的构建器实例
+    pub fn user_agent(mut self, user_agent: HeaderValue) -> Self {
+        self.http_builder = self.http_builder.user_agent(user_agent);
         self
     }
 
-    /// Adds a global header to the HTTP configuration.
+    /// 向HTTP配置添加全局头。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `key` - The header name
-    /// * `value` - The header value
+    /// * `key` - 头名称
+    /// * `value` - 头值
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// The builder instance for method chaining
-    pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.http_builder = self.http_builder.header(key.into(), value.into());
+    /// 用于方法链的构建器实例
+    pub fn header<K: IntoHeaderName>(mut self, key: K, value: HeaderValue) -> Self {
+        self.http_builder = self.http_builder.header(key, value);
         self
     }
 
-    /// Adds a global query parameter to the HTTP configuration.
+    /// 向HTTP配置添加全局主体字段。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `key` - The query parameter name
-    /// * `value` - The query parameter value
+    /// * `key` - 主体字段名称
+    /// * `value` - 主体字段值
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// The builder instance for method chaining
-    pub fn query(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.http_builder = self.http_builder.query(key.into(), value.into());
-        self
-    }
-
-    /// Adds a global body field to the HTTP configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The body field name
-    /// * `value` - The body field value
-    ///
-    /// # Returns
-    ///
-    /// The builder instance for method chaining
+    /// 用于方法链的构建器实例
     pub fn body(mut self, key: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
         self.http_builder = self.http_builder.body(key.into(), value.into());
         self
     }
 
-    /// Adds a global interceptor to the configuration.
+    /// 在HTTP配置中设置多个全局头。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `interceptor` - The interceptor to add
+    /// * `headers` - 头名称到值的映射
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// The builder instance for method chaining
-    pub fn global_interceptor(mut self, interceptor: impl Interceptor + 'static) -> Self {
-        self.global_interceptors.add_interceptor(interceptor);
-        self
-    }
-
-    /// Sets multiple global headers in the HTTP configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `headers` - A map of header names to values
-    ///
-    /// # Returns
-    ///
-    /// The builder instance for method chaining
-    pub fn headers(mut self, headers: HashMap<String, String>) -> Self {
+    /// 用于方法链的构建器实例
+    pub fn headers(mut self, headers: HeaderMap) -> Self {
         self.http_builder = self.http_builder.headers(headers);
         self
     }
 
-    /// Sets multiple global query parameters in the HTTP configuration.
+    /// 在HTTP配置中设置多个全局主体字段。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `queries` - A map of query parameter names to values
+    /// * `bodys` - 主体字段名称到值的映射
     ///
-    /// # Returns
+    /// # 返回
     ///
-    /// The builder instance for method chaining
-    pub fn querys(mut self, queries: HashMap<String, String>) -> Self {
-        self.http_builder = self.http_builder.querys(queries);
-        self
-    }
-
-    /// Sets multiple global body fields in the HTTP configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `bodys` - A map of body field names to values
-    ///
-    /// # Returns
-    ///
-    /// The builder instance for method chaining
-    pub fn bodys(mut self, bodys: HashMap<String, serde_json::Value>) -> Self {
+    /// 用于方法链的构建器实例
+    pub fn bodys(mut self, bodys: Body) -> Self {
         self.http_builder = self.http_builder.bodys(bodys);
         self
     }

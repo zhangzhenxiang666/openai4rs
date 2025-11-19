@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         user!("Introduce the Rust programming language in one sentence."),
     ];
 
-    let request = chat_request(model, &messages);
+    let request = ChatParam::new(model, &messages);
 
     println!("Sending request to model: {}...", model);
 

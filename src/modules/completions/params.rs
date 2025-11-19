@@ -1,218 +1,226 @@
-use crate::common::types::{Bodies, Headers, QueryParams};
-use derive_builder::Builder;
-use serde::Serialize;
-use std::collections::HashMap;
+use crate::common::types::{Body, InParam, RetryCount, Timeout};
+use http::{
+    HeaderValue,
+    header::{IntoHeaderName, USER_AGENT},
+};
+use serde_json::Value;
+use std::{collections::HashMap, time::Duration};
 
-/// Parameters for creating completions. This struct represents the request parameters for the OpenAI completion API.
-/// Please note that the completion API is a legacy API, primarily used for older models. For newer models, it is recommended to use the chat completion API.
-#[derive(Debug, Clone, Serialize, Builder)]
-#[builder(
-    name = "RequestParamsBuilder",
-    derive(Debug),
-    pattern = "owned",
-    setter(strip_option)
-)]
-pub struct RequestParams<'a> {
-    /// The ID of the model to use.
-    ///
-    /// You can use the List Models API to see all available models,
-    /// or refer to our model overview for their descriptions.
-    pub model: &'a str,
-
-    /// The prompt to generate completions for.
-    ///
-    /// Please note that the API works best when you provide clear instructions to define the task and desired output.
-    pub prompt: &'a str,
-
-    /// The maximum number of tokens to generate in the completion.
-    ///
-    /// The number of tokens in your prompt plus `max_tokens` cannot exceed
-    /// the model's context length. Most models have a context length of 2048 tokens
-    /// (except for the latest models, which support 4096).
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<i32>,
-
-    /// What sampling temperature to use, between 0 and 2.
-    ///
-    /// Higher values (like 0.8) will make the output more random, while lower values (like 0.2)
-    /// will make it more focused and deterministic.
-    /// We generally recommend changing this or `top_p`, but not both.
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f32>,
-
-    /// An alternative to sampling with temperature, called nucleus sampling.
-    ///
-    /// The model considers the results of the tokens with top_p probability mass.
-    /// So 0.1 means only the tokens comprising the top 10% probability mass are considered.
-    /// We generally recommend changing this or `temperature`, but not both.
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_p: Option<f32>,
-
-    /// How many completions to generate for each prompt.
-    ///
-    /// Please note that you will be charged based on the total number of tokens generated across all completions.
-    /// Keep `n` at `1` to minimize costs.
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub n: Option<i32>,
-
-    /// Whether to stream partial progress.
-    ///
-    /// If set, tokens will be sent as data-only server-sent events as they become available,
-    /// with the stream terminated by a `data: [DONE]` message.
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stream: Option<bool>,
-
-    /// Include the log probabilities on the `logprobs` most likely tokens.
-    ///
-    /// Set to 0 to disable returning any log probabilities.
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub logprobs: Option<i32>,
-
-    /// Echo back the prompt in addition to the completion.
-    ///
-    /// This is useful for debugging and understanding the model's behavior.
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub echo: Option<bool>,
-
-    /// Up to 4 sequences where the API will stop generating further tokens. The returned text will not contain the stop sequences.
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stop: Option<Vec<String>>,
-
-    /// A number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far,
-    /// increasing the model's likelihood to talk about new topics.
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub presence_penalty: Option<f32>,
-
-    /// A number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far,
-    /// decreasing the model's likelihood to repeat the same line verbatim.
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub frequency_penalty: Option<f32>,
-
-    /// Generates `best_of` completions server-side and returns the "best"
-    /// (the one with the highest log probability per token).
-    ///
-    /// Results cannot be streamed. When used with `n`, `best_of` controls
-    /// the number of candidate completions, and `n` specifies how many to return.
-    /// `best_of` must be greater than or equal to `n`.
-    /// Note: Because this parameter generates many completions, it can quickly
-    /// consume your token quota. Use it carefully and ensure you have set reasonable parameters for `max_tokens`
-    /// and `stop`.
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub best_of: Option<i32>,
-
-    /// Modify the likelihood of specified tokens appearing in the completion.
-    ///
-    /// Accepts a JSON object that maps tokens (specified by their token ID in the tokenizer)
-    /// to an associated bias value between -100 and 100.
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub logit_bias: Option<HashMap<String, i32>>,
-
-    /// A unique identifier representing your end-user, which can help OpenAI
-    /// monitor and detect abuse.
-    #[builder(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub user: Option<String>,
-
-    /// Send additional headers with the request.
-    #[builder(default)]
-    #[serde(skip_serializing)]
-    pub extra_headers: Option<Headers>,
-
-    /// Add additional query parameters to the request.
-    #[builder(default)]
-    #[serde(skip_serializing)]
-    pub extra_query: Option<QueryParams>,
-
-    /// Add additional JSON properties to the request.
-    /// This field will not be serialized in the request body.
-    #[builder(default)]
-    #[serde(skip_serializing)]
-    pub extra_body: Option<Bodies>,
-
-    /// HTTP request retry count, overriding the client's global setting.
-    /// This field will not be serialized in the request body.
-    #[builder(default)]
-    #[serde(skip_serializing)]
-    pub retry_count: Option<u32>,
-
-    /// HTTP request timeout in seconds, overriding the client's global setting.
-    /// This field will not be serialized in the request body.
-    #[builder(default)]
-    #[serde(skip_serializing)]
-    pub timeout_seconds: Option<u64>,
-
-    /// HTTP request User-Agent, overriding the client's global setting.
-    /// This field will not be serialized in the request body.
-    #[builder(default)]
-    #[serde(skip_serializing)]
-    pub user_agent: Option<String>,
+pub struct CompletionsParam {
+    inner: InParam,
 }
 
-pub fn completions_request<'a>(model: &'a str, prompt: &'a str) -> RequestParamsBuilder<'a> {
-    RequestParamsBuilder::create_empty()
-        .model(model)
-        .prompt(prompt)
-}
+impl CompletionsParam {
+    /// 创建 completions api参数构建器
+    /// `model`: 模型名称
+    /// `prompt`: 提示
+    pub fn new(model: &str, prompt: &str) -> Self {
+        let mut inner = InParam::new();
+        inner.body = Some(Body::new());
+        inner
+            .body
+            .as_mut()
+            .unwrap()
+            .insert("model".to_string(), serde_json::to_value(model).unwrap());
 
-pub trait IntoRequestParams<'a> {
-    fn into_request_params(self) -> RequestParams<'a>;
-}
+        inner
+            .body
+            .as_mut()
+            .unwrap()
+            .insert("prompt".to_string(), serde_json::to_value(prompt).unwrap());
 
-impl<'a> IntoRequestParams<'a> for RequestParams<'a> {
-    fn into_request_params(self) -> RequestParams<'a> {
+        CompletionsParam { inner }
+    }
+
+    /// 补全中要生成的最大令牌数。
+    ///
+    /// 提示中的令牌数加上`max_tokens`不能超过
+    /// 模型的上下文长度。大多数模型的上下文长度为2048个令牌
+    /// （最新的模型除外，它们支持4096个）。
+    pub fn max_tokens(mut self, max_tokens: i32) -> Self {
+        self.inner.body.as_mut().unwrap().insert(
+            "max_tokens".to_string(),
+            serde_json::to_value(max_tokens).unwrap(),
+        );
+        self
+    }
+
+    /// 使用什么采样温度，范围在0到2之间。
+    ///
+    /// 较高的值（如0.8）会使输出更加随机，而较低的值（如0.2）
+    /// 会使输出更加集中和确定。
+    /// 我们通常建议更改此参数或`top_p`，但不要同时更改两者。
+    pub fn temperature(mut self, temperature: f32) -> Self {
+        self.inner.body.as_mut().unwrap().insert(
+            "temperature".to_string(),
+            serde_json::to_value(temperature).unwrap(),
+        );
+        self
+    }
+
+    /// 一种称为核采样的温度采样替代方法。
+    ///
+    /// 模型会考虑具有top_p概率质量的令牌结果。
+    /// 因此0.1意味着只考虑构成前10%概率质量的令牌。
+    /// 我们通常建议更改此参数或`temperature`，但不要同时更改两者。
+    pub fn top_p(mut self, top_p: f32) -> Self {
+        self.inner
+            .body
+            .as_mut()
+            .unwrap()
+            .insert("top_p".to_string(), serde_json::to_value(top_p).unwrap());
+        self
+    }
+
+    /// 为每个提示生成多少个补全。
+    ///
+    /// 请注意，将根据所有补全中生成的令牌总数向您收费。
+    /// 将`n`保持在`1`以最小化成本。
+    pub fn n(mut self, n: i32) -> Self {
+        self.inner
+            .body
+            .as_mut()
+            .unwrap()
+            .insert("n".to_string(), serde_json::to_value(n).unwrap());
+        self
+    }
+
+    /// 在`logprobs`最可能的令牌上包含对数概率。
+    ///
+    /// 设置为0以禁用返回任何对数概率。
+    pub fn logprobs(mut self, logprobs: i32) -> Self {
+        self.inner.body.as_mut().unwrap().insert(
+            "logprobs".to_string(),
+            serde_json::to_value(logprobs).unwrap(),
+        );
+        self
+    }
+
+    /// 除了补全外，还回显提示。
+    ///
+    /// 这对于调试和理解模型的行为很有用。
+    pub fn echo(mut self, echo: bool) -> Self {
+        self.inner
+            .body
+            .as_mut()
+            .unwrap()
+            .insert("echo".to_string(), serde_json::to_value(echo).unwrap());
+        self
+    }
+
+    /// 最多4个序列，API将在这些序列处停止生成更多令牌。
+    /// 返回的文本将不包含停止序列。
+    pub fn stop(mut self, stop: Vec<String>) -> Self {
+        self.inner
+            .body
+            .as_mut()
+            .unwrap()
+            .insert("stop".to_string(), serde_json::to_value(stop).unwrap());
+        self
+    }
+
+    /// 一个介于-2.0和2.0之间的数值。正值根据新令牌是否出现在迄今为止的文本中进行惩罚，
+    /// 增加模型谈论新话题的可能性。
+    pub fn presence_penalty(mut self, presence_penalty: f32) -> Self {
+        self.inner.body.as_mut().unwrap().insert(
+            "presence_penalty".to_string(),
+            serde_json::to_value(presence_penalty).unwrap(),
+        );
+        self
+    }
+
+    /// 一个介于-2.0和2.0之间的数值。正值根据新令牌在迄今为止文本中的现有频率进行惩罚，
+    /// 降低模型逐字重复同一行的可能性。
+    pub fn frequency_penalty(mut self, frequency_penalty: f32) -> Self {
+        self.inner.body.as_mut().unwrap().insert(
+            "frequency_penalty".to_string(),
+            serde_json::to_value(frequency_penalty).unwrap(),
+        );
+        self
+    }
+
+    /// 在服务器端生成`best_of`个补全并返回"最佳"
+    /// （每个令牌具有最高对数概率的那个）。
+    ///
+    /// 结果无法流式传输。与`n`一起使用时，`best_of`控制
+    /// 候选补全的数量，而`n`指定返回多少个。
+    /// `best_of`必须大于或等于`n`。
+    /// 请谨慎使用，因为它可能会消耗许多令牌。
+    pub fn best_of(mut self, best_of: i32) -> Self {
+        self.inner.body.as_mut().unwrap().insert(
+            "best_of".to_string(),
+            serde_json::to_value(best_of).unwrap(),
+        );
+        self
+    }
+
+    /// 修改指定令牌在补全中出现的可能性。
+    ///
+    /// 接受一个JSON对象，该对象将令牌（由分词器中的令牌ID指定）
+    /// 映射到-100到100之间的相关偏置值。
+    pub fn logit_bias(mut self, bias: HashMap<String, i32>) -> Self {
+        self.inner.body.as_mut().unwrap().insert(
+            "logit_bias".to_string(),
+            serde_json::to_value(bias).unwrap(),
+        );
+        self
+    }
+
+    /// 代表您的终端用户的唯一标识符，这可以帮助OpenAI监控和检测滥用行为。
+    pub fn user(mut self, user: String) -> Self {
+        self.inner
+            .body
+            .as_mut()
+            .unwrap()
+            .insert("user".to_string(), serde_json::to_value(user).unwrap());
+        self
+    }
+
+    /// HTTP请求超时时间，覆盖客户端的全局设置。
+    ///
+    /// 此字段不会在请求体中序列化。
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.inner.extensions.insert(Timeout(timeout));
+        self
+    }
+
+    /// HTTP请求User-Agent，覆盖客户端的全局设置。
+    ///
+    /// 此字段不会在请求体中序列化。
+    pub fn user_agent(mut self, user_agent: HeaderValue) -> Self {
+        self.inner.headers.insert(USER_AGENT, user_agent);
+        self
+    }
+
+    /// 随请求发送额外的头信息。
+    pub fn header<K: IntoHeaderName>(mut self, key: K, val: HeaderValue) -> Self {
+        self.inner.headers.insert(key, val);
+        self
+    }
+
+    /// 向请求添加额外的JSON属性。
+    ///
+    /// 此字段不会在请求体中序列化。
+    pub fn body<K: Into<String>, V: Into<Value>>(mut self, key: K, val: V) -> Self {
+        self.inner
+            .body
+            .as_mut()
+            .unwrap()
+            .insert(key.into(), val.into());
+        self
+    }
+
+    /// HTTP请求重试次数，覆盖客户端的全局设置。
+    ///
+    /// 此字段不会在请求体中序列化。
+    pub fn retry_count(mut self, retry_count: usize) -> Self {
+        self.inner.extensions.insert(RetryCount(retry_count));
         self
     }
 }
 
-impl<'a> IntoRequestParams<'a> for RequestParamsBuilder<'a> {
-    fn into_request_params(self) -> RequestParams<'a> {
-        self.build().unwrap()
-    }
-}
-
-impl RequestParamsBuilder<'_> {
-    /// Adds an HTTP header to the request.
-    /// This allows adding custom headers to the API request, such as authentication tokens or custom metadata.
-    pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        let headers_map = self
-            .extra_headers
-            .get_or_insert_with(|| Some(HashMap::new()))
-            .get_or_insert_with(HashMap::new);
-        headers_map.insert(key.into(), value.into());
-        self
-    }
-
-    /// Adds a query parameter to the request.
-    /// This allows adding custom query parameters to the API request URL, such as additional filtering or configuration options.
-    pub fn query(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        let query_map = self
-            .extra_query
-            .get_or_insert_with(|| Some(HashMap::new()))
-            .get_or_insert_with(HashMap::new);
-        query_map.insert(key.into(), value.into());
-        self
-    }
-
-    /// Adds a field to the request body.
-    /// This allows adding custom fields to the JSON request body, such as additional parameters not directly supported by the builder.
-    pub fn body(mut self, key: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
-        let body_map = self
-            .extra_body
-            .get_or_insert_with(|| Some(HashMap::new()))
-            .get_or_insert_with(HashMap::new);
-        body_map.insert(key.into(), value.into());
-        self
+impl CompletionsParam {
+    pub(crate) fn take(self) -> InParam {
+        self.inner
     }
 }

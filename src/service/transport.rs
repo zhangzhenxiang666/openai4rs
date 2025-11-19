@@ -9,79 +9,79 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
 
-/// Result type for processing streaming events.
+/// 用于处理流事件的结果类型。
 ///
-/// This enum represents the possible outcomes when processing a streaming event:
-/// - Skip: The event should be ignored (e.g., empty data)
-/// - Data: The event contains valid data that should be forwarded
-/// - Done: The stream has completed
-/// - Error: An error occurred while processing the event
+/// 此枚举表示处理流事件时可能出现的结果：
+/// - Skip: 应该忽略该事件（例如，空数据）
+/// - Data: 事件包含应转发的有效数据
+/// - Done: 流已完成
+/// - Error: 处理事件时发生错误
 enum SseEventResult<T>
 where
     T: serde::de::DeserializeOwned,
 {
-    /// Skip this event (e.g., empty data)
+    /// 跳过此事件（例如，空数据）
     Skip,
-    /// Valid data extracted from the event
+    /// 从事件中提取的有效数据
     Data(T),
-    /// Stream has completed
+    /// 流已完成
     Done,
-    /// An error occurred while processing the event
+    /// 处理事件时发生错误
     Error(OpenAIError),
 }
 
-/// A transport layer that abstracts the underlying HTTP service.
+/// 抽象底层HTTP服务的传输层。
 ///
-/// This layer provides a simplified interface for making HTTP requests,
-/// delegating the actual execution to the `HttpExecutor`. It handles
-/// response processing, including JSON deserialization and streaming
-/// response handling.
+/// 此层为发送HTTP请求提供简化的接口，
+/// 将实际执行委托给 `HttpExecutor`。它处理
+/// 响应处理，包括JSON反序列化和流
+/// 响应处理。
 ///
-/// The transport layer is responsible for:
-/// - Converting raw HTTP responses to strongly-typed objects
-/// - Handling streaming responses using Server-Sent Events (SSE)
-/// - Managing the request/response lifecycle
-pub struct HttpTransport {
-    /// The underlying HTTP executor responsible for sending requests
+/// 传输层负责：
+/// - 将原始HTTP响应转换为强类型对象
+/// - 使用服务器发送事件（SSE）处理流响应
+/// - 管理请求/响应生命周期
+pub(crate) struct HttpTransport {
+    /// 负责发送请求的底层HTTP执行器
     executor: HttpExecutor,
 }
 
 impl HttpTransport {
-    /// Creates a new `Transport` with the given configuration.
+    /// 使用给定的配置创建一个新的 `Transport`。
     ///
-    /// # Parameters
-    /// * `config` - The main OpenAI client configuration
+    /// # 参数
+    /// * `config` - 主OpenAI客户端配置
     ///
-    /// # Returns
-    /// A new Transport instance
+    /// # 返回值
+    /// 新的Transport实例
     pub fn new(config: Config) -> HttpTransport {
         HttpTransport {
             executor: HttpExecutor::new(config),
         }
     }
 
-    /// Returns a clone of the internal configuration wrapped in an Arc<RwLock>.
+    /// 返回内部配置的克隆，包装在 Arc<RwLock> 中。
     ///
-    /// This allows access to the current configuration for request building.
-    pub(crate) fn config(&self) -> Arc<RwLock<Config>> {
+    /// 这允许访问当前配置以构建请求。
+    pub fn config(&self) -> Arc<RwLock<Config>> {
         self.executor.config()
     }
 
-    /// Sends a POST request with JSON payload and deserializes the response using HttpParams.
+    /// 使用JSON负载发送POST请求并使用HttpParams反序列化响应。
     ///
-    /// This method sends a POST request and automatically deserializes the
-    /// JSON response into the specified type.
+    /// 此方法发送一个POST请求并自动将
+    /// JSON响应反序列化为指定类型。
     ///
-    /// # Parameters
-    /// * `params` - The HttpParams structure containing all necessary request parameters
+    /// # 参数
+    /// * `params` - 包含所有必要请求参数的HttpParams结构
     ///
-    /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a String
-    /// * `F` - Function type for building the request
-    /// * `T` - The expected response type that implements DeserializeOwned
+    /// # 类型参数
+    /// * `U` - 用于生成URL的函数类型，返回一个String
+    /// * `F` - 用于构建请求的函数类型
+    /// * `T` - 实现DeserializeOwned的预期响应类型
     ///
-    /// # Returns
-    /// A Result containing the deserialized response object or an OpenAIError
+    /// # 返回值
+    /// 包含反序列化响应对象或OpenAIError的Result
     pub async fn post_json<U, F, T>(&self, params: RequestSpec<U, F>) -> Result<T, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
@@ -99,21 +99,21 @@ impl HttpTransport {
         })
     }
 
-    /// Sends a GET request and deserializes the JSON response using HttpParams.
+    /// 使用HttpParams发送GET请求并反序列化JSON响应。
     ///
-    /// This method sends a GET request and automatically deserializes the
-    /// JSON response into the specified type.
+    /// 此方法发送一个GET请求并自动将
+    /// JSON响应反序列化为指定类型。
     ///
-    /// # Parameters
-    /// * `params` - The HttpParams structure containing all necessary request parameters
+    /// # 参数
+    /// * `params` - 包含所有必要请求参数的HttpParams结构
     ///
-    /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a String
-    /// * `F` - Function type for building the request
-    /// * `T` - The expected response type that implements DeserializeOwned
+    /// # 类型参数
+    /// * `U` - 用于生成URL的函数类型，返回一个String
+    /// * `F` - 用于构建请求的函数类型
+    /// * `T` - 实现DeserializeOwned的预期响应类型
     ///
-    /// # Returns
-    /// A Result containing the deserialized response object or an OpenAIError
+    /// # 返回值
+    /// 包含反序列化响应对象或OpenAIError的Result
     pub async fn get_json<U, F, T>(&self, params: RequestSpec<U, F>) -> Result<T, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
@@ -131,22 +131,22 @@ impl HttpTransport {
         })
     }
 
-    /// Sends a POST request expecting a streaming JSON response using HttpParams.
+    /// 使用HttpParams发送POST请求并期望流式JSON响应。
     ///
-    /// This method sends a POST request and handles streaming responses
-    /// using Server-Sent Events (SSE). It returns a stream of deserialized
-    /// response chunks.
+    /// 此方法发送一个POST请求并处理流式响应
+    /// 使用服务器发送事件（SSE）。它返回反序列化
+    /// 响应块的流。
     ///
-    /// # Parameters
-    /// * `params` - The HttpParams structure containing all necessary request parameters
+    /// # 参数
+    /// * `params` - 包含所有必要请求参数的HttpParams结构
     ///
-    /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a String
-    /// * `F` - Function type for building the request
-    /// * `T` - The expected response chunk type that implements DeserializeOwned
+    /// # 类型参数
+    /// * `U` - 用于生成URL的函数类型，返回一个String
+    /// * `F` - 用于构建请求的函数类型
+    /// * `T` - 实现DeserializeOwned的预期响应块类型
     ///
-    /// # Returns
-    /// A Result containing a stream of response chunks or an OpenAIError
+    /// # 返回值
+    /// 包含响应块流或OpenAIError的Result
     pub async fn post_json_stream<U, F, T>(
         &self,
         params: RequestSpec<U, F>,
@@ -184,20 +184,20 @@ impl HttpTransport {
         Ok(ReceiverStream::new(rx))
     }
 
-    /// Processes a streaming event from the SSE stream.
+    /// 处理来自SSE流的流式事件。
     ///
-    /// This method handles the parsing and processing of individual events
-    /// from a Server-Sent Events stream, converting them into ProcessEventResult
-    /// variants.
+    /// 此方法处理解析和处理单个事件
+    /// 来自服务器发送事件流，将它们转换为ProcessEventResult
+    /// 变体。
     ///
-    /// # Parameters
-    /// * `event_result` - The result from the event stream (either an event or an error)
+    /// # 参数
+    /// * `event_result` - 事件流的结果（事件或错误）
     ///
-    /// # Type Parameters
-    /// * `T` - The expected response chunk type that implements DeserializeOwned
+    /// # 类型参数
+    /// * `T` - 实现DeserializeOwned的预期响应块类型
     ///
-    /// # Returns
-    /// A ProcessEventResult indicating how to handle this event
+    /// # 返回值
+    /// 指示如何处理此事件的ProcessEventResult
     async fn process_stream_event<T>(
         event_result: Result<Event, EventStreamError<reqwest::Error>>,
     ) -> SseEventResult<T>
@@ -232,10 +232,10 @@ impl HttpTransport {
         }
     }
 
-    /// Updates the internal HTTP client configuration.
+    /// 更新内部HTTP客户端配置。
     ///
-    /// This method triggers a rebuild of the underlying HTTP client with
-    /// any updated configuration settings.
+    /// 此方法触发底层HTTP客户端的重建
+    /// 以及任何更新的配置设置。
     pub async fn refresh_client(&self) {
         self.executor.rebuild_reqwest_client().await;
     }

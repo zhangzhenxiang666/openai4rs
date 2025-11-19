@@ -1,144 +1,112 @@
-use std::collections::HashMap;
-
-use crate::common::types::{Bodies, Headers, QueryParams};
-use derive_builder::Builder;
-use serde::Serialize;
-
 use super::types::{EncodingFormat, Input};
+use crate::common::types::{Body, InParam, RetryCount, Timeout};
+use http::{
+    HeaderValue,
+    header::{IntoHeaderName, USER_AGENT},
+};
+use serde_json::Value;
+use std::time::Duration;
 
-/// Parameters for creating embeddings for text inputs.
-///
-/// This struct represents the request parameters for the OpenAI embeddings API,
-/// which generates vector representations of text inputs.
-#[derive(Debug, Clone, Serialize, Builder)]
-#[builder(
-    name = "RequestParamsBuilder",
-    derive(Debug),
-    pattern = "owned",
-    setter(strip_option)
-)]
-pub struct RequestParams {
-    /// ID of the model to use. You can use the List models API to see all of your available models,
-    /// or see our Model overview for descriptions of them.
-    pub model: String,
-
-    /// Input text to embed, encoded as a string or array of tokens.
-    /// To embed multiple inputs in a single request, pass an array of strings or array of token arrays.
-    /// Each input must not exceed the max input tokens for the model (8192 tokens for `text-embedding-ada-002`).
-    /// Example: ["The quick brown fox", "jumps over the lazy dog"]
-    pub input: Input,
-
-    /// The format to return the embeddings in. Can be either `float` or `base64`
-    #[builder(default)]
-    pub encoding_format: EncodingFormat,
-
-    /// The number of dimensions the resulting output embeddings should have.
-    /// Only supported in `text-embedding-3` and later models.
-    #[builder(default)]
-    pub dimensions: Option<usize>,
-
-    /// A unique identifier representing your end-user, which can help OpenAI
-    /// monitor and detect abuse.
-    #[builder(default)]
-    pub user: Option<String>,
-    /// Send additional headers with the request.
-    ///
-    #[builder(default)]
-    #[serde(skip_serializing)]
-    pub extra_headers: Option<Headers>,
-
-    /// Add additional query parameters to the request.
-    ///
-    #[builder(default)]
-    #[serde(skip_serializing)]
-    pub extra_query: Option<QueryParams>,
-
-    /// Add additional JSON properties to the request.
-    ///
-    /// This field will not be serialized in the request body.
-    #[builder(default)]
-    #[serde(skip_serializing)]
-    pub extra_body: Option<Bodies>,
-
-    /// HTTP request retry count, overriding the client's global setting.
-    ///
-    /// This field will not be serialized in the request body.
-    #[builder(default)]
-    #[serde(skip_serializing)]
-    pub retry_count: Option<u32>,
-
-    /// HTTP request timeout in seconds, overriding the client's global setting.
-    ///
-    /// This field will not be serialized in the request body.
-    #[builder(default)]
-    #[serde(skip_serializing)]
-    pub timeout_seconds: Option<u64>,
-
-    /// HTTP request User-Agent, overriding the client's global setting.
-    ///
-    /// This field will not be serialized in the request body.
-    #[builder(default)]
-    #[serde(skip_serializing)]
-    pub user_agent: Option<String>,
+pub struct EmbeddingsParam {
+    inner: InParam,
 }
 
-pub fn embeddings_request<T>(model: &str, input: T) -> RequestParamsBuilder
-where
-    T: Into<Input>,
-{
-    let input = input.into();
-    RequestParamsBuilder::create_empty()
-        .model(model.to_string())
-        .input(input)
-}
+impl EmbeddingsParam {
+    /// 创建embeddings api参数构建器
+    /// `model`: 模型名称
+    /// `input`: 输入需要嵌入的文本
+    pub fn new<T: Into<Input>>(model: &str, input: T) -> Self {
+        let mut inner = InParam::new();
+        inner.body = Some(Body::new());
+        inner
+            .body
+            .as_mut()
+            .unwrap()
+            .insert("model".to_string(), serde_json::to_value(model).unwrap());
 
-pub trait IntoRequestParams {
-    fn into_request_params(self) -> RequestParams;
-}
+        inner.body.as_mut().unwrap().insert(
+            "input".to_string(),
+            serde_json::to_value(<T as Into<Input>>::into(input)).unwrap(),
+        );
+        let param = EmbeddingsParam { inner };
+        param.encoding_format(EncodingFormat::Float)
+    }
 
-impl IntoRequestParams for RequestParams {
-    fn into_request_params(self) -> RequestParams {
+    /// 返回嵌入的格式。可以是`float`或`base64`
+    pub fn encoding_format(mut self, encoding_format: EncodingFormat) -> Self {
+        self.inner.body.as_mut().unwrap().insert(
+            "encoding_format".to_string(),
+            serde_json::to_value(encoding_format).unwrap(),
+        );
+        self
+    }
+
+    /// 结果输出嵌入应该具有的维度数。
+    /// 仅在`text-embedding-3`及后续模型中支持。
+    pub fn dimensions(mut self, dimensions: usize) -> Self {
+        self.inner.body.as_mut().unwrap().insert(
+            "dimensions".to_string(),
+            serde_json::to_value(dimensions).unwrap(),
+        );
+        self
+    }
+
+    /// 代表您的终端用户的唯一标识符，这可以帮助OpenAI
+    /// 监控和检测滥用行为。
+    pub fn user(mut self, user: &str) -> Self {
+        self.inner
+            .body
+            .as_mut()
+            .unwrap()
+            .insert("user".to_string(), serde_json::to_value(user).unwrap());
+        self
+    }
+
+    /// HTTP请求超时时间，覆盖客户端的全局设置。
+    ///
+    /// 此字段不会在请求体中序列化。
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.inner.extensions.insert(Timeout(timeout));
+        self
+    }
+
+    /// HTTP请求User-Agent，覆盖客户端的全局设置。
+    ///
+    /// 此字段不会在请求体中序列化。
+    pub fn user_agent(mut self, user_agent: HeaderValue) -> Self {
+        self.inner.headers.insert(USER_AGENT, user_agent);
+        self
+    }
+
+    /// 随请求发送额外的头信息。
+    pub fn header<K: IntoHeaderName>(mut self, key: K, val: HeaderValue) -> Self {
+        self.inner.headers.insert(key, val);
+        self
+    }
+
+    /// 向请求添加额外的JSON属性。
+    ///
+    /// 此字段不会在请求体中序列化。
+    pub fn body<K: Into<String>, V: Into<Value>>(mut self, key: K, val: V) -> Self {
+        self.inner
+            .body
+            .as_mut()
+            .unwrap()
+            .insert(key.into(), val.into());
+        self
+    }
+
+    /// HTTP请求重试次数，覆盖客户端的全局设置。
+    ///
+    /// 此字段不会在请求体中序列化。
+    pub fn retry_count(mut self, retry_count: usize) -> Self {
+        self.inner.extensions.insert(RetryCount(retry_count));
         self
     }
 }
 
-impl IntoRequestParams for RequestParamsBuilder {
-    fn into_request_params(self) -> RequestParams {
-        self.build().unwrap()
-    }
-}
-
-impl RequestParamsBuilder {
-    /// Adds an HTTP header to the request.
-    /// This allows adding custom headers to the API request, such as authentication tokens or custom metadata.
-    pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        let headers_map = self
-            .extra_headers
-            .get_or_insert_with(|| Some(HashMap::new()))
-            .get_or_insert_with(HashMap::new);
-        headers_map.insert(key.into(), value.into());
-        self
-    }
-
-    /// Adds a query parameter to the request.
-    /// This allows adding custom query parameters to the API request URL, such as additional filtering or configuration options.
-    pub fn query(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        let query_map = self
-            .extra_query
-            .get_or_insert_with(|| Some(HashMap::new()))
-            .get_or_insert_with(HashMap::new);
-        query_map.insert(key.into(), value.into());
-        self
-    }
-
-    /// Adds a field to the request body.
-    /// This allows adding custom fields to the JSON request body, such as additional parameters not directly supported by the builder.
-    pub fn body(mut self, key: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
-        let body_map = self
-            .extra_body
-            .get_or_insert_with(|| Some(HashMap::new()))
-            .get_or_insert_with(HashMap::new);
-        body_map.insert(key.into(), value.into());
-        self
+impl EmbeddingsParam {
+    pub(crate) fn take(self) -> InParam {
+        self.inner
     }
 }

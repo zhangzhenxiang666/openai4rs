@@ -1,21 +1,20 @@
-//! Error handling and custom error types for the `openai4rs` crate.
+//! `openai4rs` 库的错误处理和自定义错误类型。
 //!
-//! This module provides a comprehensive error handling system for the `openai4rs` crate.
-//! It defines the main [`OpenAIError`] enum, which encompasses all possible error types
-//! that can occur during API interactions.
+//! 该模块为 `openai4rs` 库提供了一个全面的错误处理系统。
+//! 它定义了主要的 [`OpenAIError`] 枚举，其中包含了在 API 交互过程中可能出现的所有错误类型。
 //!
-//! The error types are categorized into:
+//! 错误类型分为：
 //!
-//! - [`RequestError`]: Errors that occur during the preparation or sending of an API request
-//!   (e.g., network issues, invalid URLs).
-//! - [`ApiError`]: Errors returned by the OpenAI API itself (e.g., authentication failures,
-//!   rate limits, invalid requests).
-//! - [`ProcessingError`]: Errors that occur during the processing of an API response
-//!   (e.g., deserialization failures).
+//! - [`RequestError`]: 在准备或发送 API 请求期间发生的错误
+//!   (例如，网络问题，无效 URL)。
+//! - [`ApiError`]: OpenAI API 本身返回的错误 (例如，身份验证失败，
+//!   速率限制，无效请求)。
+//! - [`ProcessingError`]: 在处理 API 响应期间发生的错误
+//!   (例如，反序列化失败)。
 //!
-//! # Examples
+//! # 示例
 //!
-//! ## Handling Specific Error Types
+//! ## 处理特定错误类型
 //!
 //! ```rust,no_run
 //! use openai4rs::*;
@@ -26,28 +25,28 @@
 //!     dotenv().ok();
 //!     let client = OpenAI::from_env()?;
 //!     let messages = vec![user!("Hello, world!")];
-//!     let request = chat_request("invalid-model-name", &messages);
+//!     let request = ChatParam::new("invalid-model-name", &messages);
 //!
 //!     match client.chat().create(request).await {
 //!         Ok(response) => {
 //!             println!("Success: {:#?}", response);
 //!         }
 //!         Err(OpenAIError::Api(api_error)) => {
-//!             eprintln!("API Error: {}", api_error.message);
-//!             // Handle specific API errors (e.g., bad request, rate limit)
+//!             eprintln!("API 错误: {}", api_error.message);
+//!             // 处理特定的 API 错误 (例如，错误请求，速率限制)
 //!             if api_error.is_bad_request() {
-//!                 eprintln!("Bad request. Check your parameters.");
+//!                 eprintln!("错误请求。请检查您的参数。");
 //!             } else if api_error.is_rate_limit() {
-//!                 eprintln!("Rate limit exceeded. Try again later.");
+//!                 eprintln!("超过速率限制。请稍后重试。");
 //!             }
 //!         }
 //!         Err(OpenAIError::Request(req_error)) => {
-//!             eprintln!("Request Error: {}", req_error);
-//!             // Handle network or connection errors
+//!             eprintln!("请求错误: {}", req_error);
+//!             // 处理网络或连接错误
 //!         }
 //!         Err(OpenAIError::Processing(proc_error)) => {
-//!             eprintln!("Processing Error: {}", proc_error);
-//!             // Handle errors during response processing
+//!             eprintln!("处理错误: {}", proc_error);
+//!             // 处理响应处理期间的错误
 //!         }
 //!     }
 //!
@@ -55,7 +54,7 @@
 //! }
 //! ```
 //!
-//! ## Checking for Retryable Errors
+//! ## 检查可重试错误
 //!
 //! ```rust,no_run
 //! use openai4rs::*;
@@ -69,7 +68,7 @@
 //!
 //!     let mut retries = 3;
 //!     loop {
-//!         let request = chat_request("gpt-3.5-turbo", &messages);
+//!         let request = ChatParam::new("gpt-3.5-turbo", &messages);
 //!         match client.chat().create(request).await {
 //!             Ok(response) => {
 //!                 println!("Success: {:#?}", response);
@@ -77,11 +76,11 @@
 //!             }
 //!             Err(e) if e.is_retryable() && retries > 0 => {
 //!                 retries -= 1;
-//!                 eprintln!("Retryable error: {}. Retries left: {}", e, retries);
+//!                 eprintln!("可重试错误: {}. 剩余重试次数: {}", e, retries);
 //!                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 //!             }
 //!             Err(e) => {
-//!                 eprintln!("Non-retryable error: {}", e);
+//!                 eprintln!("不可重试错误: {}", e);
 //!                 break;
 //!             }
 //!         }
@@ -104,77 +103,76 @@ pub mod processing;
 pub mod request;
 pub mod sse;
 
-/// The main error type for the `openai4rs` crate.
+/// `openai4rs` 库的主要错误类型。
 ///
-/// This enum encompasses all possible error types that can occur during
-/// interactions with the OpenAI API.
+/// 此枚举包含在与 OpenAI API 交互期间可能出现的所有错误类型。
 #[derive(Debug, Error)]
 pub enum OpenAIError {
-    /// An error that occurred during the preparation or sending of an API request.
-    #[error("Request Error: {0}")]
+    /// 在准备或发送 API 请求期间发生的错误。
+    #[error("请求错误: {0}")]
     Request(#[from] RequestError),
 
-    /// An error returned by the OpenAI API.
-    #[error("API Error: {0}")]
+    /// OpenAI API 返回的错误。
+    #[error("API 错误: {0}")]
     Api(#[from] ApiError),
 
-    /// An error that occurred during the processing of an API response.
-    #[error("Processing Error: {0}")]
+    /// 在处理 API 响应期间发生的错误。
+    #[error("处理错误: {0}")]
     Processing(#[from] ProcessingError),
 }
 
 impl OpenAIError {
-    /// Returns `true` if the error is a request error.
+    /// 如果错误是请求错误，则返回 `true`。
     pub fn is_request_error(&self) -> bool {
         matches!(self, Self::Request(_))
     }
 
-    /// Returns `true` if the error is an API error.
+    /// 如果错误是 API 错误，则返回 `true`。
     pub fn is_api_error(&self) -> bool {
         matches!(self, Self::Api(_))
     }
 
-    /// Returns `true` if the error is a processing error.
+    /// 如果错误是处理错误，则返回 `true`。
     pub fn is_processing_error(&self) -> bool {
         matches!(self, Self::Processing(_))
     }
 
-    /// Returns `true` if the error is a timeout.
+    /// 如果错误是超时错误，则返回 `true`。
     pub fn is_timeout(&self) -> bool {
         matches!(self, Self::Request(err) if err.is_timeout())
     }
 
-    /// Returns `true` if the error is a connection error.
+    /// 如果错误是连接错误，则返回 `true`。
     pub fn is_connection(&self) -> bool {
         matches!(self, Self::Request(err) if err.is_connection())
     }
 
-    /// Returns `true` if the error is an authentication error (HTTP 401).
+    /// 如果错误是身份验证错误 (HTTP 401)，则返回 `true`。
     pub fn is_authentication(&self) -> bool {
         matches!(self, Self::Api(err) if err.is_authentication())
     }
 
-    /// Returns `true` if the error is a rate limit error (HTTP 429).
+    /// 如果错误是速率限制错误 (HTTP 429)，则返回 `true`。
     pub fn is_rate_limit(&self) -> bool {
         matches!(self, Self::Api(err) if err.is_rate_limit())
     }
 
-    /// Returns `true` if the error is a server-side error (HTTP 5xx).
+    /// 如果错误是服务器端错误 (HTTP 5xx)，则返回 `true`。
     pub fn is_server_error(&self) -> bool {
         matches!(self, Self::Api(err) if err.is_server_error())
     }
 
-    /// Returns `true` if the error is a bad request error (HTTP 400).
+    /// 如果错误是错误请求错误 (HTTP 400)，则返回 `true`。
     pub fn is_bad_request(&self) -> bool {
         matches!(self, Self::Api(err) if err.is_bad_request())
     }
 
-    /// Returns `true` if the error is due to a deserialization problem.
+    /// 如果错误是由于反序列化问题，则返回 `true`。
     pub fn is_deserialization(&self) -> bool {
         matches!(self, Self::Processing(ProcessingError::Deserialization(_)))
     }
 
-    /// Returns a reference to the underlying `ApiError` if the error is an API error.
+    /// 如果错误是 API 错误，则返回对底层 `ApiError` 的引用。
     pub fn as_api_error(&self) -> Option<&ApiError> {
         match self {
             Self::Api(err) => Some(err),
@@ -182,7 +180,7 @@ impl OpenAIError {
         }
     }
 
-    /// Returns the HTTP status code if the error is related to an HTTP response.
+    /// 如果错误与 HTTP 响应相关，则返回 HTTP 状态码。
     pub fn status_code(&self) -> Option<u16> {
         match self {
             Self::Request(err) => err.status().map(|s| s.as_u16()),
@@ -191,22 +189,22 @@ impl OpenAIError {
         }
     }
 
-    /// Returns `true` if the request that caused the error might succeed on retry.
+    /// 如果导致错误的请求在重试时可能成功，则返回 `true`。
     pub fn is_retryable(&self) -> bool {
         match self {
-            // Timeouts and connection errors are often transient.
+            // 超时和连接错误通常是暂时的。
             Self::Request(err) if err.is_timeout() || err.is_connection() => true,
-            // Rate limits, server-side errors, and conflicts are worth retrying.
+            // 速率限制、服务器端错误和冲突值得重试。
             Self::Api(err) if err.is_rate_limit() || err.is_server_error() || err.is_conflict() => {
                 true
             }
-            // Decode errors can be transient if the response body is incomplete.
+            // 如果响应体不完整，解码错误可能是暂时的。
             Self::Processing(ProcessingError::TextRead(err)) if err.is_decode() => true,
             _ => false,
         }
     }
 
-    /// Returns a descriptive message for the error.
+    /// 返回错误的描述性消息。
     pub fn message(&self) -> String {
         match self {
             Self::Request(err) => err.to_string(),
@@ -217,6 +215,7 @@ impl OpenAIError {
 }
 
 impl OpenAIError {
+    /// 从 EventSource 流错误创建 OpenAIError
     pub fn from_eventsource_stream_error(err: EventStreamError<reqwest::Error>) -> Self {
         match err {
             EventStreamError::Utf8(utf8_err) => {

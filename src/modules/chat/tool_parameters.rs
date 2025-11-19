@@ -1,26 +1,25 @@
-//! Type-safe definitions for building tool parameters that conform to the JSON Schema standard.
+//! 符合JSON Schema标准的工具参数的类型安全定义。
 //!
-//! This module provides a robust, type-safe builder for defining the parameters a function
-//! tool can accept. It ensures that the generated schema is valid according to the subset
-//! of JSON Schema supported by OpenAI's API.
+//! 此模块提供了一个健壮的、类型安全的构建器，用于定义函数工具可以接受的参数。
+//! 它确保生成的模式根据OpenAI API支持的JSON Schema子集是有效的。
 //!
-//! ## Example
+//! ## 示例
 //!
 //! ```rust
 //! use openai4rs::chat::tool_parameters::Parameters;
 //!
 //! let params = Parameters::object()
-//!     .description("Parameters for the weather function")
+//!     .description("天气函数的参数")
 //!     .property(
 //!         "location",
-//!         Parameters::string().description("The city and state, e.g., San Francisco, CA").build()
+//!         Parameters::string().description("城市和州，例如：旧金山，加利福尼亚州").build()
 //!     )
 //!     .property(
 //!         "unit",
 //!         Parameters::string()
-//!             .description("The unit of temperature")
-//!             .enum_str("Celsius")
-//!             .enum_str("Fahrenheit")
+//!             .description("温度单位")
+//!             .enum_str("摄氏度")
+//!             .enum_str("华氏度")
 //!             .build()
 //!     )
 //!     .require("location")
@@ -28,13 +27,13 @@
 //!     .unwrap();
 //! ```
 //!
-//! This module defines a hierarchy of parameter types:
-//! - `Parameters::Object(ObjectParameters)`: For defining objects with named properties.
-//! - `Parameters::Array(ArrayParameters)`: For defining arrays with item types.
-//! - `Parameters::String(StringParameters)`: For defining string parameters.
-//! - `Parameters::Number(NumberParameters)`: For defining number parameters.
-//! - `Parameters::Integer(IntegerParameters)`: For defining integer parameters.
-//! - `Parameters::Boolean(BooleanParameters)`: For defining boolean parameters.
+//! 此模块定义了参数类型的层次结构：
+//! - `Parameters::Object(ObjectParameters)`: 用于定义具有命名属性的对象。
+//! - `Parameters::Array(ArrayParameters)`: 用于定义具有项目类型的数组。
+//! - `Parameters::String(StringParameters)`: 用于定义字符串参数。
+//! - `Parameters::Number(NumberParameters)`: 用于定义数字参数。
+//! - `Parameters::Integer(IntegerParameters)`: 用于定义整数参数。
+//! - `Parameters::Boolean(BooleanParameters)`: 用于定义布尔参数。
 
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
@@ -42,14 +41,14 @@ use serde_json::Value;
 use std::collections::HashMap;
 use thiserror::Error;
 
-/// An error that can occur during the construction of parameter objects.
+/// 在构建参数对象期间可能发生的错误。
 #[derive(Error, Debug, PartialEq)]
 pub enum ParameterBuilderError {
     #[error("A required property '{0}' is not defined in the properties map")]
     RequiredPropertyNotDefined(String),
 }
 
-/// An error that can occur when converting a `serde_json::Value` to `Parameters`.
+/// 在将 `serde_json::Value` 转换为 `Parameters` 时可能发生的错误。
 #[derive(Error, Debug, PartialEq)]
 pub enum ConversionError {
     #[error("The provided JSON Value must be an object, but it is: {0}")]
@@ -66,10 +65,10 @@ pub enum ConversionError {
 
 // --- Core Data Structures ---
 
-/// A type-safe representation of JSON Schema parameters for defining tool parameters.
+/// 用于定义工具参数的JSON Schema参数的类型安全表示。
 ///
-/// This enum represents the different types of parameters that can be defined.
-/// Each variant contains a specific struct that defines the properties for that type.
+/// 此枚举表示可以定义的不同类型的参数。
+/// 每个变体包含一个特定的结构体，用于定义该类型的属性。
 #[derive(Debug, Clone, PartialEq)]
 pub enum Parameters {
     Object(ObjectParameters),
@@ -80,9 +79,9 @@ pub enum Parameters {
     Boolean(BooleanParameters),
 }
 
-/// Parameters for an object type.
+/// 对象类型的参数。
 ///
-/// Defines an object with named properties. Each property is itself a `Parameters` object.
+/// 定义具有命名属性的对象。每个属性本身都是一个 `Parameters` 对象。
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ObjectParameters {
     pub description: Option<String>,
@@ -90,37 +89,37 @@ pub struct ObjectParameters {
     pub required: Vec<String>,
 }
 
-/// Parameters for an array type.
+/// 数组类型的参数。
 ///
-/// Defines an array where each item conforms to a specified `Parameters` schema.
+/// 定义一个数组，其中每个项目都符合指定的 `Parameters` 模式。
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ArrayParameters {
     pub description: Option<String>,
     pub items: Option<Box<Parameters>>,
 }
 
-/// Parameters for a string type.
+/// 字符串类型的参数。
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct StringParameters {
     pub description: Option<String>,
     pub enum_values: Option<Vec<Value>>,
 }
 
-/// Parameters for a number type (floating point).
+/// 数字类型（浮点数）的参数。
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct NumberParameters {
     pub description: Option<String>,
     pub enum_values: Option<Vec<Value>>,
 }
 
-/// Parameters for an integer type.
+/// 整数类型的参数。
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct IntegerParameters {
     pub description: Option<String>,
     pub enum_values: Option<Vec<Value>>,
 }
 
-/// Parameters for a boolean type.
+/// 布尔类型的参数。
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct BooleanParameters {
     pub description: Option<String>,
@@ -128,7 +127,7 @@ pub struct BooleanParameters {
 
 // --- Builder Implementations ---
 
-/// A builder for constructing `ObjectParameters` instances safely and conveniently.
+/// 用于安全且方便地构建 `ObjectParameters` 实例的构建器。
 #[derive(Debug)]
 pub struct ObjectParametersBuilder {
     params: ObjectParameters,
@@ -141,38 +140,38 @@ impl ObjectParametersBuilder {
         }
     }
 
-    /// Sets the description for the object.
+    /// 设置对象的描述。
     pub fn description(mut self, description: &str) -> ObjectParametersBuilder {
         self.params.description = Some(description.to_string());
         self
     }
 
-    /// Adds a property to the object.
+    /// 向对象添加一个属性。
     ///
-    /// The `name` is the property name, and `schema` defines the parameter for that property.
+    /// `name` 是属性名称，`schema` 定义该属性的参数。
     pub fn property(mut self, name: &str, schema: Parameters) -> ObjectParametersBuilder {
         self.params.properties.insert(name.to_string(), schema);
         self
     }
 
-    /// Marks a property as required.
+    /// 将属性标记为必需。
     ///
-    /// The property must have been previously added with `property()`.
+    /// 该属性必须已通过 `property()` 先前添加。
     pub fn required(mut self, required: Vec<String>) -> ObjectParametersBuilder {
         self.params.required = required;
         self
     }
 
-    /// Marks a property as require.
+    /// 将属性标记为必需。
     ///
-    /// The property must have been previously added with `property()`.
+    /// 该属性必须已通过 `property()` 先前添加。
     pub fn require(mut self, name: &str) -> ObjectParametersBuilder {
         self.params.required.push(name.to_string());
         self
     }
-    /// Builds the final `Parameters::Object` instance.
+    /// 构建最终的 `Parameters::Object` 实例。
     ///
-    /// This method performs validation to ensure the schema is valid.
+    /// 此方法执行验证以确保模式是有效的。
     pub fn build(self) -> Result<Parameters, ParameterBuilderError> {
         // Validate that all required properties exist
         for req_prop in &self.params.required {
@@ -187,7 +186,7 @@ impl ObjectParametersBuilder {
     }
 }
 
-/// A builder for constructing `ArrayParameters` instances.
+/// 用于构建 `ArrayParameters` 实例的构建器。
 #[derive(Debug)]
 pub struct ArrayParametersBuilder {
     params: ArrayParameters,
@@ -200,25 +199,25 @@ impl ArrayParametersBuilder {
         }
     }
 
-    /// Sets the description for the array.
+    /// 设置数组的描述。
     pub fn description(mut self, description: &str) -> ArrayParametersBuilder {
         self.params.description = Some(description.to_string());
         self
     }
 
-    /// Sets the schema for the items in the array.
+    /// 设置数组中项目的模式。
     pub fn items(mut self, items_schema: Parameters) -> ArrayParametersBuilder {
         self.params.items = Some(Box::new(items_schema));
         self
     }
 
-    /// Builds the final `Parameters::Array` instance.
+    /// 构建最终的 `Parameters::Array` 实例。
     pub fn build(self) -> Parameters {
         Parameters::Array(self.params)
     }
 }
 
-/// A builder for constructing `StringParameters` instances.
+/// 用于构建 `StringParameters` 实例的构建器。
 #[derive(Debug)]
 pub struct StringParametersBuilder {
     params: StringParameters,
@@ -231,15 +230,15 @@ impl StringParametersBuilder {
         }
     }
 
-    /// Sets the description for the string.
+    /// 设置字符串的描述。
     pub fn description(mut self, description: &str) -> StringParametersBuilder {
         self.params.description = Some(description.to_string());
         self
     }
 
-    /// Adds an enum value for the string.
+    /// 为字符串添加一个枚举值。
     ///
-    /// Constrains the string to be one of the specified values.
+    /// 限制字符串必须是所指定值中的一个。
     pub fn enum_value(mut self, value: Value) -> StringParametersBuilder {
         self.params
             .enum_values
@@ -274,15 +273,15 @@ impl NumberParametersBuilder {
         }
     }
 
-    /// Sets the description for the number.
+    /// 设置数字的描述。
     pub fn description(mut self, description: &str) -> NumberParametersBuilder {
         self.params.description = Some(description.to_string());
         self
     }
 
-    /// Adds an enum value for the number.
+    /// 为数字添加一个枚举值。
     ///
-    /// Constrains the number to be one of the specified values.
+    /// 限制数字必须是所指定值中的一个。
     pub fn enum_value(mut self, value: Value) -> NumberParametersBuilder {
         self.params
             .enum_values
@@ -291,7 +290,7 @@ impl NumberParametersBuilder {
         self
     }
 
-    /// Builds the final `Parameters::Number` instance.
+    /// 构建最终的 `Parameters::Number` 实例。
     pub fn build(self) -> Parameters {
         Parameters::Number(self.params)
     }
@@ -310,15 +309,15 @@ impl IntegerParametersBuilder {
         }
     }
 
-    /// Sets the description for the integer.
+    /// 设置整数的描述。
     pub fn description(mut self, description: &str) -> IntegerParametersBuilder {
         self.params.description = Some(description.to_string());
         self
     }
 
-    /// Adds an enum value for the integer.
+    /// 为整数添加一个枚举值。
     ///
-    /// Constrains the integer to be one of the specified values.
+    /// 限制整数必须是所指定值中的一个。
     pub fn enum_value(mut self, value: Value) -> IntegerParametersBuilder {
         self.params
             .enum_values
@@ -327,7 +326,7 @@ impl IntegerParametersBuilder {
         self
     }
 
-    /// Builds the final `Parameters::Integer` instance.
+    /// 构建最终的 `Parameters::Integer` 实例。
     pub fn build(self) -> Parameters {
         Parameters::Integer(self.params)
     }
@@ -346,13 +345,13 @@ impl BooleanParametersBuilder {
         }
     }
 
-    /// Sets the description for the boolean.
+    /// 设置布尔值的描述。
     pub fn description(mut self, description: &str) -> BooleanParametersBuilder {
         self.params.description = Some(description.to_string());
         self
     }
 
-    /// Builds the final `Parameters::Boolean` instance.
+    /// 构建最终的 `Parameters::Boolean` 实例。
     pub fn build(self) -> Parameters {
         Parameters::Boolean(self.params)
     }
@@ -361,32 +360,32 @@ impl BooleanParametersBuilder {
 // --- Convenience Constructors ---
 
 impl Parameters {
-    /// Creates a new object parameters builder.
+    /// 创建一个新的对象参数构建器。
     pub fn object() -> ObjectParametersBuilder {
         ObjectParametersBuilder::new()
     }
 
-    /// Creates a new array parameters builder.
+    /// 创建一个新的数组参数构建器。
     pub fn array() -> ArrayParametersBuilder {
         ArrayParametersBuilder::new()
     }
 
-    /// Creates a new string parameters builder.
+    /// 创建一个新的字符串参数构建器。
     pub fn string() -> StringParametersBuilder {
         StringParametersBuilder::new()
     }
 
-    /// Creates a new number parameters builder.
+    /// 创建一个新的数字参数构建器。
     pub fn number() -> NumberParametersBuilder {
         NumberParametersBuilder::new()
     }
 
-    /// Creates a new integer parameters builder.
+    /// 创建一个新的整数参数构建器。
     pub fn integer() -> IntegerParametersBuilder {
         IntegerParametersBuilder::new()
     }
 
-    /// Creates a new boolean parameters builder.
+    /// 创建一个新的布尔参数构建器。
     pub fn boolean() -> BooleanParametersBuilder {
         BooleanParametersBuilder::new()
     }
@@ -468,7 +467,7 @@ impl TryFrom<Value> for Parameters {
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         let mut obj = match value {
             Value::Object(map) => map,
-            _ => return Err(ConversionError::ValueNotAnObject(format!("{:?}", value))),
+            _ => return Err(ConversionError::ValueNotAnObject(format!("{value:?}"))),
         };
 
         let type_str = obj

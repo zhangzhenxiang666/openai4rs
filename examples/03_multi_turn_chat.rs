@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         messages.push(user!(content: user_input));
 
-        let request = chat_request(model, &messages);
+        let request = ChatParam::new(model, &messages);
 
         let mut stream = client.chat().create_stream(request).await?;
         let mut first_content = true;

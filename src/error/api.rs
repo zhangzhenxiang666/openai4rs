@@ -1,11 +1,10 @@
-use async_trait::async_trait;
 use reqwest::Response;
 use serde_json::Value;
 use thiserror::Error;
 
 use crate::utils::traits::AsyncFrom;
 
-/// Represents an error returned by the OpenAI API.
+/// 表示由 OpenAI API 返回的错误。
 #[derive(Debug, Error)]
 #[error("API error: Status {status}, Kind {kind:?}, Message: {message}")]
 pub struct ApiError {
@@ -16,7 +15,7 @@ pub struct ApiError {
     pub r#type: Option<String>,
 }
 
-/// API error classification based on HTTP status codes.
+/// 基于 HTTP 状态码的 API 错误分类。
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ApiErrorKind {
     BadRequest,
@@ -27,7 +26,7 @@ pub enum ApiErrorKind {
     UnprocessableEntity,
     RateLimit,
     InternalServer,
-    /// An unclassified or unknown API error.
+    /// 未分类或未知的 API 错误。
     Other,
 }
 
@@ -48,39 +47,38 @@ impl From<u16> for ApiErrorKind {
 }
 
 impl ApiError {
-    /// Returns `true` if the error is an authentication error (HTTP 401).
+    /// 如果错误是身份验证错误（HTTP 401），则返回 `true`。
     pub fn is_authentication(&self) -> bool {
         self.kind == ApiErrorKind::Authentication
     }
 
-    /// Returns `true` if the error is a rate limit error (HTTP 429).
+    /// 如果错误是速率限制错误（HTTP 429），则返回 `true`。
     pub fn is_rate_limit(&self) -> bool {
         self.kind == ApiErrorKind::RateLimit
     }
 
-    /// Returns `true` if the error is a server-side error (HTTP 5xx).
+    /// 如果错误是服务器端错误（HTTP 5xx），则返回 `true`。
     pub fn is_server_error(&self) -> bool {
         self.kind == ApiErrorKind::InternalServer
     }
 
-    /// Returns `true` if the error is a bad request error (HTTP 400).
+    /// 如果错误是错误请求错误（HTTP 400），则返回 `true`。
     pub fn is_bad_request(&self) -> bool {
         self.kind == ApiErrorKind::BadRequest
     }
 
-    /// Returns `true` if the request conflict (HTTP 409).
+    /// 如果请求冲突（HTTP 409），则返回 `true`。
     pub fn is_conflict(&self) -> bool {
         self.kind == ApiErrorKind::Conflict
     }
 
-    /// Returns `true` if the request that caused the error might succeed on retry.
+    /// 如果导致错误的请求在重试时可能成功，则返回 `true`。
     pub fn is_retryable(&self) -> bool {
-        // Rate limits, server-side errors, and conflicts are worth retrying.
+        // 速率限制、服务器端错误和冲突值得重试。
         self.is_rate_limit() || self.is_server_error() || self.is_conflict()
     }
 }
 
-#[async_trait]
 impl AsyncFrom<Response> for ApiError {
     async fn async_from(response: Response) -> Self {
         let status = response.status();
@@ -119,7 +117,7 @@ mod tests {
 
     #[test]
     fn test_api_error_kind_from_status_code() {
-        // Test all defined status codes
+        // 测试所有定义的状态码
         assert_eq!(ApiErrorKind::from(400), ApiErrorKind::BadRequest);
         assert_eq!(ApiErrorKind::from(401), ApiErrorKind::Authentication);
         assert_eq!(ApiErrorKind::from(403), ApiErrorKind::PermissionDenied);
@@ -130,7 +128,7 @@ mod tests {
         assert_eq!(ApiErrorKind::from(500), ApiErrorKind::InternalServer);
         assert_eq!(ApiErrorKind::from(503), ApiErrorKind::InternalServer);
 
-        // Test other status codes
+        // 测试其他状态码
         assert_eq!(ApiErrorKind::from(200), ApiErrorKind::Other);
         assert_eq!(ApiErrorKind::from(301), ApiErrorKind::Other);
         assert_eq!(ApiErrorKind::from(600), ApiErrorKind::Other);
@@ -178,7 +176,7 @@ mod tests {
             r#type: Some("conflict_error".to_string()),
         };
 
-        // Test helper methods
+        // 测试辅助方法
         assert!(auth_error.is_authentication());
         assert!(!auth_error.is_rate_limit());
         assert!(!auth_error.is_server_error());

@@ -47,10 +47,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         user!(content = "What's the weather like in Boston today?"),
     ];
 
-    let request = chat_request(model, &messages)
+    let request = ChatParam::new(model, &messages)
         .tools(vec![weather_tool])
-        .tool_choice(ToolChoice::Auto)
-        .build()?;
+        .tool_choice(ToolChoice::Auto);
 
     println!("Sending request to model: {}...", model);
 
@@ -89,7 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     content = function_result
                 ));
 
-                let follow_up_request = chat_request(model, &new_messages).build()?;
+                let follow_up_request = ChatParam::new(model, &new_messages);
 
                 let final_response = client.chat().create(follow_up_request).await?;
                 if let Some(content) = final_response.content() {

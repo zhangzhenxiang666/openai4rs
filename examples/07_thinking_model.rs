@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         user!(content: "There are three friends: Tom, Mary, and John. They are a teacher, a doctor, and an engineer. Tom is not the teacher. Mary is neither the teacher nor the doctor. Based on this information, determine each person's profession."),
     ];
 
-    let request = chat_request(model, &messages).body("enable_thinking", true);
+    let request = ChatParam::new(model, &messages).body("enable_thinking", true);
 
     println!("Sending request to model: {}...", model);
     println!("This may take a moment as the model 'thinks' through the logic puzzle...");

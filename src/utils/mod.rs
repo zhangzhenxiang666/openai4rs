@@ -10,7 +10,5 @@
 //! - [`ResponseHandler`]: A trait for processing API responses (used internally).
 //! - [`AsyncFrom`]: A trait for asynchronous conversion between types (used internally).
 
-pub use traits::Apply;
-
 pub mod methods;
 pub mod traits;

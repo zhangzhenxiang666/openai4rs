@@ -1,7 +1,7 @@
 use super::request::{Request, RequestBuilder, RequestSpec};
 use crate::Config;
+use crate::common::types::RetryCount;
 use crate::error::{ApiError, ApiErrorKind, OpenAIError, RequestError};
-use crate::interceptor::InterceptorChain;
 use crate::utils::traits::AsyncFrom;
 use rand::Rng;
 use reqwest::{Client, Response};
@@ -9,36 +9,35 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
-/// HTTP request executor that handles the actual sending of HTTP requests.
+/// 处理实际发送HTTP请求的HTTP请求执行器。
 ///
-/// This component is responsible for:
-/// - Building and maintaining the underlying reqwest HTTP client
-/// - Executing HTTP requests with retry logic
-/// - Handling request/response lifecycle including error handling
+/// 该组件负责：
+/// - 构建和维护底层reqwest HTTP客户端
+/// - 使用重试逻辑执行HTTP请求
+/// - 处理请求/响应生命周期，包括错误处理
 ///
-/// The executor uses a read-write lock for the reqwest client to allow concurrent
-/// reads while ensuring thread-safe updates when the configuration changes.
-pub struct HttpExecutor {
-    /// The main OpenAI client configuration.
+/// 执行器对reqwest客户端使用读写锁，以允许并发读取，
+/// 同时确保配置更改时的线程安全更新。
+pub(crate) struct HttpExecutor {
+    /// 主OpenAI客户端配置。
     ///
-    /// This is used to determine retry counts and other client-specific settings.
+    /// 用于确定重试次数和其他客户端特定设置。
     config: Arc<RwLock<Config>>,
 
-    /// The underlying reqwest HTTP client wrapped in a RwLock.
+    /// 包装在RwLock中的底层reqwest HTTP客户端。
     ///
-    /// This allows multiple concurrent requests while ensuring thread-safe
-    /// updates when the configuration changes.
+    /// 这允许多个并发请求，同时确保配置更改时的线程安全更新。
     reqwest_client: RwLock<Client>,
 }
 
 impl HttpExecutor {
-    /// Creates a new HttpExecutor with the given configuration.
+    /// 使用给定配置创建一个新的HttpExecutor。
     ///
-    /// # Parameters
-    /// * `config` - The main OpenAI client configuration
+    /// # 参数
+    /// * `config` - 主OpenAI客户端配置
     ///
-    /// # Returns
-    /// A new HttpExecutor instance
+    /// # 返回值
+    /// 新的HttpExecutor实例
     pub fn new(config: Config) -> HttpExecutor {
         let reqwest_client = config.http().build_reqwest_client();
         HttpExecutor {
@@ -47,17 +46,17 @@ impl HttpExecutor {
         }
     }
 
-    /// Returns a clone of the internal configuration wrapped in an Arc<RwLock>.
+    /// 返回包装在Arc<RwLock>中的内部配置的克隆。
     ///
-    /// This allows access to the current configuration for request building.
+    /// 这允许访问当前配置以构建请求。
     pub(crate) fn config(&self) -> Arc<RwLock<Config>> {
         self.config.clone()
     }
 
-    /// Rebuilds the internal `reqwest::Client` based on the current configuration.
+    /// 根据当前配置重建内部的`reqwest::Client`。
     ///
-    /// This method should be called when the HTTP configuration changes,
-    /// such as when proxy settings or timeout values are updated.
+    /// 当HTTP配置更改时应调用此方法，
+    /// 例如当代理设置或超时值更新时。
     pub async fn rebuild_reqwest_client(&self) {
         let new_client = {
             let config_guard = self.config.read().await;
@@ -67,22 +66,22 @@ impl HttpExecutor {
         *client_guard = new_client;
     }
 
-    /// Sends a POST request and returns the raw HTTP response using HttpParams.
+    /// 使用HttpParams发送POST请求并返回原始HTTP响应。
     ///
-    /// This method handles the complete request lifecycle including:
-    /// - Building the request using the provided functions
-    /// - Executing the request with retry logic
-    /// - Handling errors and retries
+    /// 此方法处理完整的请求生命周期，包括：
+    /// - 使用提供的函数构建请求
+    /// - 使用重试逻辑执行请求
+    /// - 处理错误和重试
     ///
-    /// # Parameters
-    /// * `params` - The HttpParams structure containing all necessary request parameters
+    /// # 参数
+    /// * `params` - 包含所有必要请求参数的HttpParams结构
     ///
-    /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a String
-    /// * `F` - Function type for building the request
+    /// # 类型参数
+    /// * `U` - 用于生成URL的函数类型，返回一个String
+    /// * `F` - 用于构建请求的函数类型
     ///
-    /// # Returns
-    /// A Result containing the raw HTTP response or an OpenAIError
+    /// # 返回值
+    /// 包含原始HTTP响应或OpenAIError的Result
     pub async fn post<U, F>(&self, params: RequestSpec<U, F>) -> Result<Response, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
@@ -94,60 +93,52 @@ impl HttpExecutor {
             client_guard.clone()
         };
 
-        let (retry_count, global_interceptors, request, module_interceptors) = {
+        let (retry_count, request) = {
             let config_guard = self.config.read().await;
-
-            let retry_count = if params.retry_count != 0 {
-                params.retry_count
-            } else {
-                config_guard.retry_count()
-            };
 
             let mut request_builder = RequestBuilder::new(
                 reqwest::Method::POST,
                 (params.url_fn)(&config_guard).as_str(),
             );
+
             (params.builder_fn)(&config_guard, &mut request_builder);
             HttpExecutor::apply_global_http_settings(&config_guard, &mut request_builder);
+
+            let retry_count = match request_builder.extensions().get::<RetryCount>() {
+                Some(retry) => {
+                    if retry.0 != 0 {
+                        retry.0
+                    } else {
+                        config_guard.retry_count()
+                    }
+                }
+                None => config_guard.retry_count(),
+            };
+
             let request = request_builder.build();
 
-            let global_interceptors = config_guard.global_interceptors().clone();
-            let module_interceptors = params.module_interceptors;
-
-            (
-                retry_count,
-                global_interceptors,
-                request,
-                module_interceptors,
-            )
+            (retry_count, request)
         };
 
-        HttpExecutor::send_with_retries(
-            request,
-            retry_count,
-            global_interceptors,
-            module_interceptors,
-            client,
-        )
-        .await
+        HttpExecutor::send_with_retries(request, retry_count as u32, client).await
     }
 
-    /// Sends a GET request and returns the raw HTTP response using HttpParams.
+    /// 使用HttpParams发送GET请求并返回原始HTTP响应。
     ///
-    /// This method handles the complete request lifecycle including:
-    /// - Building the request using the provided functions
-    /// - Executing the request with retry logic
-    /// - Handling errors and retries
+    /// 此方法处理完整的请求生命周期，包括：
+    /// - 使用提供的函数构建请求
+    /// - 使用重试逻辑执行请求
+    /// - 处理错误和重试
     ///
-    /// # Parameters
-    /// * `params` - The HttpParams structure containing all necessary request parameters
+    /// # 参数
+    /// * `params` - 包含所有必要请求参数的HttpParams结构
     ///
-    /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a String
-    /// * `F` - Function type for building the request
+    /// # 类型参数
+    /// * `U` - 用于生成URL的函数类型，返回一个String
+    /// * `F` - 用于构建请求的函数类型
     ///
-    /// # Returns
-    /// A Result containing the raw HTTP response or an OpenAIError
+    /// # 返回值
+    /// 包含原始HTTP响应或OpenAIError的Result
     pub async fn get<U, F>(&self, params: RequestSpec<U, F>) -> Result<Response, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
@@ -159,64 +150,49 @@ impl HttpExecutor {
             client_guard.clone()
         };
 
-        let (retry_count, global_interceptors, request, module_interceptors) = {
+        let (retry_count, request) = {
             let config_guard = self.config.read().await;
-
-            let retry_count = if params.retry_count != 0 {
-                params.retry_count
-            } else {
-                config_guard.retry_count()
-            };
 
             let mut request_builder = RequestBuilder::new(
                 reqwest::Method::GET,
                 (params.url_fn)(&config_guard).as_str(),
             );
+
             (params.builder_fn)(&config_guard, &mut request_builder);
             HttpExecutor::apply_global_http_settings(&config_guard, &mut request_builder);
+
+            let retry_count = match request_builder.extensions().get::<RetryCount>() {
+                Some(retry) => {
+                    if retry.0 != 0 {
+                        retry.0
+                    } else {
+                        config_guard.retry_count()
+                    }
+                }
+                None => config_guard.retry_count(),
+            };
+
             let request = request_builder.build();
 
-            let global_interceptors = config_guard.global_interceptors().clone();
-            let module_interceptors = params.module_interceptors;
-
-            (
-                retry_count,
-                global_interceptors,
-                request,
-                module_interceptors,
-            )
+            (retry_count, request)
         };
 
-        HttpExecutor::send_with_retries(
-            request,
-            retry_count,
-            global_interceptors,
-            module_interceptors,
-            client,
-        )
-        .await
+        HttpExecutor::send_with_retries(request, retry_count as u32, client).await
     }
 }
 
 impl HttpExecutor {
-    /// Applies global HTTP settings (headers, query params, body fields) to the request builder
-    /// Only applies global settings if they are not already set locally (local has higher priority)
+    /// 将全局HTTP设置（头、查询参数、主体字段）应用到请求构建器
+    /// 仅在本地未设置时才应用全局设置（本地具有更高优先级）
     fn apply_global_http_settings(config: &Config, request_builder: &mut RequestBuilder) {
-        // Apply global query params only if not already set locally
-        config.http().querys().iter().for_each(|(k, v)| {
-            if !request_builder.has_query(k) {
-                request_builder.query(k, v);
-            }
-        });
-
-        // Apply global headers only if not already set locally
+        // 仅在本地未设置时才应用全局头
         config.http().headers().iter().for_each(|(k, v)| {
             if !request_builder.has_header(k) {
-                request_builder.header(k, v);
+                request_builder.header(k, v.clone());
             }
         });
 
-        // Apply global body fields only if not already set locally
+        // 仅在本地未设置时才应用全局主体字段
         config.http().bodys().iter().for_each(|(k, v)| {
             if !request_builder.has_body_field(k) {
                 request_builder.body_field(k, v.clone());
@@ -224,85 +200,19 @@ impl HttpExecutor {
         });
     }
 
-    /// Helper function to apply request interceptors in the correct order (global -> module)
-    async fn apply_request_interceptors(
-        mut request: Request,
-        global_interceptors: &InterceptorChain,
-        module_interceptors: Option<&InterceptorChain>,
-    ) -> Result<Request, OpenAIError> {
-        if !global_interceptors.is_empty() {
-            request = global_interceptors
-                .execute_request_interceptors(request)
-                .await?;
-        }
-
-        if let Some(module_chain) = module_interceptors {
-            request = module_chain.execute_request_interceptors(request).await?;
-        }
-
-        Ok(request)
-    }
-
-    /// Helper function to apply response interceptors in the correct order (module -> global)
-    async fn apply_response_interceptors(
-        mut response: Response,
-        module_interceptors: Option<&InterceptorChain>,
-        global_interceptors: &InterceptorChain,
-    ) -> Result<Response, OpenAIError> {
-        if let Some(module_chain) = module_interceptors {
-            response = module_chain.execute_response_interceptors(response).await?;
-        }
-
-        if !global_interceptors.is_empty() {
-            response = global_interceptors
-                .execute_response_interceptors(response)
-                .await?;
-        }
-
-        Ok(response)
-    }
-
-    /// Helper function to apply error interceptors in the correct order (module -> global)
-    async fn apply_error_interceptors(
-        mut error: OpenAIError,
-        module_interceptors: Option<&InterceptorChain>,
-        global_interceptors: &InterceptorChain,
-    ) -> Result<OpenAIError, OpenAIError> {
-        if let Some(module_chain) = module_interceptors {
-            error = module_chain.execute_error_interceptors(error).await?;
-        }
-
-        if !global_interceptors.is_empty() {
-            error = global_interceptors
-                .execute_error_interceptors(error)
-                .await?;
-        }
-
-        Ok(error)
-    }
-
     async fn send_with_retries(
         request: Request,
         retry_count: u32,
-        global_interceptors: InterceptorChain,
-        module_interceptors: Option<InterceptorChain>,
         client: reqwest::Client,
     ) -> Result<Response, OpenAIError> {
         let mut attempts = 0;
         let max_attempts = retry_count.max(1);
 
-        // Apply request interceptors: global -> module
-        let processed_request = HttpExecutor::apply_request_interceptors(
-            request,
-            &global_interceptors,
-            module_interceptors.as_ref(),
-        )
-        .await?;
         loop {
             attempts += 1;
 
             // Convert to reqwest RequestBuilder
-            let request_builder = processed_request.to_reqwest(&client);
+            let request_builder = request.to_reqwest(&client);
 
             match request_builder.send().await {
                 Ok(response) => {
@@ -315,28 +225,13 @@ impl HttpExecutor {
                         .map(Duration::from_secs);
 
                     if response.status().is_success() {
-                        // Apply response interceptors: module -> global
-                        let processed_response = HttpExecutor::apply_response_interceptors(
-                            response,
-                            module_interceptors.as_ref(),
-                            &global_interceptors,
-                        )
-                        .await?;
-
-                        return Ok(processed_response);
+                        return Ok(response);
                     } else {
                         let api_error = ApiError::async_from(response).await;
 
                         // Check if we should retry or return error with interceptors applied
                         if attempts >= max_attempts || !api_error.is_retryable() {
-                            let error = HttpExecutor::apply_error_interceptors(
-                                api_error.into(),
-                                module_interceptors.as_ref(),
-                                &global_interceptors,
-                            )
-                            .await?;
-
-                            return Err(error);
+                            return Err(api_error.into());
                         }
 
                         tracing::debug!(
@@ -358,14 +253,7 @@ impl HttpExecutor {
 
                     // Check if we should retry or return error with interceptors applied
                     if attempts >= max_attempts || !request_error.is_retryable() {
-                        let error = HttpExecutor::apply_error_interceptors(
-                            request_error.into(),
-                            module_interceptors.as_ref(),
-                            &global_interceptors,
-                        )
-                        .await?;
-
-                        return Err(error);
+                        return Err(request_error.into());
                     }
 
                     tracing::debug!(
@@ -385,73 +273,72 @@ impl HttpExecutor {
     }
 }
 
-// --- Utility functions for retry logic (migrated from client/http.rs) ---
+// --- 重试逻辑的实用函数（从client/http.rs迁移） ---
 
-/// Calculates the appropriate delay before retrying based on the error type.
+/// 根据错误类型计算重试前的适当延迟。
 ///
-/// This function implements an exponential backoff strategy with jitter,
-/// with special handling for rate limit errors and server errors.
+/// 此函数实现带有抖动的指数退避策略，
+/// 并对速率限制错误和服务器错误进行特殊处理。
 ///
-/// # Parameters
-/// * `attempt` - The current attempt number (1-based)
-/// * `error_kind` - The type of API error that occurred
-/// * `retry_after` - Optional server-specified retry delay
+/// # 参数
+/// * `attempt` - 当前尝试次数（从1开始）
+/// * `error_kind` - 发生的API错误类型
+/// * `retry_after` - 服务器指定的可选重试延迟
 ///
-/// # Returns
-/// The duration to wait before retrying
+/// # 返回值
+/// 重试前等待的持续时间
 fn calculate_retry_delay(
     attempt: u32,
     error_kind: &ApiErrorKind,
     retry_after: Option<Duration>,
 ) -> Duration {
-    // If the server specified a retry delay, use that with jitter
+    // 如果服务器指定了重试延迟，使用该延迟并添加抖动
     if let Some(duration) = retry_after {
         let jitter = Duration::from_millis(rand::thread_rng().gen_range(0..1000));
         return duration + jitter;
     }
 
-    // Base delay varies by error type
+    // 基础延迟因错误类型而异
     let base_delay_ms = match error_kind {
-        ApiErrorKind::RateLimit => 5000,      // 5 seconds for rate limits
-        ApiErrorKind::InternalServer => 1000, // 1 second for server errors
-        _ => 500,                             // 0.5 seconds for other errors
+        ApiErrorKind::RateLimit => 5000,      // 速率限制为5秒
+        ApiErrorKind::InternalServer => 1000, // 服务器错误为1秒
+        _ => 500,                             // 其他错误为0.5秒
     };
 
-    // Exponential backoff: base_delay * 2^(attempt-1)
+    // 指数退避：base_delay * 2^(attempt-1)
     let delay_ms = base_delay_ms * 2u64.pow(attempt - 1);
-    // Cap the delay at 30 seconds
+    // 将延迟限制为30秒
     let base_delay = Duration::from_millis(delay_ms.min(30_000));
 
-    // Add 0-10% jitter to prevent thundering herd
+    // 添加0-10%的抖动以防止雷鸣般涌入
     let jitter_ms = (base_delay.as_millis() as u64 * (rand::thread_rng().gen_range(0..10))) / 100;
     base_delay + Duration::from_millis(jitter_ms)
 }
 
-/// Calculates the appropriate delay before retrying based on request errors.
+/// 根据请求错误计算重试前的适当延迟。
 ///
-/// This function implements an exponential backoff strategy with jitter
-/// for network-level request errors.
+/// 此函数为网络级请求错误实现带有抖动的指数退避策略。
 ///
-/// # Parameters
-/// * `attempt` - The current attempt number (1-based)
-/// * `error` - The request error that occurred
+/// # 参数
+/// * `attempt` - 当前尝试次数（从1开始）
+/// * `error` - 发生的请求错误
 ///
-/// # Returns
-/// The duration to wait before retrying
+/// # 返回值
+/// 重试前等待的持续时间
 fn calculate_retry_delay_for_request_error(attempt: u32, error: &RequestError) -> Duration {
-    // Base delay varies by error type
+    // 基础延迟因错误类型而异
     let base_delay = match error {
-        RequestError::Timeout(_) => 100,    // 100ms for timeouts
-        RequestError::Connection(_) => 200, // 200ms for connection errors
-        _ => 100,                           // 100ms for other errors
+        RequestError::Timeout(_) => 100,    // 超时为100ms
+        RequestError::Connection(_) => 200, // 连接错误为200ms
+        _ => 100,                           // 其他错误为100ms
     };
 
-    // Exponential backoff: base_delay * 2^(attempt-1)
+    // 指数退避：base_delay * 2^(attempt-1)
     let delay_ms = base_delay * 2u64.pow(attempt - 1);
-    // Cap the delay at 10 seconds
+    // 将延迟限制为10秒
     let base_delay = Duration::from_millis(delay_ms.min(10_000));
 
-    // Add 0-10% jitter to prevent thundering herd
+    // 添加0-10%的抖动以防止雷鸣般涌入
     let jitter_ms = (base_delay.as_millis() as u64 * (rand::random::<u64>() % 10)) / 100;
     base_delay + Duration::from_millis(jitter_ms)
 }

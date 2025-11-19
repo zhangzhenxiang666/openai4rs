@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use http::{Extensions, HeaderMap};
 use serde::{Deserialize, Serialize, de::MapAccess};
 
 fn default_id() -> String {
@@ -51,9 +52,29 @@ pub enum ServiceTier {
     Default,
 }
 
-pub type Headers = HashMap<String, String>;
-pub type QueryParams = HashMap<String, String>;
-pub type Bodies = HashMap<String, serde_json::Value>;
+pub(crate) type Body = serde_json::Map<String, serde_json::Value>;
+
+#[derive(Debug, Clone)]
+pub(crate) struct Timeout(pub(crate) std::time::Duration);
+
+#[derive(Debug, Clone)]
+pub(crate) struct RetryCount(pub(crate) usize);
+
+pub(crate) struct InParam {
+    pub(crate) body: Option<Body>,
+    pub(crate) headers: HeaderMap,
+    pub(crate) extensions: Extensions,
+}
+
+impl InParam {
+    pub(crate) fn new() -> Self {
+        Self {
+            body: None,
+            headers: HeaderMap::new(),
+            extensions: Extensions::new(),
+        }
+    }
+}
 
 pub(crate) fn extract_optional<T, E>(
     map: &mut HashMap<String, serde_json::Value>,

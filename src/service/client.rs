@@ -1,143 +1,56 @@
-use super::request::RequestBuilder;
 use crate::Config;
-use crate::error::OpenAIError;
-use crate::service::request::RequestSpec;
 use crate::service::transport::HttpTransport;
+use std::ops::Deref;
 use std::sync::Arc;
-use tokio::sync::RwLock;
-use tokio_stream::wrappers::ReceiverStream;
 
-/// A high-level HTTP client that manages the underlying HTTP service and configuration.
+/// 一个管理底层HTTP服务和配置的高级HTTP客户端。
 ///
-/// This client acts as the main entry point for making HTTP requests to the OpenAI API.
-/// It holds a reference to the `Transport` which handles the actual request execution,
-/// retry logic, and configuration management.
+/// 此客户端充当向OpenAI API发出HTTP请求的主要入口点。
+/// 它持有对`Transport`的引用，该引用处理实际的请求执行，
+/// 重试逻辑和配置管理。
 ///
-/// The client is designed to be cloned efficiently, allowing multiple components to share
-/// the same underlying transport layer.
-pub struct HttpClient {
-    /// The underlying transport responsible for executing requests.
+/// 客户端设计为可以高效克隆，允许多个组件共享
+/// 相同的底层传输层。
+pub(crate) struct HttpClient {
+    /// 负责执行请求的底层传输。
     ///
-    /// This transport handles the actual HTTP communication, including request building,
-    /// response processing, retry logic, and connection management.
+    /// 此传输处理实际的HTTP通信，包括请求构建，
+    /// 响应处理、重试逻辑和连接管理。
     transport: Arc<HttpTransport>,
 }
 
 impl HttpClient {
-    /// Creates a new `HttpClient` with the given configuration.
+    /// 使用给定配置创建新的`HttpClient`。
     ///
-    /// This will initialize the underlying `Transport` with the provided configuration.
+    /// 这将使用提供的配置初始化底层`Transport`。
     ///
-    /// # Parameters
-    /// * `config` - The main configuration for the OpenAI client, wrapped in Arc<RwLock<>>
+    /// # 参数
+    /// * `config` - OpenAI客户端的主要配置，包装在Arc<RwLock<>>
     ///
-    /// # Returns
-    /// A new HttpClient instance ready for making API requests
+    /// # 返回
+    /// 一个准备就绪的新HttpClient实例，用于发出API请求
     pub fn new(config: Config) -> HttpClient {
         HttpClient {
             transport: Arc::new(HttpTransport::new(config)),
         }
     }
-
-    /// Returns a clone of the internal configuration wrapped in an Arc<RwLock>.
-    ///
-    /// This allows access to the current configuration for request building.
-    pub(crate) fn config(&self) -> Arc<RwLock<Config>> {
-        self.transport.config()
-    }
-
-    /// Updates the internal HTTP client configuration.
-    ///
-    /// This method rebuilds the underlying HTTP client with any updated configuration
-    /// settings, such as new proxy settings or timeout values.
-    pub async fn refresh_client(&self) {
-        self.transport.refresh_client().await;
-    }
-
-    /// Sends a POST request with JSON payload to the OpenAI API using HttpParams.
-    ///
-    /// This method uses the HttpParams structure to encapsulate all request parameters,
-    /// making it easier to add new parameters in the future without changing function signatures.
-    ///
-    /// # Parameters
-    /// * `params` - The HttpParams structure containing all necessary request parameters
-    ///
-    /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a String
-    /// * `F` - Function type for building the request
-    /// * `T` - The expected response type that implements DeserializeOwned
-    ///
-    /// # Returns
-    /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn post_json<U, F, T>(&self, params: RequestSpec<U, F>) -> Result<T, OpenAIError>
-    where
-        U: FnOnce(&Config) -> String,
-        F: FnOnce(&Config, &mut RequestBuilder),
-        T: serde::de::DeserializeOwned,
-    {
-        self.transport.post_json(params).await
-    }
-
-    /// Sends a GET request expecting a JSON response from the OpenAI API using HttpParams.
-    ///
-    /// This method uses the HttpParams structure to encapsulate all request parameters,
-    /// making it easier to add new parameters in the future without changing function signatures.
-    ///
-    /// # Parameters
-    /// * `params` - The HttpParams structure containing all necessary request parameters
-    ///
-    /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a String
-    /// * `F` - Function type for building the request
-    /// * `T` - The expected response type that implements DeserializeOwned
-    ///
-    /// # Returns
-    /// A Result containing the deserialized response object or an OpenAIError
-    pub async fn get_json<U, F, T>(&self, params: RequestSpec<U, F>) -> Result<T, OpenAIError>
-    where
-        U: FnOnce(&Config) -> String,
-        F: FnOnce(&Config, &mut RequestBuilder),
-        T: serde::de::DeserializeOwned,
-    {
-        self.transport.get_json(params).await
-    }
-
-    /// Sends a POST request expecting a streaming JSON response from the OpenAI API using HttpParams.
-    ///
-    /// This method uses the HttpParams structure to encapsulate all request parameters,
-    /// making it easier to add new parameters in the future without changing function signatures.
-    ///
-    /// # Parameters
-    /// * `params` - The HttpParams structure containing all necessary request parameters
-    ///
-    /// # Type Parameters
-    /// * `U` - Function type for generating the URL, returning a String
-    /// * `F` - Function type for building the request
-    /// * `T` - The expected response chunk type that implements DeserializeOwned
-    ///
-    /// # Returns
-    /// A Result containing a stream of response chunks or an OpenAIError
-    pub async fn post_json_stream<U, F, T>(
-        &self,
-        params: RequestSpec<U, F>,
-    ) -> Result<ReceiverStream<Result<T, OpenAIError>>, OpenAIError>
-    where
-        U: FnOnce(&Config) -> String,
-        F: FnOnce(&Config, &mut RequestBuilder),
-        T: serde::de::DeserializeOwned + Send + 'static,
-    {
-        self.transport.post_json_stream(params).await
-    }
 }
 
 impl Clone for HttpClient {
-    /// Creates a clone of the HttpClient.
+    /// 创建HttpClient的克隆。
     ///
-    /// This operation is efficient as it only clones the Arc reference to the transport,
-    /// not the transport itself.
+    /// 此操作是高效的，因为它只克隆传输的Arc引用，
+    /// 而不是传输本身。
     fn clone(&self) -> Self {
         HttpClient {
             transport: Arc::clone(&self.transport),
         }
+    }
+}
+
+impl Deref for HttpClient {
+    type Target = Arc<HttpTransport>;
+    fn deref(&self) -> &Self::Target {
+        &self.transport
     }
 }

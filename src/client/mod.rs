@@ -1,27 +1,26 @@
-//! Core client implementation, configuration, and entry point for the OpenAI API.
+//! 核心客户端实现、配置以及 OpenAI API 的入口点。
 //!
-//! This module provides the main [`OpenAI`] client struct, which is the primary
-//! interface for interacting with OpenAI-compatible APIs. It handles HTTP request
-//! configuration, authentication, and provides access to the various API endpoints
-//! such as chat completions, completions, and models.
+//! 该模块提供了主要的 [`OpenAI`] 客户端结构体，这是与 OpenAI 兼容 API 交互的主要
+//! 接口。它处理 HTTP 请求配置、身份验证，并提供对各种 API 端点的访问
+//! 例如聊天补全、补全和模型。
 //!
-//! The client is designed to be:
-//! - **Thread-safe**: Can be safely shared across multiple threads.
-//! - **Configurable**: Supports custom timeouts, retries, proxies, and user agents.
-//! - **Async-first**: Built for non-blocking operations using `tokio` and `reqwest`.
+//! 客户端设计具有以下特点：
+//! - **线程安全**: 可以在线程间安全共享。
+//! - **可配置**: 支持自定义超时、重试、代理和用户代理。
+//! - **异步优先**: 使用 `tokio` 和 `reqwest` 构建非阻塞操作。
 //!
-//! # Examples
+//! # 示例
 //!
-//! ## Creating a client
+//! ## 创建客户端
 //!
 //! ```rust
 //! use openai4rs::OpenAI;
 //!
-//! // Create a client with an API key and base URL
+//! // 使用 API 密钥和基础 URL 创建客户端
 //! let client = OpenAI::new("your-api-key", "https://api.openai.com/v1");
 //! ```
 //!
-//! ## Using environment variables
+//! ## 使用环境变量
 //!
 //! ```rust
 //! use openai4rs::OpenAI;
@@ -29,24 +28,24 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Load environment variables from a .env file
+//!     // 从 .env 文件加载环境变量
 //!     dotenv().ok();
 //!
-//!     // Create a client from environment variables
-//!     // Requires `OPENAI_API_KEY` to be set
+//!     // 从环境变量创建客户端
+//!     // 需要设置 `OPENAI_API_KEY`
 //!     let client = OpenAI::from_env()?;
 //!
 //!     Ok(())
 //! }
 //! ```
 //!
-//! ## Accessing API endpoints
+//! ## 访问 API 端点
 //!
-//! Once you have a client, you can access the different API endpoints:
+//! 一旦拥有客户端，您可以访问不同的 API 端点：
 //!
-//! - [`OpenAI::chat()`] for chat completions
-//! - [`OpenAI::completions()`] for legacy text completions
-//! - [`OpenAI::models()`] for listing and retrieving model information
+//! - [`OpenAI::chat()`] 用于聊天补全
+//! - [`OpenAI::completions()`] 用于传统的文本补全
+//! - [`OpenAI::models()`] 用于列出和检索模型信息
 
 pub mod base;
 pub use base::OpenAI;

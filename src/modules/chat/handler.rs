@@ -1,47 +1,33 @@
-use super::params::{IntoRequestParams, RequestParams};
+use core::panic;
+
+use super::params::ChatParam;
 use super::types::{ChatCompletion, ChatCompletionChunk};
-use crate::InterceptorChain;
+use crate::common::types::{InParam, RetryCount, Timeout};
 use crate::error::OpenAIError;
 use crate::service::client::HttpClient;
 use crate::service::request::{RequestBuilder, RequestSpec};
-use std::time::Duration;
 use tokio_stream::wrappers::ReceiverStream;
 
-/// Handles chat completion requests, including both streaming and non-streaming modes.
+/// 处理聊天完成请求，包括流式和非流式模式。
 pub struct Chat {
     http_client: HttpClient,
-    interceptors: InterceptorChain,
 }
 
 impl Chat {
-    pub fn new(http_client: HttpClient) -> Chat {
-        Chat {
-            http_client,
-            interceptors: InterceptorChain::new(),
-        }
+    pub(crate) fn new(http_client: HttpClient) -> Chat {
+        Chat { http_client }
     }
 
-    /// Returns a reference to the module interceptors
-    pub fn interceptors(&self) -> &InterceptorChain {
-        &self.interceptors
-    }
-
-    /// Returns a mutable reference to the module interceptors
-    pub fn interceptors_mut(&mut self) -> &mut InterceptorChain {
-        &mut self.interceptors
-    }
-
-    /// Creates a chat completion.
+    /// 创建一个聊天完成。
     ///
-    /// This method sends a request to the API and returns the complete completion
-    /// in a single response.
+    /// 此方法向API发送请求，并在单个响应中返回完整的完成结果。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `params` - A set of parameters for the chat completion, such as the model and messages.
-    ///   Can be created using `chat_request`.
+    /// * `param` - 聊天完成的一组参数，例如模型和消息。
+    ///   可以使用 `ChatParam` 创建。
     ///
-    /// # Examples
+    /// # 示例
     ///
     /// ```rust,no_run
     /// use openai4rs::*;
@@ -51,45 +37,41 @@ impl Chat {
     ///     dotenv().ok();
     ///     let client = OpenAI::from_env()?;
     ///     let messages = vec![user!("What is Rust?")];
-    ///     let request = chat_request("Qwen/Qwen3-235B-A22B-Instruct-2507", &messages);
+    ///     let request = ChatParam::new("Qwen/Qwen3-235B-A22B-Instruct-2507", &messages);
     ///     let response = client.chat().create(request).await?;
     ///     println!("{:#?}", response);
     ///     Ok(())
     /// }
     /// ```
-    pub async fn create<'a, T>(&self, params: T) -> Result<ChatCompletion, OpenAIError>
-    where
-        T: IntoRequestParams<'a>,
-    {
-        let mut params = params.into_request_params();
-        params.stream = Some(false);
-
-        let retry_count = params.retry_count.unwrap_or(0);
+    pub async fn create(&self, param: ChatParam) -> Result<ChatCompletion, OpenAIError> {
+        let mut inner = param.take();
+        inner
+            .body
+            .as_mut()
+            .unwrap()
+            .insert("stream".to_string(), serde_json::to_value(false).unwrap());
 
         let http_params = RequestSpec::new(
             |config| format!("{}/chat/completions", config.base_url()),
             |config, builder| {
-                Self::apply_request_settings(builder, params);
+                Self::apply_request_settings(builder, inner);
                 builder.bearer_auth(config.api_key());
             },
-            retry_count,
-            Some(self.interceptors.clone()),
         );
 
         self.http_client.post_json(http_params).await
     }
 
-    /// Creates a streaming chat completion.
+    /// 创建一个流式聊天完成。
     ///
-    /// This method returns a stream of `ChatCompletionChunk` events. This is useful
-    /// for displaying completions in real-time as they are generated.
+    /// 此方法返回 `ChatCompletionChunk` 事件流。这对于实时显示生成的完成结果非常有用。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `params` - A set of parameters for the chat completion, such as the model and messages.
-    ///   Can be created using `chat_request`.
+    /// * `param` - 聊天完成的一组参数，例如模型和消息。
+    ///   可以使用 `ChatParam` 创建。
     ///
-    /// # Examples
+    /// # 示例
     ///
     /// ```rust,no_run
     /// use openai4rs::*;
@@ -100,7 +82,7 @@ impl Chat {
     ///     dotenv().ok();
     ///     let client = OpenAI::from_env()?;
     ///     let messages = vec![user!("Tell me a short story.")];
-    ///     let request = chat_request("Qwen/Qwen3-235B-A22B-Instruct-2507", &messages);
+    ///     let request = ChatParam::new("Qwen/Qwen3-235B-A22B-Instruct-2507", &messages);
     ///     let mut stream = client.chat().create_stream(request).await?;
     ///
     ///     while let Some(chunk) = stream.next().await {
@@ -114,61 +96,44 @@ impl Chat {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn create_stream<'a, T>(
+    pub async fn create_stream(
         &self,
-        params: T,
-    ) -> Result<ReceiverStream<Result<ChatCompletionChunk, OpenAIError>>, OpenAIError>
-    where
-        T: IntoRequestParams<'a>,
-    {
-        let mut params = params.into_request_params();
-        params.stream = Some(true);
-
-        let retry_count = params.retry_count.unwrap_or(0);
+        param: ChatParam,
+    ) -> Result<ReceiverStream<Result<ChatCompletionChunk, OpenAIError>>, OpenAIError> {
+        let mut inner = param.take();
+        inner
+            .body
+            .as_mut()
+            .unwrap()
+            .insert("stream".to_string(), serde_json::to_value(true).unwrap());
 
         let http_params = RequestSpec::new(
             |config| format!("{}/chat/completions", config.base_url()),
             |config, builder| {
-                Self::apply_request_settings(builder, params);
+                Self::apply_request_settings(builder, inner);
                 builder.bearer_auth(config.api_key());
             },
-            retry_count,
-            Some(self.interceptors.clone()),
         );
         self.http_client.post_json_stream(http_params).await
     }
 }
 
 impl Chat {
-    fn apply_request_settings(builder: &mut RequestBuilder, params: RequestParams) {
-        if let Ok(serde_json::Value::Object(obj)) = serde_json::to_value(&params) {
-            builder.body_fields(obj.into_iter().collect());
+    fn apply_request_settings(builder: &mut RequestBuilder, params: InParam) {
+        let body = params
+            .body
+            .unwrap_or_else(|| panic!("Unknown internal error, please submit an issue."));
+
+        builder.body_fields(body);
+
+        *builder.headers_mut() = params.headers;
+
+        if let Some(time) = params.extensions.get::<Timeout>() {
+            builder.timeout(time.0);
         }
 
-        if let Some(headers) = params.extra_headers {
-            headers.into_iter().for_each(|(k, v)| {
-                builder.header(k, v);
-            });
-        }
-
-        if let Some(query) = params.extra_query {
-            query.into_iter().for_each(|(k, v)| {
-                builder.query(k, v);
-            });
-        }
-
-        if let Some(extra_body) = params.extra_body {
-            extra_body.into_iter().for_each(|(k, v)| {
-                builder.body_field(k, v);
-            });
-        }
-
-        if let Some(timeout) = params.timeout_seconds {
-            builder.timeout(Duration::from_secs(timeout));
-        }
-
-        if let Some(user_agent) = params.user_agent {
-            builder.header("user-agent", user_agent);
+        if let Some(retry) = params.extensions.get::<RetryCount>() {
+            builder.extensions_mut().insert(retry.clone());
         }
     }
 }

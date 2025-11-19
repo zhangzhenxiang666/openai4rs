@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use dotenvy::dotenv;
 use openai4rs::*;
 
@@ -29,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let timeout_config = Config::builder()
         .api_key(api_key.clone())
         .base_url(base_url.clone())
-        .timeout_seconds(120)
+        .timeout(Duration::from_secs(120))
         .build()?;
     let _timeout_client = OpenAI::with_config(timeout_config);
 
@@ -37,8 +39,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _global_http_params_client = Config::builder()
         .api_key(api_key.clone())
         .base_url(base_url.clone())
-        .header("test-header", "test-value")
-        .query("name", "openai4rs")
+        .header(
+            "test-header",
+            header::HeaderValue::from_str("test-valeu").unwrap(),
+        )
         .body("global_body_key", "global_body_value")
         .build()?;
     let _global_http_params_client = OpenAI::with_config(_global_http_params_client);
@@ -48,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let model = "Qwen/Qwen3-235B-A22B-Instruct-2507";
     let messages = vec![user!(content: "Ping to check if the client is working.")];
-    let request = chat_request(model, &messages);
+    let request = ChatParam::new(model, &messages);
 
     println!("Testing basic client...");
     match basic_client.chat().create(request).await {

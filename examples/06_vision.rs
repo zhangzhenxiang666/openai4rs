@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ,content!({"type": "text", "text": "What is in this image?"})
         ]),
     ];
-    let request = chat_request(model, &messages).build()?;
+    let request = ChatParam::new(model, &messages);
     println!("Sending request to model: {} with an image...", model);
 
     let response = client.chat().create(request).await?;

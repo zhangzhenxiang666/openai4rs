@@ -9,6 +9,4 @@ pub mod executor;
 pub mod request;
 pub mod transport;
 
-pub use client::HttpClient;
-pub use request::{Request, RequestBuilder};
-pub use reqwest::Response;
+pub(crate) use client::HttpClient;

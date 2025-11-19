@@ -4,8 +4,6 @@
 [![Documentation](https://docs.rs/openai4rs/badge.svg)](https://docs.rs/openai4rs)
 [![License](https://img.shields.io/crates/l/openai4rs)](LICENSE)
 
-简体中文 | [English](README_en.md)
-
 一个基于 `tokio` 和 `reqwest` 的异步 Rust crate，用于与遵循 OpenAI 规范的大模型供应商进行交互。
 
 ## ✨ 特性
@@ -43,11 +41,6 @@
 - ✅ 全局查询参数
 - ✅ 全局请求体
 
-### 🎯 拦截器
-
-- ✅ 全局拦截器
-- ✅ 模块拦截器
-
 ## 🚀 快速开始
 
 ### 安装
@@ -56,7 +49,7 @@
 
 ```toml
 [dependencies]
-openai4rs = "0.1.8"
+openai4rs = "0.1.9"
 tokio = { version = "1.45.1", features = ["full"] }
 futures = "0.3.31"
 dotenvy = "0.15"
@@ -69,6 +62,10 @@ cargo add openai4rs
 ```
 
 ### 基础使用
+
+所有的端点都提供了各自的参数构建器
+
+例如 ChatParam, EmbeddingsParam
 
 ```rust
 use dotenvy::dotenv;
@@ -85,7 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         user!("Introduce the Rust programming language in one sentence."),
     ];
 
-    let request = chat_request(model, &messages);
+    let request = ChatParam::new(model, &messages);
 
     println!("Sending request to model: {}...", model);
 
@@ -128,10 +125,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         user!(content: "Introduce the Rust programming language in one sentence."),
     ];
 
-    let request = chat_request(model, &messages).build()?;
+    let request = ChatParam::new(model, &messages);
 
     println!("Sending request to model: {}...", model);
-    
+
     let mut stream = client.chat().create_stream(request).await?;
     let mut first_content = true;
 
@@ -169,9 +166,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 use dotenvy::dotenv;
 use openai4rs::*;
 
-// Mock function to get weather data
+// 模拟获取天气数据的函数
 fn get_current_weather(location: &str, unit: Option<&str>) -> String {
-    // In a real application, this would call an external weather API.
+    // 在实际应用中，这将调用外部天气API。
     let unit = unit.unwrap_or("celsius");
     format!(
         "The current weather in {} is 22 degrees {}.",
@@ -186,7 +183,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let model = "Qwen/Qwen3-235B-A22B-Instruct-2507";
 
-    // 1. Define the tool (function)
+    // 1. 定义工具（函数）
     let weather_tool_params = Parameters::object()
         .property(
             "location",
@@ -209,28 +206,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         weather_tool_params,
     );
 
-    // 2. Create the initial message and request
+    // 2. 创建初始消息和请求
     let messages = vec![
         system!(content = "You are a helpful assistant."),
         user!(content = "What's the weather like in Boston today?"),
     ];
 
-    let request = chat_request(model, &messages)
+    let request = ChatParam::new(model, &messages)
         .tools(vec![weather_tool])
-        .tool_choice(ToolChoice::Auto)
-        .build()?;
+        .tool_choice(ToolChoice::Auto);
 
     println!("Sending request to model: {}...", model);
 
     let response = client.chat().create(request).await?;
     println!("Initial response: {:#?}", response);
 
-    // 3. Check if the model wants to call a tool
+    // 3. 检查模型是否需要调用工具
     if response.has_tool_calls() {
         println!("\nModel wants to call a tool.");
         let tool_calls = response.tool_calls().unwrap();
 
-        // For simplicity, we'll only handle the first tool call
+        // 为简单起见，我们只处理第一个工具调用
         if let Some(tool_call) = tool_calls.first() {
             let function_name = &tool_call.function.name;
             let arguments_str = &tool_call.function.arguments;
@@ -245,11 +241,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     function_name, location, unit
                 );
 
-                // 4. Call the function and get the result
+                // 4. 调用函数并获取结果
                 let function_result = get_current_weather(location, unit);
                 println!("Function result: {}", function_result);
 
-                // 5. Send the function result back to the model
+                // 5. 将函数结果发送回模型
                 let mut new_messages = messages.clone();
                 new_messages.push(response.first_choice_message().unwrap().clone().into());
                 new_messages.push(tool!(
@@ -257,7 +253,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     content = function_result
                 ));
 
-                let follow_up_request = chat_request(model, &new_messages).build()?;
+                let follow_up_request = ChatParam::new(model, &new_messages);
 
                 let final_response = client.chat().create(follow_up_request).await?;
                 if let Some(content) = final_response.content() {
@@ -274,6 +270,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
 ```
 
 #### 🧠 多轮对话
@@ -283,7 +280,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use dotenvy::dotenv;
 use openai4rs::*;
-use std::io::{stdin, stdout, Write};
+use std::io::{Write, stdin, stdout};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -307,7 +304,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         messages.push(user!(content: user_input));
 
-        let request = chat_request(model, &messages);
+        let request = ChatParam::new(model, &messages);
 
         let response = client.chat().create(request).await?;
         if let Some(content) = response.content() {
@@ -320,6 +317,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
 ```
 
 ### **🗺️ Embeddings 词嵌入**
@@ -336,7 +334,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = OpenAI::from_env()?;
 
     // 1. 单个文本嵌入
-    let request = embeddings_request("text-embedding-ada-002", "Hello, world!");
+    let request = EmbeddingsParam::new("text-embedding-ada-002", "Hello, world!");
     let response = client.embeddings().create(request).await?;
     println!("Generated {} embedding(s)", response.len());
     if let Some(embedding) = response.get_embedding(0) {
@@ -345,7 +343,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2. 多个文本嵌入
     let texts = vec!["Hello, world!", "How are you?", "Rust is awesome!"];
-    let request = embeddings_request("text-embedding-ada-002", texts);
+    let request = EmbeddingsParam::new("text-embedding-ada-002", texts);
     let response = client.embeddings().create(request).await?;
     println!("Generated {} embeddings", response.len());
     for (i, embedding) in response.embeddings().iter().enumerate() {
@@ -358,6 +356,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
 ```
 
 ### **🔧 高级配置**
@@ -365,6 +364,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #### 客户端配置
 
 ```rust
+use std::time::Duration;
+
 use dotenvy::dotenv;
 use openai4rs::*;
 
@@ -372,19 +373,19 @@ use openai4rs::*;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
-    // Get the API key from the environment
+    // 获取环境变量
     let api_key = std::env::var("OPENAI_API_KEY")?;
     let base_url = std::env::var("OPENAI_BASE_URL")?;
-    // 1. Basic client with default settings
+    // 1. 基础客户端
     let basic_client = OpenAI::new(&api_key, &base_url);
 
-    // 2. Client with a custom base URL (e.g., for a proxy or a different provider)
+    // 2. 具有自定义基础URL的客户端（例如，用于代理或不同供应商）
     let _custom_base_url_client = Config::builder()
         .api_key(&api_key)
-        .base_url(&base_url) // Replace with your custom base URL
+        .base_url(&base_url) // 替换为您的自定义基础URL
         .build_openai()?;
 
-    // 3. Client with a proxy
+    // 3. 带代理的客户端
     let proxy_config = Config::builder()
         .api_key(&api_key)
         .base_url(&base_url)
@@ -392,20 +393,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
     let _proxy_client = OpenAI::with_config(proxy_config);
 
-    // 4. Client with custom timeout
+    // 4. 带自定义超时的客户端
     let timeout_config = Config::builder()
         .api_key(&api_key)
         .base_url(&base_url)
-        .timeout_seconds(120)
+        .timeout(Duration::from_secs(120))
         .build()?;
     let _timeout_client = OpenAI::with_config(timeout_config);
 
-    // For demonstration, we'll use the basic client to make a simple request.
-    // In a real application, you would use the client that best fits your needs.
+    // 为了演示，我们将使用基础客户端发出简单请求。
+    // 在实际应用中，您应使用最适合您需求的客户端。
 
     let model = "Qwen/Qwen3-235B-A22B-Instruct-2507";
     let messages = vec![user!(content: "Ping to check if the client is working.")];
-    let request = chat_request(model, &messages);
+    let request = ChatParam::new(model, &messages);
 
     println!("Testing basic client...");
     match basic_client.chat().create(request).await {
@@ -421,6 +422,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
 ```
 
 ## 📖 运行示例
@@ -434,9 +436,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - [05. 客户端配置](examples/05_client_configuration.rs)
 - [06. 视觉（Vision）API](examples/06_vision.rs) (如果模型支持)
 - [07. 思维模型（Thinking Model）](examples/07_thinking_model.rs) (如果模型支持复杂推理)
-- [08. 全局拦截器](examples/08_interceptor_example.rs)
-- [09. 模块拦截器](examples/09_module_interceptor_example.rs)
-- [10. 词嵌入（Embeddings）](examples/10_embeddings_example.rs)
+- [08. 词嵌入（Embeddings）](examples/08_embeddings_example.rs)
 
 你可以通过以下命令运行示例：
 
