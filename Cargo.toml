@@ -11,7 +11,14 @@ authors = ["Zhang Zhenxiang 401303740@qq.com"]
 description = "A non-official Rust crate for calling the OpenAI service"
 license = "Apache-2.0"
 keywords = ["ai", "openai", "machine-learning", "library"]
-exclude = [".vscode/", "docs/", ".git/", ".github/", "*.log", ".env*"]
+include = [
+    "src/**/*",
+    "examples/**/*",
+    "tests/**/*",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md",
+]
 categories = ["api-bindings", "asynchronous", "science"]
 
 [dependencies]
