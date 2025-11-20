@@ -140,7 +140,7 @@ impl Config {
     /// # 返回
     ///
     /// 用于方法链的自引用
-    pub fn with_base_url(&mut self, base_url: impl Into<String>) -> &mut Self {
+    pub fn with_base_url<T: Into<String>>(&mut self, base_url: T) -> &mut Self {
         self.credentials.with_base_url(base_url);
         self
     }
@@ -154,7 +154,7 @@ impl Config {
     /// # 返回
     ///
     /// 用于方法链的自引用
-    pub fn with_api_key(&mut self, api_key: impl Into<String>) -> &mut Self {
+    pub fn with_api_key<T: Into<String>>(&mut self, api_key: T) -> &mut Self {
         self.credentials.with_api_key(api_key);
         self
     }
@@ -210,7 +210,7 @@ impl Config {
     /// # 返回
     ///
     /// 用于方法链的自引用
-    pub fn with_proxy(&mut self, proxy: impl Into<String>) -> &mut Self {
+    pub fn with_proxy<T: Into<String>>(&mut self, proxy: T) -> &mut Self {
         self.http.with_proxy(proxy);
         self
     }
@@ -272,7 +272,7 @@ impl ConfigBuilder {
     /// # 返回
     ///
     /// 用于方法链的构建器实例
-    pub fn api_key(mut self, api_key: impl Into<String>) -> Self {
+    pub fn api_key<T: Into<String>>(mut self, api_key: T) -> Self {
         self.credentials_builder = self.credentials_builder.api_key(api_key.into());
         self
     }
@@ -286,7 +286,7 @@ impl ConfigBuilder {
     /// # 返回
     ///
     /// 用于方法链的构建器实例
-    pub fn base_url(mut self, base_url: impl Into<String>) -> Self {
+    pub fn base_url<T: Into<String>>(mut self, base_url: T) -> Self {
         self.credentials_builder = self.credentials_builder.base_url(base_url.into());
         self
     }
@@ -342,7 +342,7 @@ impl ConfigBuilder {
     /// # 返回
     ///
     /// 用于方法链的构建器实例
-    pub fn proxy(mut self, proxy: impl Into<String>) -> Self {
+    pub fn proxy<T: Into<String>>(mut self, proxy: T) -> Self {
         self.http_builder = self.http_builder.proxy(proxy.into());
         self
     }
@@ -386,7 +386,7 @@ impl ConfigBuilder {
     /// # 返回
     ///
     /// 用于方法链的构建器实例
-    pub fn body(mut self, key: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
+    pub fn body<T: Into<String>, U: Into<serde_json::Value>>(mut self, key: T, value: U) -> Self {
         self.http_builder = self.http_builder.body(key.into(), value.into());
         self
     }

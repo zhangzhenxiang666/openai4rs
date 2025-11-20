@@ -1,7 +1,8 @@
-use super::request::{RequestBuilder, RequestSpec};
+use super::request::RequestSpec;
 use crate::Config;
 use crate::error::{OpenAIError, ProcessingError};
 use crate::service::executor::HttpExecutor;
+use crate::service::request::Request;
 use eventsource_stream::{Event, EventStreamError, Eventsource};
 use futures::StreamExt;
 use std::any::type_name;
@@ -41,21 +42,21 @@ where
 /// - 将原始HTTP响应转换为强类型对象
 /// - 使用服务器发送事件（SSE）处理流响应
 /// - 管理请求/响应生命周期
-pub(crate) struct HttpTransport {
+pub(crate) struct InnerHttp {
     /// 负责发送请求的底层HTTP执行器
     executor: HttpExecutor,
 }
 
-impl HttpTransport {
-    /// 使用给定的配置创建一个新的 `Transport`。
+impl InnerHttp {
+    /// 使用给定的配置创建一个新的 `InnerHttp`。
     ///
     /// # 参数
     /// * `config` - 主OpenAI客户端配置
     ///
     /// # 返回值
-    /// 新的Transport实例
-    pub fn new(config: Config) -> HttpTransport {
-        HttpTransport {
+    /// 新的InnerHttp实例
+    pub fn new(config: Config) -> InnerHttp {
+        InnerHttp {
             executor: HttpExecutor::new(config),
         }
     }
@@ -85,15 +86,20 @@ impl HttpTransport {
     pub async fn post_json<U, F, T>(&self, params: RequestSpec<U, F>) -> Result<T, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
-        F: FnOnce(&Config, &mut RequestBuilder),
+        F: FnOnce(&Config, Request) -> Request,
         T: serde::de::DeserializeOwned,
     {
         let res = self.executor.post(params).await?;
-        let raw = res.text().await.map_err(ProcessingError::TextRead)?;
-        serde_json::from_str(&raw).map_err(|_| {
-            ProcessingError::Conversion {
-                raw,
+
+        let status = res.status();
+        let url = res.url().clone();
+
+        res.json().await.map_err(|e| {
+            ProcessingError::JsonDeserialization {
+                error: e,
                 target_type: type_name::<T>().to_string(),
+                status_code: Some(status.as_u16()),
+                url: Some(url.to_string()),
             }
             .into()
         })
@@ -117,15 +123,20 @@ impl HttpTransport {
     pub async fn get_json<U, F, T>(&self, params: RequestSpec<U, F>) -> Result<T, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
-        F: FnOnce(&Config, &mut RequestBuilder),
+        F: FnOnce(&Config, Request) -> Request,
         T: serde::de::DeserializeOwned,
     {
         let res = self.executor.get(params).await?;
-        let raw = res.text().await.map_err(ProcessingError::TextRead)?;
-        serde_json::from_str(&raw).map_err(|_| {
-            ProcessingError::Conversion {
-                raw,
+
+        let status = res.status();
+        let url = res.url().clone();
+
+        res.json().await.map_err(|e| {
+            ProcessingError::JsonDeserialization {
+                error: e,
                 target_type: type_name::<T>().to_string(),
+                status_code: Some(status.as_u16()),
+                url: Some(url.to_string()),
             }
             .into()
         })
@@ -153,7 +164,7 @@ impl HttpTransport {
     ) -> Result<tokio_stream::wrappers::ReceiverStream<Result<T, OpenAIError>>, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
-        F: FnOnce(&Config, &mut RequestBuilder),
+        F: FnOnce(&Config, Request) -> Request,
         T: serde::de::DeserializeOwned + Send + 'static,
     {
         let res = self.executor.post(params).await?;
@@ -162,7 +173,7 @@ impl HttpTransport {
 
         tokio::spawn(async move {
             while let Some(event_result) = event_stream.next().await {
-                let process_result = Self::process_stream_event(event_result).await;
+                let process_result = Self::process_stream_event(event_result);
                 match process_result {
                     SseEventResult::Skip => continue,
                     SseEventResult::Data(chunk) => {
@@ -198,7 +209,7 @@ impl HttpTransport {
     ///
     /// # 返回值
     /// 指示如何处理此事件的ProcessEventResult
-    async fn process_stream_event<T>(
+    fn process_stream_event<T>(
         event_result: Result<Event, EventStreamError<reqwest::Error>>,
     ) -> SseEventResult<T>
     where
@@ -206,16 +217,16 @@ impl HttpTransport {
     {
         match event_result {
             Ok(event) => {
-                // Skip empty events
+                // 如果数据为空就跳过这个事件
                 if event.data.is_empty() {
                     return SseEventResult::Skip;
                 }
 
-                // Check for stream completion marker
+                // 检查sse完成标志
                 if event.data == "[DONE]" {
                     SseEventResult::Done
                 } else {
-                    // Try to deserialize the event data
+                    // 尝试将事件数据反序列化为预期类型
                     match serde_json::from_str::<T>(&event.data) {
                         Ok(chunk) => SseEventResult::Data(chunk),
                         Err(_) => SseEventResult::Error(

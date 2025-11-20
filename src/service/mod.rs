@@ -1,12 +1,9 @@
-//! HTTP module for the OpenAI client.
-//!
-//! This module provides the HTTP transport layer implementation for making requests
-//! to the OpenAI API. It includes components for configuration, request execution,
-//! and response handling.
+//! 用以发出http请求的底层模块
 
 pub mod client;
 pub mod executor;
+pub mod innerhttp;
 pub mod request;
-pub mod transport;
 
 pub(crate) use client::HttpClient;
+pub use request::{Request, RequestBuilder};

@@ -85,7 +85,7 @@ impl HttpExecutor {
     pub async fn post<U, F>(&self, params: RequestSpec<U, F>) -> Result<Response, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
-        F: FnOnce(&Config, &mut RequestBuilder),
+        F: FnOnce(&Config, Request) -> Request,
     {
         // Snapshot client and config-derived values to avoid holding locks across await
         let client = {
@@ -96,15 +96,17 @@ impl HttpExecutor {
         let (retry_count, request) = {
             let config_guard = self.config.read().await;
 
-            let mut request_builder = RequestBuilder::new(
-                reqwest::Method::POST,
-                (params.url_fn)(&config_guard).as_str(),
-            );
+            let mut request = Request::new(reqwest::Method::POST, (params.url_fn)(&config_guard));
 
-            (params.builder_fn)(&config_guard, &mut request_builder);
+            request = (params.builder_fn)(&config_guard, request);
+
+            let mut request_builder = RequestBuilder::new(request);
+
             HttpExecutor::apply_global_http_settings(&config_guard, &mut request_builder);
 
-            let retry_count = match request_builder.extensions().get::<RetryCount>() {
+            request = request_builder.take();
+
+            let retry_count = match request.extensions().get::<RetryCount>() {
                 Some(retry) => {
                     if retry.0 != 0 {
                         retry.0
@@ -114,8 +116,6 @@ impl HttpExecutor {
                 }
                 None => config_guard.retry_count(),
             };
-
-            let request = request_builder.build();
 
             (retry_count, request)
         };
@@ -142,7 +142,7 @@ impl HttpExecutor {
     pub async fn get<U, F>(&self, params: RequestSpec<U, F>) -> Result<Response, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
-        F: FnOnce(&Config, &mut RequestBuilder),
+        F: FnOnce(&Config, Request) -> Request,
     {
         // Snapshot client and config-derived values to avoid holding locks across await
         let client = {
@@ -153,15 +153,17 @@ impl HttpExecutor {
         let (retry_count, request) = {
             let config_guard = self.config.read().await;
 
-            let mut request_builder = RequestBuilder::new(
-                reqwest::Method::GET,
-                (params.url_fn)(&config_guard).as_str(),
-            );
+            let mut request = Request::new(reqwest::Method::GET, (params.url_fn)(&config_guard));
 
-            (params.builder_fn)(&config_guard, &mut request_builder);
+            request = (params.builder_fn)(&config_guard, request);
+
+            let mut request_builder = RequestBuilder::new(request);
+
             HttpExecutor::apply_global_http_settings(&config_guard, &mut request_builder);
 
-            let retry_count = match request_builder.extensions().get::<RetryCount>() {
+            request = request_builder.take();
+
+            let retry_count = match request.extensions().get::<RetryCount>() {
                 Some(retry) => {
                     if retry.0 != 0 {
                         retry.0
@@ -171,8 +173,6 @@ impl HttpExecutor {
                 }
                 None => config_guard.retry_count(),
             };
-
-            let request = request_builder.build();
 
             (retry_count, request)
         };

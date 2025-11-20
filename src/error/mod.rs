@@ -32,20 +32,20 @@
 //!             println!("Success: {:#?}", response);
 //!         }
 //!         Err(OpenAIError::Api(api_error)) => {
-//!             eprintln!("API 错误: {}", api_error.message);
+//!             eprintln!("OpenAI API error: {}", api_error.message);
 //!             // 处理特定的 API 错误 (例如，错误请求，速率限制)
 //!             if api_error.is_bad_request() {
-//!                 eprintln!("错误请求。请检查您的参数。");
+//!                 eprintln!("Bad request. Please check your parameters.");
 //!             } else if api_error.is_rate_limit() {
-//!                 eprintln!("超过速率限制。请稍后重试。");
+//!                 eprintln!("Rate limit exceeded. Please try again later.");
 //!             }
 //!         }
 //!         Err(OpenAIError::Request(req_error)) => {
-//!             eprintln!("请求错误: {}", req_error);
+//!             eprintln!("Request preparation or sending error: {}", req_error);
 //!             // 处理网络或连接错误
 //!         }
 //!         Err(OpenAIError::Processing(proc_error)) => {
-//!             eprintln!("处理错误: {}", proc_error);
+//!             eprintln!("Response processing error: {}", proc_error);
 //!             // 处理响应处理期间的错误
 //!         }
 //!     }
@@ -109,15 +109,15 @@ pub mod sse;
 #[derive(Debug, Error)]
 pub enum OpenAIError {
     /// 在准备或发送 API 请求期间发生的错误。
-    #[error("请求错误: {0}")]
+    #[error("Request preparation or sending error: {0}")]
     Request(#[from] RequestError),
 
     /// OpenAI API 返回的错误。
-    #[error("API 错误: {0}")]
+    #[error("OpenAI API error: {0}")]
     Api(#[from] ApiError),
 
     /// 在处理 API 响应期间发生的错误。
-    #[error("处理错误: {0}")]
+    #[error("Response processing error: {0}")]
     Processing(#[from] ProcessingError),
 }
 
@@ -169,7 +169,10 @@ impl OpenAIError {
 
     /// 如果错误是由于反序列化问题，则返回 `true`。
     pub fn is_deserialization(&self) -> bool {
-        matches!(self, Self::Processing(ProcessingError::Deserialization(_)))
+        matches!(
+            self,
+            Self::Processing(ProcessingError::JsonDeserialization { .. })
+        )
     }
 
     /// 如果错误是 API 错误，则返回对底层 `ApiError` 的引用。
@@ -185,21 +188,20 @@ impl OpenAIError {
         match self {
             Self::Request(err) => err.status().map(|s| s.as_u16()),
             Self::Api(err) => Some(err.status),
-            Self::Processing(_) => None,
+            Self::Processing(err) => match err {
+                ProcessingError::JsonDeserialization { status_code, .. } => *status_code,
+                _ => None,
+            },
         }
     }
 
     /// 如果导致错误的请求在重试时可能成功，则返回 `true`。
     pub fn is_retryable(&self) -> bool {
         match self {
-            // 超时和连接错误通常是暂时的。
             Self::Request(err) if err.is_timeout() || err.is_connection() => true,
-            // 速率限制、服务器端错误和冲突值得重试。
             Self::Api(err) if err.is_rate_limit() || err.is_server_error() || err.is_conflict() => {
                 true
             }
-            // 如果响应体不完整，解码错误可能是暂时的。
-            Self::Processing(ProcessingError::TextRead(err)) if err.is_decode() => true,
             _ => false,
         }
     }

@@ -1,11 +1,9 @@
-use crate::modules::{
-    chat::Chat, completions::Completions, embeddings::Embeddings, models::Models,
-};
+use crate::modules::{Chat, Completions, Embeddings, Models};
 use crate::{config::Config, service::client::HttpClient};
 use http::HeaderValue;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, RwLockReadGuard};
+use tokio::sync::RwLock;
 
 /// 用于与OpenAI兼容API交互的OpenAI客户端
 ///
@@ -114,7 +112,6 @@ impl OpenAI {
     }
 
     #[doc = include_str!("../docs/from_env.md")]
-    #[must_use]
     pub fn from_env() -> Result<Self, String> {
         let api_key = std::env::var("OPENAI_API_KEY")
             .map_err(|_| "The `OPENAI_API_KEY` environment variable is not set.")?;
@@ -228,22 +225,17 @@ impl OpenAI {
         self.config.read().await.api_key().to_string()
     }
 
-    /// 返回当前的配置。
-    pub async fn config(&self) -> RwLockReadGuard<'_, Config> {
-        self.config.read().await
-    }
-
     /// 更新客户端的基础URL。
     ///
     /// 此操作不会重建HTTP客户端，因为它在每个请求中都会使用。
-    pub async fn with_base_url(&self, base_url: impl Into<String>) {
+    pub async fn with_base_url<T: Into<String>>(&self, base_url: T) {
         self.config.write().await.with_base_url(base_url);
     }
 
     /// 更新客户端的API密钥。
     ///
     /// 此操作不会重建HTTP客户端，因为API密钥在每个请求的头部中发送。
-    pub async fn with_api_key(&self, api_key: impl Into<String>) {
+    pub async fn with_api_key<T: Into<String>>(&self, api_key: T) {
         self.config.write().await.with_api_key(api_key);
     }
 

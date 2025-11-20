@@ -1,14 +1,12 @@
-//! Common types and utilities shared across the `openai4rs` crate.
+//! 在 `openai4rs` 库中共享的常见类型和实用工具。
 //!
-//! This module contains types and utilities that are used by multiple
-//! other modules within the `openai4rs` crate. These types often
-//! represent shared data structures or provide common functionality.
+//! 此模块包含在 `openai4rs` 库中多个其他模块中使用的类型和实用工具。
+//! 这些类型通常表示共享的数据结构或提供通用功能。
 //!
-//! # Key Components
+//! # 主要组件
 //!
-//! - [`CompletionGeneric`]: A generic struct representing the common fields
-//!   of a completion response.
-//! - [`CompletionUsage`]: Represents token usage statistics for a completion.
-//! - [`ServiceTier`]: Represents the service tier of the model.
+//! - [`CompletionGeneric`]: 一个泛型结构体，表示补全响应的通用字段。
+//! - [`CompletionUsage`]: 表示补全的令牌使用统计信息。
+//! - [`ServiceTier`]: 表示模型的服务层级。
 
 pub mod types;

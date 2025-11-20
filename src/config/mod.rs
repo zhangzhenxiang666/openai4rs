@@ -60,7 +60,7 @@ impl Credentials {
     /// # 返回
     ///
     /// 用于方法链的可变引用
-    pub fn with_base_url(&mut self, base_url: impl Into<String>) -> &mut Self {
+    pub fn with_base_url<T: Into<String>>(&mut self, base_url: T) -> &mut Self {
         self.base_url = base_url.into();
         self
     }
@@ -74,7 +74,7 @@ impl Credentials {
     /// # 返回
     ///
     /// 用于方法链的可变引用
-    pub fn with_api_key(&mut self, api_key: impl Into<String>) -> &mut Self {
+    pub fn with_api_key<T: Into<String>>(&mut self, api_key: T) -> &mut Self {
         self.api_key = api_key.into();
         self
     }

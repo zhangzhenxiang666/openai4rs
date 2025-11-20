@@ -55,15 +55,15 @@ pub enum ServiceTier {
 pub(crate) type Body = serde_json::Map<String, serde_json::Value>;
 
 #[derive(Debug, Clone)]
-pub(crate) struct Timeout(pub(crate) std::time::Duration);
+pub(crate) struct Timeout(pub std::time::Duration);
 
 #[derive(Debug, Clone)]
-pub(crate) struct RetryCount(pub(crate) usize);
+pub(crate) struct RetryCount(pub usize);
 
 pub(crate) struct InParam {
-    pub(crate) body: Option<Body>,
-    pub(crate) headers: HeaderMap,
-    pub(crate) extensions: Extensions,
+    pub body: Option<Body>,
+    pub headers: HeaderMap,
+    pub extensions: Extensions,
 }
 
 impl InParam {

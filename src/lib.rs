@@ -88,7 +88,7 @@ pub mod error;
 /// 以及对常规 JSON 响应和流式服务器发送事件 (SSE) 的支持。
 ///
 /// 服务模块包含用于请求执行、传输处理和响应处理的组件。
-pub(crate) mod service;
+pub mod service;
 
 /// 实用函数和 trait。
 /// 包含在整个库中使用的辅助函数和通用 trait。
@@ -102,6 +102,7 @@ pub use http::header;
 pub use http::header::{HeaderName, HeaderValue};
 pub use modules::*;
 pub use serde_json;
+pub use service::{Request, RequestBuilder};
 // 导入并重新导出新的过程宏
 pub mod macros {
     pub use openai4rs_macro::{assistant, content, system, tool, user};

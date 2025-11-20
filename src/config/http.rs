@@ -192,10 +192,10 @@ impl HttpConfig {
     /// # 返回值
     ///
     /// 用于方法链的自引用
-    pub fn add_body(
+    pub fn add_body<T: Into<String>, U: Into<serde_json::Value>>(
         &mut self,
-        key: impl Into<String>,
-        value: impl Into<serde_json::Value>,
+        key: T,
+        value: U,
     ) -> &mut Self {
         self.bodys.insert(key.into(), value.into());
         self
@@ -261,7 +261,7 @@ impl HttpConfig {
     /// # 返回值
     ///
     /// 用于方法链的自引用
-    pub fn with_proxy(&mut self, proxy: impl Into<String>) -> &mut Self {
+    pub fn with_proxy<T: Into<String>>(&mut self, proxy: T) -> &mut Self {
         self.proxy = Some(proxy.into());
         self
     }
@@ -338,7 +338,7 @@ impl HttpConfigBuilder {
         self
     }
 
-    pub fn body(mut self, key: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
+    pub fn body<T: Into<String>, U: Into<serde_json::Value>>(mut self, key: T, value: U) -> Self {
         let body_map = self.bodys.get_or_insert_with(Body::new);
         body_map.insert(key.into(), value.into());
         self

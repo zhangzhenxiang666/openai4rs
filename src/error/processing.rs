@@ -5,15 +5,17 @@ use super::sse::SseError;
 /// 在处理API响应期间发生的错误。
 #[derive(Debug, Error)]
 pub enum ProcessingError {
-    /// 无法反序列化响应体。
-    #[error("Failed to deserialize response: {0}")]
-    Deserialization(#[from] serde_json::Error),
+    /// JSON反序列化失败，包含原始响应信息用于调试
+    #[error("Failed to deserialize JSON response to type '{target_type}': {error}")]
+    JsonDeserialization {
+        #[source]
+        error: reqwest::Error,
+        target_type: String,
+        status_code: Option<u16>,
+        url: Option<String>,
+    },
 
-    /// 无法读取响应文本。
-    #[error("Failed to read response text: {0}")]
-    TextRead(#[from] reqwest::Error),
-
-    /// 无法将一个值从一种类型转换为另一种类型。
+    /// 无法将一个值从一种类型转换为另一种类型（用于SSE流处理）
     #[error("Failed to convert value '{raw}' to type '{target_type}'")]
     Conversion { raw: String, target_type: String },
 

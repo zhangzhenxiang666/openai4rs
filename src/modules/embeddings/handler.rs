@@ -47,9 +47,11 @@ impl Embeddings {
 
         let http_params = RequestSpec::new(
             |config| format!("{}/embeddings", config.base_url()),
-            |config, builder| {
-                Self::apply_request_settings(builder, inner);
+            move |config, request| {
+                let mut builder = RequestBuilder::new(request);
+                Self::apply_request_settings(&mut builder, inner);
                 builder.bearer_auth(config.api_key());
+                builder.take()
             },
         );
         self.http_client.post_json(http_params).await
@@ -64,14 +66,14 @@ impl Embeddings {
 
         builder.body_fields(body);
 
-        *builder.headers_mut() = params.headers;
+        *builder.request_mut().headers_mut() = params.headers;
 
         if let Some(time) = params.extensions.get::<Timeout>() {
             builder.timeout(time.0);
         }
 
         if let Some(retry) = params.extensions.get::<RetryCount>() {
-            builder.extensions_mut().insert(retry.clone());
+            builder.request_mut().extensions_mut().insert(retry.clone());
         }
     }
 }

@@ -16,8 +16,8 @@ pub struct ChatParam {
 
 impl ChatParam {
     /// 创建chat api参数构建器
-    /// `model`: 模型名称
-    /// `messages`: 聊天消息的共享引用
+    /// * `model`: 模型名称
+    /// * `messages`: 聊天消息的共享引用
     pub fn new(model: &str, messages: &Vec<ChatCompletionMessageParam>) -> Self {
         let mut inner = InParam::new();
         inner.body = Some(Body::new());
