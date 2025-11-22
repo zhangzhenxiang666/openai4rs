@@ -1,4 +1,4 @@
-use crate::common::types::{Body, InParam, RetryCount, Timeout};
+use crate::common::types::{InParam, JsonBody, RetryCount, Timeout};
 use http::{
     HeaderValue,
     header::{IntoHeaderName, USER_AGENT},
@@ -16,7 +16,7 @@ impl ModelsParam {
             inner: InParam::new(),
         }
     }
-    /// HTTP请求超时时间，覆盖客户端的全局设置。
+    /// 超时时间。HTTP请求超时时间，覆盖客户端的全局设置。
     ///
     /// 此字段不会在请求体中序列化。
     pub fn timeout(mut self, timeout: Duration) -> Self {
@@ -24,32 +24,28 @@ impl ModelsParam {
         self
     }
 
-    /// HTTP请求User-Agent，覆盖客户端的全局设置。
-    ///
-    /// 此字段不会在请求体中序列化。
+    /// 用户代理。HTTP请求User-Agent，覆盖客户端的全局设置。
     pub fn user_agent(mut self, user_agent: HeaderValue) -> Self {
         self.inner.headers.insert(USER_AGENT, user_agent);
         self
     }
 
-    /// 随请求发送额外的头信息。
+    /// 设置HTTP请求头信息。
     pub fn header<K: IntoHeaderName>(mut self, key: K, val: HeaderValue) -> Self {
         self.inner.headers.insert(key, val);
         self
     }
 
-    /// 向请求添加额外的JSON属性。
-    ///
-    /// 此字段不会在请求体中序列化。
+    /// 向请求体添加额外的JSON属性。
     pub fn body<K: Into<String>, V: Into<Value>>(mut self, key: K, val: V) -> Self {
         self.inner
             .body
-            .get_or_insert_with(Body::new)
+            .get_or_insert_with(JsonBody::new)
             .insert(key.into(), val.into());
         self
     }
 
-    /// HTTP请求重试次数，覆盖客户端的全局设置。
+    /// 重试次数。HTTP请求重试次数，覆盖客户端的全局设置。
     ///
     /// 此字段不会在请求体中序列化。
     pub fn retry_count(mut self, retry_count: usize) -> Self {

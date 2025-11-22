@@ -1,5 +1,5 @@
 use crate::Config;
-use crate::common::types::{Body, Timeout};
+use crate::common::types::{JsonBody, Timeout};
 use http::header::{AUTHORIZATION, AsHeaderName, IntoHeaderName};
 use http::{Extensions, HeaderMap, HeaderValue};
 use reqwest::{Method, RequestBuilder as ReqwestRequestBuilder};
@@ -43,7 +43,7 @@ pub struct Request {
     method: Method,
     url: String,
     headers: HeaderMap<HeaderValue>,
-    body: Option<Body>,
+    body: Option<JsonBody>,
     extensions: Extensions,
 }
 
@@ -89,12 +89,12 @@ impl Request {
     }
 
     #[inline]
-    pub fn body(&self) -> Option<&Body> {
+    pub fn body(&self) -> Option<&JsonBody> {
         self.body.as_ref()
     }
 
     #[inline]
-    pub fn body_mut(&mut self) -> Option<&mut Body> {
+    pub fn body_mut(&mut self) -> Option<&mut JsonBody> {
         self.body.as_mut()
     }
 
@@ -177,16 +177,16 @@ impl RequestBuilder {
     pub fn body_field<K: Into<String>, V: Into<Value>>(&mut self, key: K, value: V) -> &mut Self {
         self.request
             .body
-            .get_or_insert_with(Body::new)
+            .get_or_insert_with(JsonBody::new)
             .insert(key.into(), value.into());
         self
     }
 
     /// 扩展请求体字段
-    pub fn body_fields(&mut self, fields: Body) -> &mut Self {
+    pub fn body_fields(&mut self, fields: JsonBody) -> &mut Self {
         self.request
             .body
-            .get_or_insert_with(Body::new)
+            .get_or_insert_with(JsonBody::new)
             .extend(fields);
         self
     }

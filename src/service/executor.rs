@@ -5,9 +5,8 @@ use crate::error::{ApiError, ApiErrorKind, OpenAIError, RequestError};
 use crate::utils::traits::AsyncFrom;
 use rand::Rng;
 use reqwest::{Client, Response};
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// 处理实际发送HTTP请求的HTTP请求执行器。
 ///
@@ -22,7 +21,7 @@ pub(crate) struct HttpExecutor {
     /// 主OpenAI客户端配置。
     ///
     /// 用于确定重试次数和其他客户端特定设置。
-    config: Arc<RwLock<Config>>,
+    config: RwLock<Config>,
 
     /// 包装在RwLock中的底层reqwest HTTP客户端。
     ///
@@ -41,16 +40,17 @@ impl HttpExecutor {
     pub fn new(config: Config) -> HttpExecutor {
         let reqwest_client = config.http().build_reqwest_client();
         HttpExecutor {
-            config: Arc::new(RwLock::new(config)),
+            config: RwLock::new(config),
             reqwest_client: RwLock::new(reqwest_client),
         }
     }
 
-    /// 返回包装在Arc<RwLock>中的内部配置的克隆。
-    ///
-    /// 这允许访问当前配置以构建请求。
-    pub(crate) fn config(&self) -> Arc<RwLock<Config>> {
-        self.config.clone()
+    pub async fn config_read(&self) -> RwLockReadGuard<'_, Config> {
+        self.config.read().await
+    }
+
+    pub async fn config_write(&self) -> RwLockWriteGuard<'_, Config> {
+        self.config.write().await
     }
 
     /// 根据当前配置重建内部的`reqwest::Client`。
@@ -272,8 +272,6 @@ impl HttpExecutor {
         }
     }
 }
-
-// --- 重试逻辑的实用函数（从client/http.rs迁移） ---
 
 /// 根据错误类型计算重试前的适当延迟。
 ///

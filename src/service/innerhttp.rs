@@ -6,8 +6,7 @@ use crate::service::request::Request;
 use eventsource_stream::{Event, EventStreamError, Eventsource};
 use futures::StreamExt;
 use std::any::type_name;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLockReadGuard, RwLockWriteGuard};
 use tokio_stream::wrappers::ReceiverStream;
 
 /// 用于处理流事件的结果类型。
@@ -61,11 +60,14 @@ impl InnerHttp {
         }
     }
 
-    /// 返回内部配置的克隆，包装在 Arc<RwLock> 中。
-    ///
-    /// 这允许访问当前配置以构建请求。
-    pub fn config(&self) -> Arc<RwLock<Config>> {
-        self.executor.config()
+    /// 获取对配置的只读访问权限。
+    pub async fn config_read(&self) -> RwLockReadGuard<'_, Config> {
+        self.executor.config_read().await
+    }
+
+    /// 获取对配置的写入访问权限。
+    pub async fn config_write(&self) -> RwLockWriteGuard<'_, Config> {
+        self.executor.config_write().await
     }
 
     /// 使用JSON负载发送POST请求并使用HttpParams反序列化响应。

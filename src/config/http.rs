@@ -1,4 +1,4 @@
-use crate::common::types::Body;
+use crate::common::types::JsonBody;
 use derive_builder::Builder;
 use http::{
     HeaderMap, HeaderValue,
@@ -48,8 +48,8 @@ pub struct HttpConfig {
     /// 要包含在所有有请求体的请求中的全局请求体字段
     ///
     /// 这些字段将自动合并到每个包含请求体的请求的请求体中。
-    #[builder(default = Body::new())]
-    bodys: Body,
+    #[builder(default = JsonBody::new())]
+    bodys: JsonBody,
 }
 
 impl HttpConfig {
@@ -122,7 +122,7 @@ impl HttpConfig {
     ///
     /// 此映射包含将自动包含在所有请求体中的请求体字段。
     #[inline]
-    pub fn bodys(&self) -> &Body {
+    pub fn bodys(&self) -> &JsonBody {
         &self.bodys
     }
 
@@ -325,7 +325,7 @@ impl Default for HttpConfig {
             timeout: Duration::from_secs(300),
             connect_timeout: Duration::from_secs(10),
             proxy: None,
-            bodys: Body::new(),
+            bodys: JsonBody::new(),
             headers: HeaderMap::new(),
         }
     }
@@ -339,7 +339,7 @@ impl HttpConfigBuilder {
     }
 
     pub fn body<T: Into<String>, U: Into<serde_json::Value>>(mut self, key: T, value: U) -> Self {
-        let body_map = self.bodys.get_or_insert_with(Body::new);
+        let body_map = self.bodys.get_or_insert_with(JsonBody::new);
         body_map.insert(key.into(), value.into());
         self
     }

@@ -1,9 +1,7 @@
 use crate::modules::{Chat, Completions, Embeddings, Models};
 use crate::{config::Config, service::client::HttpClient};
 use http::HeaderValue;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
 
 /// 用于与OpenAI兼容API交互的OpenAI客户端
 ///
@@ -37,7 +35,6 @@ use tokio::sync::RwLock;
 /// }
 /// ```
 pub struct OpenAI {
-    config: Arc<RwLock<Config>>,
     http_client: HttpClient,
     chat: Chat,
     completions: Completions,
@@ -70,7 +67,6 @@ impl OpenAI {
             completions: Completions::new(http_client.clone()),
             models: Models::new(http_client.clone()),
             embeddings: Embeddings::new(http_client.clone()),
-            config: http_client.config(),
             http_client,
         }
     }
@@ -106,7 +102,6 @@ impl OpenAI {
             completions: Completions::new(http_client.clone()),
             models: Models::new(http_client.clone()),
             embeddings: Embeddings::new(http_client.clone()),
-            config: http_client.config(),
             http_client,
         }
     }
@@ -184,7 +179,7 @@ impl OpenAI {
         F: FnOnce(&mut Config),
     {
         {
-            let mut config_guard = self.config.write().await;
+            let mut config_guard = self.http_client.config_write().await;
             update_fn(&mut config_guard);
         }
 
@@ -217,29 +212,32 @@ impl OpenAI {
 
     /// 返回当前的基础URL。
     pub async fn base_url(&self) -> String {
-        self.config.read().await.base_url().to_string()
+        self.http_client.config_read().await.base_url().to_string()
     }
 
     /// 返回当前的API密钥。
     pub async fn api_key(&self) -> String {
-        self.config.read().await.api_key().to_string()
+        self.http_client.config_read().await.api_key().to_string()
     }
 
     /// 更新客户端的基础URL。
     ///
     /// 此操作不会重建HTTP客户端，因为它在每个请求中都会使用。
     pub async fn with_base_url<T: Into<String>>(&self, base_url: T) {
-        self.config.write().await.with_base_url(base_url);
+        self.http_client
+            .config_write()
+            .await
+            .with_base_url(base_url);
     }
 
     /// 更新客户端的API密钥。
     ///
     /// 此操作不会重建HTTP客户端，因为API密钥在每个请求的头部中发送。
     pub async fn with_api_key<T: Into<String>>(&self, api_key: T) {
-        self.config.write().await.with_api_key(api_key);
+        self.http_client.config_write().await.with_api_key(api_key);
     }
 
-    /// 更新客户端的请求超时时间（以秒为单位）。
+    /// 更新客户端的请求超时时间。
     ///
     /// 此操作将使用新设置重建内部HttpService。
     pub async fn with_timeout(&self, timeout: Duration) {
@@ -249,7 +247,7 @@ impl OpenAI {
         .await;
     }
 
-    /// 更新客户端的连接超时时间（以秒为单位）。
+    /// 更新客户端的连接超时时间。
     ///
     /// 此操作将使用新设置重建内部HttpService。
     pub async fn with_connect_timeout(&self, connect_timeout: Duration) {
@@ -263,7 +261,10 @@ impl OpenAI {
     ///
     /// 此操作不会重建HTTP客户端，因为它在每次重试时都会使用。
     pub async fn with_retry_count(&self, retry_count: usize) {
-        self.config.write().await.with_retry_count(retry_count);
+        self.http_client
+            .config_write()
+            .await
+            .with_retry_count(retry_count);
     }
 
     /// 更新客户端的HTTP代理。

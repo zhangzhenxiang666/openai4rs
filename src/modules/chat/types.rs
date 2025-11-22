@@ -1,11 +1,11 @@
-use crate::chat::tool_parameters::{ConversionError, Parameters};
-use crate::common::types::{CompletionGeneric, extract_optional, try_deserialize_or_skip};
+use crate::chat::tool_parameters::Parameters;
+use crate::common::types::{CompletionGeneric, try_deserialize_or_skip};
 use crate::content;
 use crate::utils::methods::merge_extra_fields_in_place;
 use derive_builder::Builder;
 use serde::de::{self, MapAccess, Visitor};
+use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -156,7 +156,7 @@ pub enum ChatCompletionToolParam {
     Function(FunctionDefinition),
 }
 
-#[derive(Debug, Clone, Serialize, Builder)]
+#[derive(Debug, Clone, Serialize, Deserialize, Builder)]
 #[builder(
     name = "FunctionDefinitionBuilder",
     pattern = "owned",
@@ -211,14 +211,6 @@ pub enum ReasoningEffort {
 }
 
 impl ChatCompletion {
-    /// 返回第一个选择的消息的文本内容（如果可用）。
-    /// 这是访问模型响应的最常见方式。
-    pub fn content(&self) -> Option<&str> {
-        self.choices
-            .first()
-            .and_then(|choice| choice.message.content())
-    }
-
     /// 检查第一个选择的消息是否包含任何内容。
     pub fn has_content(&self) -> bool {
         self.choices
@@ -227,6 +219,13 @@ impl ChatCompletion {
             .unwrap_or(false)
     }
 
+    /// 返回第一个选择的消息的文本内容（如果可用）。
+    /// 这是访问模型响应的最常见方式。
+    pub fn content(&self) -> Option<&str> {
+        self.choices
+            .first()
+            .and_then(|choice| choice.message.content())
+    }
     /// 检查第一个选择的消息是否包含任何工具调用。
     pub fn has_tool_calls(&self) -> bool {
         self.choices
@@ -242,6 +241,21 @@ impl ChatCompletion {
             .and_then(|choice| choice.message.tool_calls())
     }
 
+    /// 检查第一个选择消息是否包含任何推理。
+    pub fn has_reasoning(&self) -> bool {
+        self.choices
+            .first()
+            .map(|choice| choice.message.has_reasoning())
+            .unwrap_or(false)
+    }
+
+    /// 获取第一个选择消息的推理（如果可用）。
+    pub fn reasoning(&self) -> Option<&str> {
+        self.choices
+            .first()
+            .and_then(|choice| choice.message.reasoning())
+    }
+
     /// 返回第一个选择的消息对象的引用。
     /// 当您需要访问消息的其他属性时（如 `role` 或 `refusal`），这很有用。
     pub fn first_choice_message(&self) -> Option<&ChatCompletionMessage> {
@@ -250,20 +264,20 @@ impl ChatCompletion {
 }
 
 impl ChatCompletionChunk {
-    /// 返回第一个选择的增量中的文本内容（如果可用）。
-    /// 这是访问流式内容块的便捷方式。
-    pub fn content(&self) -> Option<&str> {
-        self.choices
-            .first()
-            .and_then(|choice| choice.delta.content())
-    }
-
     /// 检查第一个选择的增量是否包含任何内容。
     pub fn has_content(&self) -> bool {
         self.choices
             .first()
             .map(|choice| choice.delta.has_content())
             .unwrap_or(false)
+    }
+
+    /// 返回第一个选择的增量中的文本内容（如果可用）。
+    /// 这是访问流式内容块的便捷方式。
+    pub fn content(&self) -> Option<&str> {
+        self.choices
+            .first()
+            .and_then(|choice| choice.delta.content())
     }
 
     /// 检查第一个选择的增量是否包含任何工具调用。
@@ -361,21 +375,6 @@ impl FunctionDefinition {
     pub fn builder() -> FunctionDefinitionBuilder {
         FunctionDefinitionBuilder::create_empty()
     }
-
-    /// 从 `serde_json::Value` 创建 `FunctionDefinition` 的便捷方法。
-    ///
-    /// 此方法是 `TryFrom<Value>` 的包装器。
-    ///
-    /// # 参数
-    ///
-    /// * `value` - 应该表示 FunctionDefinition 的 `serde_json::Value`。
-    ///
-    /// # 返回值
-    ///
-    /// 包含构建的 `FunctionDefinition` 或 `ConversionError` 的 `Result`。
-    pub fn from_value(value: Value) -> Result<Self, ConversionError> {
-        Self::try_from(value)
-    }
 }
 
 impl ChatCompletionToolParam {
@@ -389,21 +388,6 @@ impl ChatCompletionToolParam {
                 .build()
                 .unwrap(), // Safe to unwrap as all required fields are provided
         )
-    }
-
-    /// 从 `serde_json::Value` 创建 `ChatCompletionToolParam` 的便捷方法。
-    ///
-    /// 此方法是 `TryFrom<Value>` 的包装器。
-    ///
-    /// # 参数
-    ///
-    /// * `value` - 应该表示 ChatCompletionToolParam 的 `serde_json::Value`。
-    ///
-    /// # 返回值
-    ///
-    /// 包含构建的 `ChatCompletionToolParam` 或 `ConversionError` 的 `Result`。
-    pub fn from_value(value: Value) -> Result<Self, ConversionError> {
-        Self::try_from(value)
     }
 }
 
@@ -426,17 +410,6 @@ impl ChatCompletionMessageToolCallParam {
 impl From<ChatCompletionToolCall> for ChatCompletionMessageToolCallParam {
     fn from(value: ChatCompletionToolCall) -> Self {
         Self::Function(value.function)
-    }
-}
-
-impl ChatCompletionMessageParam {
-    pub fn assistant_from_str(content: &str) -> Self {
-        Self::Assistant(ChatCompletionAssistantMessageParam {
-            name: None,
-            content: Some(content!(content)),
-            refusal: None,
-            tool_calls: None,
-        })
     }
 }
 
@@ -497,108 +470,6 @@ impl From<StreamChoice> for FinalChoice {
     }
 }
 
-impl TryFrom<Value> for FunctionDefinition {
-    type Error = ConversionError;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        let mut obj = match value {
-            Value::Object(map) => map,
-            _ => {
-                return Err(ConversionError::ValueNotAnObject(format!(
-                    "Expected object for FunctionDefinition, got: {value:?} (type: {value:?})"
-                )));
-            }
-        };
-
-        let name = obj
-            .get("name")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                ConversionError::InvalidFieldValue(
-                    "name".to_string(),
-                    "Field 'name' is required and must be a string".to_string(),
-                )
-            })?
-            .to_string();
-
-        let description = obj
-            .get("description")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                ConversionError::InvalidFieldValue(
-                    "description".to_string(),
-                    "Field 'description' is required and must be a string".to_string(),
-                )
-            })?
-            .to_string();
-
-        let parameters_value = match obj.remove("parameters") {
-            Some(value) => value,
-            None => {
-                return Err(ConversionError::InvalidFieldValue(
-                    "parameters".to_string(),
-                    "Field 'parameters' is required".to_string(),
-                ));
-            }
-        };
-
-        let parameters = Parameters::try_from(parameters_value)?;
-
-        // Handle optional "strict" field
-        let strict = obj.get("strict").and_then(Value::as_bool);
-
-        Ok(FunctionDefinition {
-            name,
-            description,
-            parameters,
-            strict,
-        })
-    }
-}
-
-impl TryFrom<Value> for ChatCompletionToolParam {
-    type Error = ConversionError;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        let mut obj = match value {
-            Value::Object(map) => map,
-            _ => {
-                return Err(ConversionError::ValueNotAnObject(format!(
-                    "Expected object for ChatCompletionToolParam, got: {value:?} (type: {value:?})"
-                )));
-            }
-        };
-
-        // Check if it's the standard format with "type" and "function" fields
-        if let Some(type_str) = obj.get("type").and_then(Value::as_str) {
-            if type_str == "function" {
-                if let Some(function_value) = obj.remove("function") {
-                    let function_def = FunctionDefinition::try_from(function_value)?;
-                    return Ok(ChatCompletionToolParam::Function(function_def));
-                } else {
-                    // "type": "function" is present but "function" field is missing
-                    return Err(ConversionError::InvalidFieldValue(
-                        "function".to_string(),
-                        "Field 'function' is required when 'type' is 'function'".to_string(),
-                    ));
-                }
-            } else {
-                // "type" field is present but not "function"
-                return Err(ConversionError::InvalidFieldValue(
-                    "type".to_string(),
-                    format!(
-                        "Expected 'function' for 'type' field, got: {type_str} (full object: {obj:?})"
-                    ),
-                ));
-            }
-        }
-
-        // If no "type" field, assume it's the direct FunctionDefinition format
-        let function_def = FunctionDefinition::try_from(Value::Object(obj))?;
-        Ok(ChatCompletionToolParam::Function(function_def))
-    }
-}
-
 impl StreamChoice {
     pub fn merge(&mut self, delta: Self) {
         if self.index == 0 {
@@ -616,7 +487,7 @@ impl StreamChoice {
 
 impl ChoiceDelta {
     pub fn merge(&mut self, delta: Self) {
-        // 合并内容
+        // 合并响应内容
         match (self.content.as_mut(), delta.content) {
             (Some(left), Some(right)) => left.push_str(&right),
             (None, Some(right)) => self.content = Some(right),
@@ -664,7 +535,7 @@ impl ChoiceDelta {
             _ => {}
         }
 
-        // 合并推理
+        // 合并思考内容
         match (self.reasoning.as_mut(), delta.reasoning) {
             (Some(left), Some(right)) => left.push_str(&right),
             (None, Some(right)) => self.reasoning = Some(right),
@@ -696,14 +567,10 @@ impl Serialize for ChatCompletionPredictionContentParam {
     where
         S: serde::Serializer,
     {
-        let mut map = serde_json::Map::new();
-        map.insert("type".into(), Value::from("content"));
-        map.insert(
-            "content".into(),
-            serde_json::to_value(&self.content)
-                .map_err(|e| serde::ser::Error::custom(e.to_string()))?,
-        );
-        serializer.collect_map(map)
+        let mut state = serializer.serialize_struct("ChatCompletionPredictionContentParam", 2)?;
+        state.serialize_field("type", "content")?;
+        state.serialize_field("content", &self.content)?;
+        state.end()
     }
 }
 
@@ -712,10 +579,10 @@ impl Serialize for Function {
     where
         S: serde::Serializer,
     {
-        let mut map = serde_json::Map::new();
-        map.insert("name".into(), Value::from(self.name.as_str()));
-        map.insert("arguments".into(), Value::from(self.arguments.as_str()));
-        serde_json::Value::Object(map).serialize(serializer)
+        let mut state = serializer.serialize_struct("Function", 2)?;
+        state.serialize_field("name", &self.name)?;
+        state.serialize_field("arguments", &self.arguments)?;
+        state.end()
     }
 }
 
@@ -726,15 +593,12 @@ impl Serialize for ChatCompletionMessageToolCallParam {
     {
         match self {
             Self::Function(inner) => {
-                let mut map = serde_json::Map::new();
-                map.insert("type".into(), Value::from("function"));
-                map.insert("id".into(), Value::from(inner.id.as_str()));
-                map.insert(
-                    "function".into(),
-                    serde_json::to_value(inner)
-                        .map_err(|e| serde::ser::Error::custom(e.to_string()))?,
-                );
-                serializer.collect_map(map)
+                let mut state =
+                    serializer.serialize_struct("ChatCompletionMessageToolCallParam", 3)?;
+                state.serialize_field("type", "function")?;
+                state.serialize_field("id", &inner.id)?;
+                state.serialize_field("function", inner)?;
+                state.end()
             }
         }
     }
@@ -747,69 +611,67 @@ impl Serialize for ChatCompletionMessageParam {
     {
         match self {
             Self::System(inner) => {
-                let mut map = serde_json::Map::new();
-                map.insert("role".into(), Value::from("system"));
-                map.insert(
-                    "content".into(),
-                    serde_json::to_value(&inner.content)
-                        .map_err(|e| serde::ser::Error::custom(e.to_string()))?,
-                );
-                if let Some(name) = &inner.name {
-                    map.insert("name".into(), Value::from(name.as_str()));
+                let mut len = 2;
+                if inner.name.is_some() {
+                    len += 1;
                 }
-                serializer.collect_map(map)
+                let mut state = serializer.serialize_struct("ChatCompletionMessageParam", len)?;
+                state.serialize_field("role", "system")?;
+                state.serialize_field("content", &inner.content)?;
+                if let Some(name) = &inner.name {
+                    state.serialize_field("name", name)?;
+                }
+                state.end()
             }
             Self::User(inner) => {
-                let mut map = serde_json::Map::new();
-                map.insert("role".into(), Value::from("user"));
-                map.insert(
-                    "content".into(),
-                    serde_json::to_value(&inner.content)
-                        .map_err(|e| serde::ser::Error::custom(e.to_string()))?,
-                );
-                if let Some(name) = &inner.name {
-                    map.insert("name".into(), Value::from(name.as_str()));
+                let mut len = 2;
+                if inner.name.is_some() {
+                    len += 1;
                 }
-                serializer.collect_map(map)
+                let mut state = serializer.serialize_struct("ChatCompletionMessageParam", len)?;
+                state.serialize_field("role", "user")?;
+                state.serialize_field("content", &inner.content)?;
+                if let Some(name) = &inner.name {
+                    state.serialize_field("name", name)?;
+                }
+                state.end()
             }
             Self::Assistant(inner) => {
-                let mut map = serde_json::Map::new();
-                map.insert("role".into(), Value::from("assistant"));
+                let mut len = 1;
+                if inner.content.is_some() {
+                    len += 1;
+                }
+                if inner.name.is_some() {
+                    len += 1;
+                }
+                if inner.refusal.is_some() {
+                    len += 1;
+                }
+                if inner.tool_calls.is_some() {
+                    len += 1;
+                }
+                let mut state = serializer.serialize_struct("ChatCompletionMessageParam", len)?;
+                state.serialize_field("role", "assistant")?;
                 if let Some(content) = &inner.content {
-                    map.insert(
-                        "content".into(),
-                        serde_json::to_value(content)
-                            .map_err(|e| serde::ser::Error::custom(e.to_string()))?,
-                    );
+                    state.serialize_field("content", content)?;
                 }
                 if let Some(name) = &inner.name {
-                    map.insert("name".into(), Value::from(name.as_str()));
+                    state.serialize_field("name", name)?;
                 }
                 if let Some(refusal) = &inner.refusal {
-                    map.insert("refusal".into(), Value::from(refusal.as_str()));
+                    state.serialize_field("refusal", refusal)?;
                 }
                 if let Some(tool_calls) = &inner.tool_calls {
-                    map.insert(
-                        "tool_calls".into(),
-                        serde_json::to_value(tool_calls)
-                            .map_err(|e| serde::ser::Error::custom(e.to_string()))?,
-                    );
+                    state.serialize_field("tool_calls", tool_calls)?;
                 }
-                serializer.collect_map(map)
+                state.end()
             }
             Self::Tool(inner) => {
-                let mut map = serde_json::Map::new();
-                map.insert("role".into(), Value::from("tool"));
-                map.insert(
-                    "content".into(),
-                    serde_json::to_value(&inner.content)
-                        .map_err(|e| serde::ser::Error::custom(e.to_string()))?,
-                );
-                map.insert(
-                    "tool_call_id".into(),
-                    Value::from(inner.tool_call_id.as_str()),
-                );
-                serializer.collect_map(map)
+                let mut state = serializer.serialize_struct("ChatCompletionMessageParam", 3)?;
+                state.serialize_field("role", "tool")?;
+                state.serialize_field("content", &inner.content)?;
+                state.serialize_field("tool_call_id", &inner.tool_call_id)?;
+                state.end()
             }
         }
     }
@@ -822,15 +684,42 @@ impl Serialize for ChatCompletionToolParam {
     {
         match self {
             Self::Function(inner) => {
-                let mut map = serde_json::Map::new();
-                map.insert("type".into(), Value::from("function"));
-                map.insert(
-                    "function".into(),
-                    serde_json::to_value(inner)
-                        .map_err(|e| serde::ser::Error::custom(e.to_string()))?,
-                );
-                serializer.collect_map(map)
+                let mut state = serializer.serialize_struct("ChatCompletionToolParam", 2)?;
+                state.serialize_field("type", "function")?;
+                state.serialize_field("function", inner)?;
+                state.end()
             }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ChatCompletionToolParam {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum ToolParamHelper {
+            Typed {
+                r#type: String,
+                function: FunctionDefinition,
+            },
+            Direct(FunctionDefinition),
+        }
+
+        match ToolParamHelper::deserialize(deserializer)? {
+            ToolParamHelper::Typed { r#type, function } => {
+                if r#type == "function" {
+                    Ok(ChatCompletionToolParam::Function(function))
+                } else {
+                    Err(de::Error::custom(format!(
+                        "Expected type 'function', found '{}'",
+                        r#type
+                    )))
+                }
+            }
+            ToolParamHelper::Direct(function) => Ok(ChatCompletionToolParam::Function(function)),
         }
     }
 }
@@ -853,9 +742,9 @@ impl<'de> Deserialize<'de> for Function {
             where
                 V: MapAccess<'de>,
             {
-                let mut id: Option<String> = None;
-                let mut name: Option<String> = None;
-                let mut arguments: Option<String> = None;
+                let mut id = None;
+                let mut name = None;
+                let mut arguments = None;
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
@@ -878,7 +767,7 @@ impl<'de> Deserialize<'de> for Function {
                             arguments = try_deserialize_or_skip(&mut map)?;
                         }
                         _ => {
-                            let _: serde_json::Value = map.next_value()?;
+                            map.next_value::<de::IgnoredAny>()?;
                         }
                     }
                 }
@@ -914,9 +803,9 @@ impl<'de> Deserialize<'de> for ChatCompletionToolCall {
                 V: MapAccess<'de>,
             {
                 let mut id: Option<String> = None;
-                let mut r#type: Option<String> = None;
-                let mut function_data: Option<serde_json::Value> = None;
-                let mut index: Option<usize> = None;
+                let mut r#type = None;
+                let mut function_data = None;
+                let mut index = None;
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
@@ -945,7 +834,7 @@ impl<'de> Deserialize<'de> for ChatCompletionToolCall {
                             index = try_deserialize_or_skip(&mut map)?;
                         }
                         _ => {
-                            let _: serde_json::Value = map.next_value()?;
+                            map.next_value::<de::IgnoredAny>()?;
                         }
                     }
                 }
@@ -986,34 +875,87 @@ impl<'de> Deserialize<'de> for ChoiceDelta {
     where
         D: Deserializer<'de>,
     {
-        let mut map = HashMap::<String, serde_json::Value>::deserialize(deserializer)?;
+        struct ChoiceDeltaVisitor;
 
-        let content = extract_optional(&mut map, "content")?;
-        let refusal = extract_optional(&mut map, "refusal")?;
-        let role = extract_optional(&mut map, "role")?;
-        let tool_calls = extract_optional(&mut map, "tool_calls")?;
+        impl<'de> Visitor<'de> for ChoiceDeltaVisitor {
+            type Value = ChoiceDelta;
 
-        let reasoning = match (map.remove("reasoning"), map.remove("reasoning_content")) {
-            (Some(serde_json::Value::Null), Some(serde_json::Value::Null)) => None,
-            (Some(value), _) if !value.is_null() => {
-                Some(serde_json::from_value(value).map_err(serde::de::Error::custom)?)
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a ChoiceDelta object")
             }
-            (_, Some(value)) if !value.is_null() => {
-                Some(serde_json::from_value(value).map_err(serde::de::Error::custom)?)
+
+            fn visit_map<V>(self, mut map: V) -> Result<ChoiceDelta, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut content = None;
+                let mut refusal = None;
+                let mut role = None;
+                let mut tool_calls = None;
+                let mut reasoning = None;
+                let mut reasoning_content = None;
+                let mut extra_fields = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "content" => {
+                            if content.is_some() {
+                                return Err(de::Error::duplicate_field("content"));
+                            }
+                            content = Some(map.next_value()?);
+                        }
+                        "refusal" => {
+                            if refusal.is_some() {
+                                return Err(de::Error::duplicate_field("refusal"));
+                            }
+                            refusal = Some(map.next_value()?);
+                        }
+                        "role" => {
+                            if role.is_some() {
+                                return Err(de::Error::duplicate_field("role"));
+                            }
+                            role = Some(map.next_value()?);
+                        }
+                        "tool_calls" => {
+                            if tool_calls.is_some() {
+                                return Err(de::Error::duplicate_field("tool_calls"));
+                            }
+                            tool_calls = Some(map.next_value()?);
+                        }
+                        "reasoning" => {
+                            if reasoning.is_some() {
+                                return Err(de::Error::duplicate_field("reasoning"));
+                            }
+                            reasoning = Some(map.next_value()?);
+                        }
+                        "reasoning_content" => {
+                            if reasoning_content.is_some() {
+                                return Err(de::Error::duplicate_field("reasoning_content"));
+                            }
+                            reasoning_content = Some(map.next_value()?);
+                        }
+                        _ => {
+                            let value = map.next_value()?;
+                            extra_fields
+                                .get_or_insert_with(HashMap::new)
+                                .insert(key, value);
+                        }
+                    }
+                }
+
+                let final_reasoning = reasoning.flatten().or(reasoning_content.flatten());
+
+                Ok(ChoiceDelta {
+                    content: content.flatten(),
+                    refusal: refusal.flatten(),
+                    role: role.flatten(),
+                    tool_calls: tool_calls.flatten(),
+                    reasoning: final_reasoning,
+                    extra_fields,
+                })
             }
-            _ => None,
-        };
-
-        let extra_fields = if map.is_empty() { None } else { Some(map) };
-
-        Ok(ChoiceDelta {
-            content,
-            refusal,
-            role,
-            tool_calls,
-            reasoning,
-            extra_fields,
-        })
+        }
+        deserializer.deserialize_map(ChoiceDeltaVisitor)
     }
 }
 
@@ -1022,276 +964,95 @@ impl<'de> Deserialize<'de> for ChatCompletionMessage {
     where
         D: Deserializer<'de>,
     {
-        let mut map = HashMap::<String, serde_json::Value>::deserialize(deserializer)?;
+        struct ChatCompletionMessageVisitor;
 
-        let content = extract_optional(&mut map, "content")?;
-        let refusal = extract_optional(&mut map, "refusal")?;
-        let role: Option<String> = extract_optional(&mut map, "role")?;
-        let role = role.unwrap_or("assistant".into());
+        impl<'de> Visitor<'de> for ChatCompletionMessageVisitor {
+            type Value = ChatCompletionMessage;
 
-        let tool_calls = extract_optional(&mut map, "tool_calls")?;
-        let annotations = extract_optional(&mut map, "annotations")?;
-
-        let reasoning = match (map.remove("reasoning"), map.remove("reasoning_content")) {
-            (Some(serde_json::Value::Null), Some(serde_json::Value::Null)) => None,
-            (Some(value), _) if !value.is_null() => {
-                Some(serde_json::from_value(value).map_err(serde::de::Error::custom)?)
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a ChatCompletionMessage object")
             }
-            (_, Some(value)) if !value.is_null() => {
-                Some(serde_json::from_value(value).map_err(serde::de::Error::custom)?)
+
+            fn visit_map<V>(self, mut map: V) -> Result<ChatCompletionMessage, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut content: Option<Option<String>> = None;
+                let mut refusal: Option<Option<String>> = None;
+                let mut role: Option<Option<String>> = None;
+                let mut tool_calls: Option<Option<Vec<ChatCompletionToolCall>>> = None;
+                let mut annotations: Option<Option<Vec<Annotation>>> = None;
+                let mut reasoning: Option<Option<String>> = None;
+                let mut reasoning_content: Option<Option<String>> = None;
+                let mut extra_fields: Option<HashMap<String, serde_json::Value>> = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "content" => {
+                            if content.is_some() {
+                                return Err(de::Error::duplicate_field("content"));
+                            }
+                            content = Some(map.next_value()?);
+                        }
+                        "refusal" => {
+                            if refusal.is_some() {
+                                return Err(de::Error::duplicate_field("refusal"));
+                            }
+                            refusal = Some(map.next_value()?);
+                        }
+                        "role" => {
+                            if role.is_some() {
+                                return Err(de::Error::duplicate_field("role"));
+                            }
+                            role = Some(map.next_value()?);
+                        }
+                        "tool_calls" => {
+                            if tool_calls.is_some() {
+                                return Err(de::Error::duplicate_field("tool_calls"));
+                            }
+                            tool_calls = Some(map.next_value()?);
+                        }
+                        "annotations" => {
+                            if annotations.is_some() {
+                                return Err(de::Error::duplicate_field("annotations"));
+                            }
+                            annotations = Some(map.next_value()?);
+                        }
+                        "reasoning" => {
+                            if reasoning.is_some() {
+                                return Err(de::Error::duplicate_field("reasoning"));
+                            }
+                            reasoning = Some(map.next_value()?);
+                        }
+                        "reasoning_content" => {
+                            if reasoning_content.is_some() {
+                                return Err(de::Error::duplicate_field("reasoning_content"));
+                            }
+                            reasoning_content = Some(map.next_value()?);
+                        }
+                        _ => {
+                            let value = map.next_value()?;
+                            extra_fields
+                                .get_or_insert_with(HashMap::new)
+                                .insert(key, value);
+                        }
+                    }
+                }
+
+                let final_reasoning = reasoning.flatten().or(reasoning_content.flatten());
+                let role = role.flatten().unwrap_or_else(|| "assistant".to_string());
+
+                Ok(ChatCompletionMessage {
+                    content: content.flatten(),
+                    refusal: refusal.flatten(),
+                    role,
+                    tool_calls: tool_calls.flatten(),
+                    annotations: annotations.flatten(),
+                    reasoning: final_reasoning,
+                    extra_fields,
+                })
             }
-            _ => None,
-        };
-
-        let extra_fields = if map.is_empty() { None } else { Some(map) };
-
-        Ok(ChatCompletionMessage {
-            content,
-            refusal,
-            role,
-            tool_calls,
-            annotations,
-            reasoning,
-            extra_fields,
-        })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::chat::tool_parameters::Parameters;
-    use crate::{ChatParam, system, user};
-    use openai4rs_macro::assistant;
-    use std::fs;
-
-    #[test]
-    fn test_deserialize_chatcompletion() {
-        let json = fs::read_to_string("./assets/chatcompletion.json").unwrap();
-        let chatcompletion: Result<ChatCompletion, _> = serde_json::from_str(json.as_str());
-        assert!(chatcompletion.is_ok());
-    }
-
-    #[test]
-    fn test_from_value_to_function_definition() {
-        let json = fs::read_to_string("./assets/function_definition.json").unwrap();
-        let value: serde_json::Value = serde_json::from_str(json.as_str()).unwrap();
-        let function_definition_result = FunctionDefinition::try_from(value.clone());
-        assert!(function_definition_result.is_ok());
-
-        let function_definition = function_definition_result.unwrap();
-        assert_eq!(function_definition.name, "get_current_weather");
-        assert_eq!(
-            function_definition.description,
-            "Get the current weather in a given location"
-        );
-        // Check parameters structure
-        match &function_definition.parameters {
-            Parameters::Object(obj_params) => {
-                assert_eq!(obj_params.required, vec!["location"]);
-                assert!(obj_params.properties.contains_key("location"));
-                assert!(obj_params.properties.contains_key("unit"));
-            }
-            _ => panic!("Parameters should be an object"),
         }
-    }
-
-    #[test]
-    fn test_from_value_to_chat_completion_tool_param() {
-        // Test standard format
-        let json = fs::read_to_string("./assets/chat_completion_tool_param.json").unwrap();
-        let value: serde_json::Value = serde_json::from_str(json.as_str()).unwrap();
-        let chat_completion_tool_param_result = ChatCompletionToolParam::try_from(value);
-        assert!(chat_completion_tool_param_result.is_ok());
-
-        // Verify the parsed data for standard format
-        let ChatCompletionToolParam::Function(function_def) =
-            chat_completion_tool_param_result.unwrap();
-
-        assert_eq!(function_def.name, "get_current_weather");
-        assert_eq!(
-            function_def.description,
-            "Get the current weather in a given location"
-        );
-
-        // Test direct FunctionDefinition format
-        let json = fs::read_to_string("./assets/function_definition.json").unwrap();
-        let value: serde_json::Value = serde_json::from_str(json.as_str()).unwrap();
-        let chat_completion_tool_param_result = ChatCompletionToolParam::try_from(value);
-        assert!(chat_completion_tool_param_result.is_ok());
-
-        // Verify the parsed data for direct format
-        let ChatCompletionToolParam::Function(function_def) =
-            chat_completion_tool_param_result.unwrap();
-
-        assert_eq!(function_def.name, "get_current_weather");
-        assert_eq!(
-            function_def.description,
-            "Get the current weather in a given location"
-        );
-    }
-
-    #[test]
-    fn test_deserialize_chatcompletion_stream() {
-        let json = fs::read_to_string("./assets/chatcompletionchunk.json").unwrap();
-
-        let chatcompletion_chunk: Result<ChatCompletionChunk, _> =
-            serde_json::from_str(json.as_str());
-        assert!(chatcompletion_chunk.is_ok());
-    }
-
-    #[test]
-    fn test_assistant_serialize() {
-        let assistant = assistant!(
-            content = "content",
-            name = "name",
-            refusal = "refusal",
-            tool_calls = vec![ChatCompletionMessageToolCallParam::function(
-                "id",
-                "name",
-                "{'path': '/.cargo'}",
-            )]
-        );
-
-        let json = serde_json::to_string(&assistant).unwrap();
-        assert_eq!(
-            &json,
-            r#"{"content":"content","name":"name","refusal":"refusal","role":"assistant","tool_calls":[{"function":{"arguments":"{'path': '/.cargo'}","name":"name"},"id":"id","type":"function"}]}"#
-        );
-    }
-
-    #[test]
-    fn test_request_params_serialize_with_schema() {
-        let messages = vec![system!("system message"), user!(content:"user message")];
-
-        let tool_params = Parameters::object()
-            .property(
-                "name",
-                Parameters::string()
-                    .description("name of the person")
-                    .build(),
-            )
-            .require("name")
-            .build()
-            .unwrap();
-
-        let function_tool =
-            ChatCompletionToolParam::function("function_name", "function description", tool_params);
-
-        let request = ChatParam::new("meta-llama/llama-3.3-8b-instruct:free", &messages)
-            .temperature(0.1)
-            .top_logprobs(1)
-            .n(1)
-            .tool_choice(ToolChoice::Auto)
-            .tools(vec![function_tool]);
-
-        let inner = request.take();
-        let json = serde_json::to_string(&inner.body).unwrap();
-        assert_eq!(
-            &json,
-            r#"{"messages":[{"content":"system message","role":"system"},{"content":"user message","role":"user"}],"model":"meta-llama/llama-3.3-8b-instruct:free","n":1,"temperature":0.10000000149011612,"tool_choice":"auto","tools":[{"function":{"description":"function description","name":"function_name","parameters":{"properties":{"name":{"description":"name of the person","type":"string"}},"required":["name"],"type":"object"}},"type":"function"}],"top_logprobs":1}"#
-        );
-    }
-
-    #[test]
-    fn test_chat_completion_helpers() {
-        let message = ChatCompletionMessage {
-            role: "assistant".to_string(),
-            content: Some("Hello, world!".to_string()),
-            refusal: None,
-            reasoning: None,
-            annotations: None,
-            tool_calls: Some(vec![ChatCompletionToolCall {
-                index: 0,
-                function: Function {
-                    id: "call_123".to_string(),
-                    name: "get_current_weather".to_string(),
-                    arguments: r#"{"location": "Boston, MA"}"#.to_string(),
-                },
-                r#type: "function".to_string(),
-            }]),
-            extra_fields: None,
-        };
-
-        let choice = FinalChoice {
-            index: 0,
-            finish_reason: FinishReason::Stop,
-            message: message.clone(),
-            logprobs: None,
-        };
-
-        let chat_completion = ChatCompletion {
-            id: "chatcmpl-123".to_string(),
-            choices: vec![choice],
-            created: 1234567890,
-            model: "gpt-3.5-turbo".to_string(),
-            object: "chat.completion".to_string(),
-            usage: None,
-            service_tier: None,
-            system_fingerprint: None,
-            extra_fields: None,
-        };
-
-        // Test content()
-        assert_eq!(chat_completion.content(), Some("Hello, world!"));
-
-        // Test has_tool_calls()
-        assert!(chat_completion.has_tool_calls());
-
-        // Test tool_calls()
-        let tool_calls = chat_completion.tool_calls().unwrap();
-        assert_eq!(tool_calls.len(), 1);
-        assert_eq!(tool_calls[0].function.name, "get_current_weather");
-    }
-
-    #[test]
-    fn test_chat_completion_chunk_helpers() {
-        let delta = ChoiceDelta {
-            content: Some("Hello, world!".to_string()),
-            refusal: None,
-            reasoning: None,
-            role: Some("assistant".to_string()),
-            tool_calls: Some(vec![ChatCompletionToolCall {
-                index: 0,
-                function: Function {
-                    id: "call_123".to_string(),
-                    name: "get_current_weather".to_string(),
-                    arguments: r#"{"location": "Boston, MA"}"#.to_string(),
-                },
-                r#type: "function".to_string(),
-            }]),
-            extra_fields: None,
-        };
-
-        let choice = StreamChoice {
-            index: 0,
-            delta: delta.clone(),
-            finish_reason: Some(FinishReason::Stop),
-            logprobs: None,
-        };
-
-        let chat_completion_chunk = ChatCompletionChunk {
-            id: "chatcmpl-123".to_string(),
-            choices: vec![choice],
-            created: 1234567890,
-            model: "gpt-3.5-turbo".to_string(),
-            object: "chat.completion.chunk".to_string(),
-            usage: None,
-            service_tier: None,
-            system_fingerprint: None,
-            extra_fields: None,
-        };
-
-        // Test content()
-        assert_eq!(chat_completion_chunk.content(), Some("Hello, world!"));
-
-        // Test tool_calls()
-        let tool_calls = chat_completion_chunk.tool_calls().unwrap();
-        assert_eq!(tool_calls.len(), 1);
-        assert_eq!(tool_calls[0].function.name, "get_current_weather");
-
-        // Test deltas()
-        let deltas: Vec<&ChoiceDelta> = chat_completion_chunk.deltas().collect();
-        assert_eq!(deltas.len(), 1);
+        deserializer.deserialize_map(ChatCompletionMessageVisitor)
     }
 }

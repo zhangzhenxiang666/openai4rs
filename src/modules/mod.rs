@@ -13,5 +13,5 @@ pub use chat::ChatParam;
 pub use chat::tool_parameters::Parameters;
 pub use chat::types::*;
 pub use completions::{Completions, CompletionsParam};
-pub use embeddings::{Embeddings, EmbeddingsParam};
+pub use embeddings::{Embeddings, EmbeddingsParam, EncodingFormat};
 pub use models::{Models, ModelsParam};

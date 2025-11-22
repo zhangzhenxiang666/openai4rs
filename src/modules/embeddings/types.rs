@@ -1,6 +1,7 @@
-use serde::ser::SerializeSeq;
-use serde::{Deserialize, Serialize};
+use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub enum Input {
@@ -8,14 +9,12 @@ pub enum Input {
     List(Vec<String>),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct EmbeddingResponse {
     pub model: String,
-    #[serde(default = "default_list")]
     pub object: String,
     pub data: Vec<Embedding>,
     pub usage: Usage,
-    #[serde(flatten)]
     pub extra_fields: Option<HashMap<String, serde_json::Value>>,
 }
 
@@ -46,42 +45,38 @@ pub enum EncodingFormat {
     Base64,
 }
 
-fn default_list() -> String {
-    "list".to_string()
-}
-
 impl EmbeddingResponse {
-    /// Returns the number of embeddings in the response
+    /// 返回响应中的嵌入数量
     pub fn len(&self) -> usize {
         self.data.len()
     }
 
-    /// Checks if the response contains any embeddings
+    /// 检查响应是否包含任何嵌入
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 
-    /// Returns the total number of tokens used in the request
+    /// 返回请求中使用的令牌总数
     pub fn total_tokens(&self) -> usize {
         self.usage.total_tokens
     }
 
-    /// Returns the number of prompt tokens used in the request
+    /// 返回请求中使用的提示令牌数量
     pub fn prompt_tokens(&self) -> usize {
         self.usage.prompt_tokens
     }
 
-    /// Returns the embeddings data
+    /// 返回嵌入数据
     pub fn embeddings(&self) -> &Vec<Embedding> {
         &self.data
     }
 
-    /// Returns a specific embedding by index
+    /// 根据索引返回特定的嵌入
     pub fn get_embedding(&self, index: usize) -> Option<&Embedding> {
         self.data.get(index)
     }
 
-    /// Returns all embedding vectors as a vector of float vectors, ignoring any base64-encoded embeddings
+    /// 将所有嵌入向量作为浮点向量的向量返回，忽略任何base64编码的嵌入
     pub fn embedding_vectors(&self) -> Vec<Vec<f32>> {
         self.data
             .iter()
@@ -92,42 +87,42 @@ impl EmbeddingResponse {
             .collect()
     }
 
-    /// Returns all embeddings as float vectors, attempting to decode base64 if needed
+    /// 将所有嵌入作为浮点向量返回，必要时尝试解码base64
     pub fn embedding_vectors_decoded(&self) -> Vec<Vec<f32>> {
         self.data.iter().filter_map(|e| e.vector()).collect()
     }
 }
 
 impl Embedding {
-    /// Returns the dimensionality of the embedding vector
+    /// 返回嵌入向量的维度
     pub fn dimensions(&self) -> usize {
         match &self.embedding {
             EmbeddingData::Float(vec) => vec.len(),
             EmbeddingData::Base64(_) => {
-                // For base64, we could decode it to get the actual float count
-                // For now, return 0 or we could implement proper decoding
+                // 对于base64，我们可以解码它以获取实际的浮点数计数
+                // 目前，返回0或我们可以实现适当的解码
                 0
             }
         }
     }
 
-    /// Returns the embedding vector as a float vector, attempting to decode from base64 if needed
+    /// 将嵌入向量作为浮点向量返回，必要时尝试从base64解码
     pub fn vector(&self) -> Option<Vec<f32>> {
         match &self.embedding {
             EmbeddingData::Float(vec) => Some(vec.clone()),
             EmbeddingData::Base64(base64_str) => {
-                // Attempt to decode base64 to float vector
+                // 尝试将base64解码为浮点向量
                 decode_base64_embedding(base64_str)
             }
         }
     }
 
-    /// Returns the index of this embedding in the response
+    /// 返回此嵌入在响应中的索引
     pub fn index(&self) -> usize {
         self.index
     }
 
-    /// Returns the embedding data as base64 string, if available
+    /// 返回嵌入数据为base64字符串（如果可用）
     pub fn as_base64(&self) -> Option<&str> {
         match &self.embedding {
             EmbeddingData::Base64(base64_str) => Some(base64_str),
@@ -135,7 +130,7 @@ impl Embedding {
         }
     }
 
-    /// Returns the embedding data as float vector, if available
+    /// 返回嵌入数据为浮点向量（如果可用）
     pub fn as_float(&self) -> Option<&Vec<f32>> {
         match &self.embedding {
             EmbeddingData::Float(vec) => Some(vec),
@@ -143,7 +138,7 @@ impl Embedding {
         }
     }
 
-    /// Converts the embedding data to a float vector, if available
+    /// 将嵌入数据转换为浮点向量（如果可用）
     pub fn to_float(self) -> Option<Vec<f32>> {
         match self.embedding {
             EmbeddingData::Float(vec) => Some(vec),
@@ -152,22 +147,22 @@ impl Embedding {
     }
 }
 
-/// Helper function to decode base64-encoded embedding data to float vector
+/// 将base64编码的嵌入数据解码为浮点向量的辅助函数
 fn decode_base64_embedding(base64_str: &str) -> Option<Vec<f32>> {
     use base64::Engine;
     use base64::engine::general_purpose;
     match general_purpose::STANDARD.decode(base64_str) {
         Ok(decoded_bytes) => {
-            // Convert bytes to f32 slice - this assumes the data is serialized as f32 bytes
-            // This might need adjustment based on how OpenAI actually encodes the embeddings
+            // 将字节转换为f32切片 - 这假设数据序列化为f32字节
+            // 这可能需要根据OpenAI实际编码嵌入的方式进行调整
             if decoded_bytes.len() % std::mem::size_of::<f32>() == 0 {
-                // This is a simplified conversion - in practice, we'd need to handle byte order properly
+                // 这是一个简化的转换 - 实际上，我们需要正确处理字节顺序
                 let float_count = decoded_bytes.len() / std::mem::size_of::<f32>();
                 let mut result = Vec::with_capacity(float_count);
 
                 for chunk in decoded_bytes.chunks_exact(std::mem::size_of::<f32>()) {
                     let bytes: [u8; 4] = [chunk[0], chunk[1], chunk[2], chunk[3]];
-                    result.push(f32::from_le_bytes(bytes)); // Assuming little endian
+                    result.push(f32::from_le_bytes(bytes)); // 假设小端字节序
                 }
                 Some(result)
             } else {
@@ -184,11 +179,7 @@ impl Serialize for Input {
         S: serde::Serializer,
     {
         match self {
-            Input::Text(text) => {
-                let mut seq = serializer.serialize_seq(Some(1))?;
-                seq.serialize_element(text)?;
-                seq.end()
-            }
+            Input::Text(text) => serializer.serialize_str(text),
             Input::List(list) => list.serialize(serializer),
         }
     }
@@ -199,9 +190,6 @@ impl<'de> serde::Deserialize<'de> for Embedding {
     where
         D: serde::Deserializer<'de>,
     {
-        use serde::de::{self, MapAccess, Visitor};
-        use std::fmt;
-
         struct EmbeddingVisitor;
 
         impl<'de> Visitor<'de> for EmbeddingVisitor {
@@ -213,7 +201,7 @@ impl<'de> serde::Deserialize<'de> for Embedding {
 
             fn visit_map<V>(self, mut map: V) -> Result<Embedding, V::Error>
             where
-                V: MapAccess<'de>,
+                V: de::MapAccess<'de>,
             {
                 let mut embedding = None;
                 let mut index = None;
@@ -240,7 +228,7 @@ impl<'de> serde::Deserialize<'de> for Embedding {
                             object = Some(map.next_value()?);
                         }
                         _ => {
-                            let _ = map.next_value::<serde::de::IgnoredAny>()?;
+                            let _ = map.next_value::<de::IgnoredAny>()?;
                         }
                     }
                 }
@@ -270,9 +258,6 @@ impl<'de> serde::Deserialize<'de> for EmbeddingData {
     where
         D: serde::Deserializer<'de>,
     {
-        use serde::de::{self, Visitor};
-        use std::fmt;
-
         struct EmbeddingDataVisitor;
 
         impl<'de> Visitor<'de> for EmbeddingDataVisitor {
@@ -284,7 +269,7 @@ impl<'de> serde::Deserialize<'de> for EmbeddingData {
 
             fn visit_seq<A>(self, mut seq: A) -> Result<EmbeddingData, A::Error>
             where
-                A: serde::de::SeqAccess<'de>,
+                A: de::SeqAccess<'de>,
             {
                 let mut vec = Vec::new();
                 while let Some(value) = seq.next_element::<f32>()? {
@@ -303,6 +288,84 @@ impl<'de> serde::Deserialize<'de> for EmbeddingData {
         }
 
         deserializer.deserialize_any(EmbeddingDataVisitor)
+    }
+}
+
+impl<'de> Deserialize<'de> for EmbeddingResponse {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct EmbeddingResponseVisitor;
+
+        impl<'de> Visitor<'de> for EmbeddingResponseVisitor {
+            type Value = EmbeddingResponse;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct EmbeddingResponse")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<EmbeddingResponse, V::Error>
+            where
+                V: de::MapAccess<'de>,
+            {
+                let mut model = None;
+                let mut object = None;
+                let mut data = None;
+                let mut usage = None;
+                let mut extra_fields: Option<HashMap<String, serde_json::Value>> = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "model" => {
+                            if model.is_some() {
+                                return Err(de::Error::duplicate_field("model"));
+                            }
+                            model = Some(map.next_value()?);
+                        }
+                        "object" => {
+                            if object.is_some() {
+                                return Err(de::Error::duplicate_field("object"));
+                            }
+                            object = Some(map.next_value()?);
+                        }
+                        "data" => {
+                            if data.is_some() {
+                                return Err(de::Error::duplicate_field("data"));
+                            }
+                            data = Some(map.next_value()?);
+                        }
+                        "usage" => {
+                            if usage.is_some() {
+                                return Err(de::Error::duplicate_field("usage"));
+                            }
+                            usage = Some(map.next_value()?);
+                        }
+                        _ => {
+                            let value = map.next_value()?;
+                            extra_fields
+                                .get_or_insert_with(HashMap::new)
+                                .insert(key, value);
+                        }
+                    }
+                }
+
+                let model = model.ok_or_else(|| de::Error::missing_field("model"))?;
+                let object = object.unwrap_or_else(|| "list".to_string());
+                let data = data.ok_or_else(|| de::Error::missing_field("data"))?;
+                let usage = usage.ok_or_else(|| de::Error::missing_field("usage"))?;
+
+                Ok(EmbeddingResponse {
+                    model,
+                    object,
+                    data,
+                    usage,
+                    extra_fields,
+                })
+            }
+        }
+
+        deserializer.deserialize_map(EmbeddingResponseVisitor)
     }
 }
 

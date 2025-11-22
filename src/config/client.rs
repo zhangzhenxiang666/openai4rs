@@ -1,7 +1,7 @@
 use super::http::{HttpConfig, HttpConfigBuilder};
 use super::{Credentials, CredentialsBuilder};
 use crate::OpenAI;
-use crate::common::types::Body;
+use crate::common::types::JsonBody;
 use crate::config::CredentialsBuilderError;
 use http::header::IntoHeaderName;
 use http::{HeaderMap, HeaderValue};
@@ -414,7 +414,7 @@ impl ConfigBuilder {
     /// # 返回
     ///
     /// 用于方法链的构建器实例
-    pub fn bodys(mut self, bodys: Body) -> Self {
+    pub fn bodys(mut self, bodys: JsonBody) -> Self {
         self.http_builder = self.http_builder.bodys(bodys);
         self
     }

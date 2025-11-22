@@ -1,7 +1,5 @@
-use std::vec;
-
 use dotenvy::dotenv;
-use openai4rs::{EmbeddingsParam, OpenAI, chat::*, embeddings::types::EncodingFormat, user};
+use openai4rs::*;
 
 const MODEL_NAME: &str = "Qwen/Qwen3-235B-A22B-Instruct-2507";
 
@@ -15,12 +13,7 @@ async fn test_chat() {
         let request = ChatParam::new(MODEL_NAME, &messages).temperature(0.0);
         match client.chat().create(request).await {
             Ok(result) => {
-                assert!(
-                    result
-                        .choices
-                        .first()
-                        .is_some_and(|choice| choice.message.content.is_some())
-                );
+                assert!(result.has_content());
                 return;
             }
             Err(e) if e.is_retryable() => {
@@ -33,6 +26,37 @@ async fn test_chat() {
         }
     }
     panic!("Test failed after multiple retries");
+}
+
+#[tokio::test]
+async fn test_chat_tool() {
+    dotenv().ok();
+    let client = OpenAI::from_env().unwrap();
+    let messages = vec![user!("现在上海几点")];
+    let parameters = Parameters::object()
+        .property(
+            "uct",
+            Parameters::string()
+                .description("时区, UTC±HH:MM格式")
+                .build(),
+        )
+        .require("uct")
+        .build()
+        .unwrap();
+    let tools = vec![ChatCompletionToolParam::function(
+        "get_current_time",
+        "根据时区获取当前时间",
+        parameters,
+    )];
+    let request = ChatParam::new(MODEL_NAME, &messages)
+        .tools(tools)
+        .tool_choice(ToolChoice::Required);
+    let result = client.chat().create(request).await;
+    assert!(result.is_ok());
+    let ok = result.unwrap();
+    assert!(ok.has_tool_calls());
+    let tool_req = ok.tool_calls().unwrap().first().unwrap();
+    assert_eq!("get_current_time", tool_req.function.name.as_str());
 }
 
 #[tokio::test]
@@ -53,6 +77,29 @@ async fn test_openai_error_authentication() {
         Ok(_) => panic!("Unexpected success response"),
         Err(err) => {
             if !err.is_authentication() {
+                panic!("Unexpected error: {:#?}", err);
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_openai_error_bad_request() {
+    dotenv().ok();
+    let client = OpenAI::from_env().unwrap();
+    let messages = vec![user!("hello world")];
+    let result = client
+        .chat()
+        .create(
+            ChatParam::new("invalid-model-name", &messages)
+                .temperature(0.0)
+                .max_completion_tokens(512),
+        )
+        .await;
+    match result {
+        Ok(_) => panic!("Unexpected success response"),
+        Err(err) => {
+            if !err.is_bad_request() {
                 panic!("Unexpected error: {:#?}", err);
             }
         }

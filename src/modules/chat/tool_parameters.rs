@@ -35,8 +35,7 @@
 //! - `Parameters::Integer(IntegerParameters)`: 用于定义整数参数。
 //! - `Parameters::Boolean(BooleanParameters)`: 用于定义布尔参数。
 
-use serde::ser::SerializeMap;
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use thiserror::Error;
@@ -48,84 +47,88 @@ pub enum ParameterBuilderError {
     RequiredPropertyNotDefined(String),
 }
 
-/// 在将 `serde_json::Value` 转换为 `Parameters` 时可能发生的错误。
-#[derive(Error, Debug, PartialEq)]
-pub enum ConversionError {
-    #[error("The provided JSON Value must be an object, but it is: {0}")]
-    ValueNotAnObject(String),
-    #[error("The 'type' field is missing from the JSON object")]
-    MissingTypeField,
-    #[error("The 'type' field must be a string, but it is: {0}")]
-    TypeFieldNotAString(String),
-    #[error("The value for field '{0}' is invalid: {1}")]
-    InvalidFieldValue(String, String),
-    #[error("Failed to build parameter object: {0}")]
-    BuilderError(#[from] ParameterBuilderError),
-}
-
-// --- Core Data Structures ---
-
-/// 用于定义工具参数的JSON Schema参数的类型安全表示。
+/// 用于定义工具参数的JSON Schema参数的类型安全表示。(注意这仅仅是在你通过`Parameters::object()`构建才会检查其结构的逻辑合理性, 若你通过其他方式, 比如serde的反序列化来构建则不会保证逻辑合理性)
 ///
 /// 此枚举表示可以定义的不同类型的参数。
 /// 每个变体包含一个特定的结构体，用于定义该类型的属性。
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum Parameters {
+    #[serde(rename = "object")]
     Object(ObjectParameters),
+    #[serde(rename = "array")]
     Array(ArrayParameters),
+    #[serde(rename = "string")]
     String(StringParameters),
+    #[serde(rename = "number")]
     Number(NumberParameters),
+    #[serde(rename = "integer")]
     Integer(IntegerParameters),
+    #[serde(rename = "boolean")]
     Boolean(BooleanParameters),
 }
 
 /// 对象类型的参数。
 ///
 /// 定义具有命名属性的对象。每个属性本身都是一个 `Parameters` 对象。
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ObjectParameters {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    #[serde(default)]
     pub properties: HashMap<String, Parameters>,
-    pub required: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required: Option<Vec<String>>,
 }
 
 /// 数组类型的参数。
 ///
 /// 定义一个数组，其中每个项目都符合指定的 `Parameters` 模式。
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ArrayParameters {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub items: Option<Box<Parameters>>,
 }
 
 /// 字符串类型的参数。
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct StringParameters {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(rename = "enum")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub enum_values: Option<Vec<Value>>,
 }
 
 /// 数字类型（浮点数）的参数。
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct NumberParameters {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(rename = "enum")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub enum_values: Option<Vec<Value>>,
 }
 
 /// 整数类型的参数。
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct IntegerParameters {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(rename = "enum")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub enum_values: Option<Vec<Value>>,
 }
 
 /// 布尔类型的参数。
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct BooleanParameters {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
-
-// --- Builder Implementations ---
 
 /// 用于安全且方便地构建 `ObjectParameters` 实例的构建器。
 #[derive(Debug)]
@@ -156,32 +159,36 @@ impl ObjectParametersBuilder {
 
     /// 将属性标记为必需。
     ///
-    /// 该属性必须已通过 `property()` 先前添加。
+    /// 若你在调用`build()`之前没有通过`property()` 添加属性，则调用`build()`时会返回错误`
     pub fn required(mut self, required: Vec<String>) -> ObjectParametersBuilder {
-        self.params.required = required;
+        *self.params.required.get_or_insert_with(Vec::new) = required;
         self
     }
 
     /// 将属性标记为必需。
     ///
-    /// 该属性必须已通过 `property()` 先前添加。
+    /// 若你在调用`build()`之前没有通过`property()` 添加属性，则调用`build()`时会返回错误`
     pub fn require(mut self, name: &str) -> ObjectParametersBuilder {
-        self.params.required.push(name.to_string());
+        self.params
+            .required
+            .get_or_insert_with(Vec::new)
+            .push(name.to_string());
         self
     }
     /// 构建最终的 `Parameters::Object` 实例。
     ///
     /// 此方法执行验证以确保模式是有效的。
     pub fn build(self) -> Result<Parameters, ParameterBuilderError> {
-        // Validate that all required properties exist
-        for req_prop in &self.params.required {
-            if !self.params.properties.contains_key(req_prop) {
-                return Err(ParameterBuilderError::RequiredPropertyNotDefined(
-                    req_prop.clone(),
-                ));
+        // 验证所有必需的属性是否存在。
+        if let Some(required) = &self.params.required {
+            for req_prop in required {
+                if !self.params.properties.contains_key(req_prop) {
+                    return Err(ParameterBuilderError::RequiredPropertyNotDefined(
+                        req_prop.clone(),
+                    ));
+                }
             }
         }
-
         Ok(Parameters::Object(self.params))
     }
 }
@@ -247,20 +254,18 @@ impl StringParametersBuilder {
         self
     }
 
-    /// Adds a string enum value.
-    ///
-    /// A convenience method for adding string enum values.
+    /// 添加一个字符串枚举值。
     pub fn enum_str(self, value: &str) -> Self {
         self.enum_value(serde_json::json!(value))
     }
 
-    /// Builds the final `Parameters::String` instance.
+    /// 构建最终的 `Parameters::String` 实例。
     pub fn build(self) -> Parameters {
         Parameters::String(self.params)
     }
 }
 
-/// A builder for constructing `NumberParameters` instances.
+/// 用于构建 `NumberParameters` 实例的构建器。
 #[derive(Debug)]
 pub struct NumberParametersBuilder {
     params: NumberParameters,
@@ -296,7 +301,7 @@ impl NumberParametersBuilder {
     }
 }
 
-/// A builder for constructing `IntegerParameters` instances.
+/// 用于构建 `IntegerParameters` 实例的构建器。
 #[derive(Debug)]
 pub struct IntegerParametersBuilder {
     params: IntegerParameters,
@@ -326,13 +331,19 @@ impl IntegerParametersBuilder {
         self
     }
 
+    /// 为整数添加一个枚举值。
+    /// 限制整数必须是所指定值中的一个。
+    pub fn enum_int(self, value: i64) -> Self {
+        self.enum_value(serde_json::json!(value))
+    }
+
     /// 构建最终的 `Parameters::Integer` 实例。
     pub fn build(self) -> Parameters {
         Parameters::Integer(self.params)
     }
 }
 
-/// A builder for constructing `BooleanParameters` instances.
+/// 用于构建 `BooleanParameters` 实例的构建器。
 #[derive(Debug)]
 pub struct BooleanParametersBuilder {
     params: BooleanParameters,
@@ -356,8 +367,6 @@ impl BooleanParametersBuilder {
         Parameters::Boolean(self.params)
     }
 }
-
-// --- Convenience Constructors ---
 
 impl Parameters {
     /// 创建一个新的对象参数构建器。
@@ -388,239 +397,6 @@ impl Parameters {
     /// 创建一个新的布尔参数构建器。
     pub fn boolean() -> BooleanParametersBuilder {
         BooleanParametersBuilder::new()
-    }
-}
-
-// --- Serialization ---
-
-impl Serialize for Parameters {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut map = serializer.serialize_map(None)?;
-        match self {
-            Self::Object(params) => {
-                map.serialize_entry("type", "object")?;
-                if let Some(ref desc) = params.description {
-                    map.serialize_entry("description", desc)?;
-                }
-                if !params.properties.is_empty() {
-                    map.serialize_entry("properties", &params.properties)?;
-                }
-                if !params.required.is_empty() {
-                    map.serialize_entry("required", &params.required)?;
-                }
-            }
-            Self::Array(params) => {
-                map.serialize_entry("type", "array")?;
-                if let Some(ref desc) = params.description {
-                    map.serialize_entry("description", desc)?;
-                }
-                if let Some(ref items) = params.items {
-                    map.serialize_entry("items", items.as_ref())?;
-                }
-            }
-            Self::String(params) => {
-                map.serialize_entry("type", "string")?;
-                if let Some(ref desc) = params.description {
-                    map.serialize_entry("description", desc)?;
-                }
-                if let Some(ref enum_vals) = params.enum_values {
-                    map.serialize_entry("enum", enum_vals)?;
-                }
-            }
-            Self::Number(params) => {
-                map.serialize_entry("type", "number")?;
-                if let Some(ref desc) = params.description {
-                    map.serialize_entry("description", desc)?;
-                }
-                if let Some(ref enum_vals) = params.enum_values {
-                    map.serialize_entry("enum", enum_vals)?;
-                }
-            }
-            Self::Integer(params) => {
-                map.serialize_entry("type", "integer")?;
-                if let Some(ref desc) = params.description {
-                    map.serialize_entry("description", desc)?;
-                }
-                if let Some(ref enum_vals) = params.enum_values {
-                    map.serialize_entry("enum", enum_vals)?;
-                }
-            }
-            Self::Boolean(params) => {
-                map.serialize_entry("type", "boolean")?;
-                if let Some(ref desc) = params.description {
-                    map.serialize_entry("description", desc)?;
-                }
-            }
-        }
-        map.end()
-    }
-}
-
-// --- Conversion from serde_json::Value ---
-
-impl TryFrom<Value> for Parameters {
-    type Error = ConversionError;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        let mut obj = match value {
-            Value::Object(map) => map,
-            _ => return Err(ConversionError::ValueNotAnObject(format!("{value:?}"))),
-        };
-
-        let type_str = obj
-            .get("type")
-            .and_then(Value::as_str)
-            .ok_or(ConversionError::MissingTypeField)?;
-
-        match type_str {
-            "object" => {
-                let mut builder = ObjectParameters::default();
-
-                if let Some(desc) = obj.get("description").and_then(Value::as_str) {
-                    builder.description = Some(desc.to_string());
-                }
-
-                if let Some(props_val) = obj.remove("properties") {
-                    let props_map = match props_val {
-                        Value::Object(map) => map,
-                        _ => {
-                            return Err(ConversionError::InvalidFieldValue(
-                                "properties".to_string(),
-                                "must be an object".to_string(),
-                            ));
-                        }
-                    };
-                    for (k, v) in props_map {
-                        builder.properties.insert(k, Parameters::try_from(v)?);
-                    }
-                }
-
-                if let Some(req_val) = obj.remove("required") {
-                    let req_arr = match req_val {
-                        Value::Array(arr) => arr,
-                        _ => {
-                            return Err(ConversionError::InvalidFieldValue(
-                                "required".to_string(),
-                                "must be an array".to_string(),
-                            ));
-                        }
-                    };
-                    builder.required = req_arr
-                        .into_iter()
-                        .map(|v| v.as_str().map(ToString::to_string))
-                        .collect::<Option<Vec<String>>>()
-                        .ok_or_else(|| {
-                            ConversionError::InvalidFieldValue(
-                                "required".to_string(),
-                                "must be an array of strings".to_string(),
-                            )
-                        })?;
-                }
-
-                // Validate that all required properties exist
-                for req_prop in &builder.required {
-                    if !builder.properties.contains_key(req_prop) {
-                        return Err(ConversionError::BuilderError(
-                            ParameterBuilderError::RequiredPropertyNotDefined(req_prop.clone()),
-                        ));
-                    }
-                }
-
-                Ok(Parameters::Object(builder))
-            }
-            "array" => {
-                let mut builder = ArrayParameters::default();
-
-                if let Some(desc) = obj.get("description").and_then(Value::as_str) {
-                    builder.description = Some(desc.to_string());
-                }
-
-                if let Some(items_val) = obj.remove("items") {
-                    builder.items = Some(Box::new(Parameters::try_from(items_val)?));
-                }
-
-                Ok(Parameters::Array(builder))
-            }
-            "string" => {
-                let mut builder = StringParameters::default();
-
-                if let Some(desc) = obj.get("description").and_then(Value::as_str) {
-                    builder.description = Some(desc.to_string());
-                }
-
-                if let Some(enum_val) = obj.remove("enum") {
-                    let enum_arr = match enum_val {
-                        Value::Array(arr) => arr,
-                        _ => {
-                            return Err(ConversionError::InvalidFieldValue(
-                                "enum".to_string(),
-                                "must be an array".to_string(),
-                            ));
-                        }
-                    };
-                    builder.enum_values = Some(enum_arr);
-                }
-
-                Ok(Parameters::String(builder))
-            }
-            "number" => {
-                let mut builder = NumberParameters::default();
-
-                if let Some(desc) = obj.get("description").and_then(Value::as_str) {
-                    builder.description = Some(desc.to_string());
-                }
-
-                if let Some(enum_val) = obj.remove("enum") {
-                    let enum_arr = match enum_val {
-                        Value::Array(arr) => arr,
-                        _ => {
-                            return Err(ConversionError::InvalidFieldValue(
-                                "enum".to_string(),
-                                "must be an array".to_string(),
-                            ));
-                        }
-                    };
-                    builder.enum_values = Some(enum_arr);
-                }
-
-                Ok(Parameters::Number(builder))
-            }
-            "integer" => {
-                let mut builder = IntegerParameters::default();
-
-                if let Some(desc) = obj.get("description").and_then(Value::as_str) {
-                    builder.description = Some(desc.to_string());
-                }
-
-                if let Some(enum_val) = obj.remove("enum") {
-                    let enum_arr = match enum_val {
-                        Value::Array(arr) => arr,
-                        _ => {
-                            return Err(ConversionError::InvalidFieldValue(
-                                "enum".to_string(),
-                                "must be an array".to_string(),
-                            ));
-                        }
-                    };
-                    builder.enum_values = Some(enum_arr);
-                }
-
-                Ok(Parameters::Integer(builder))
-            }
-            "boolean" => {
-                let mut builder = BooleanParameters::default();
-
-                if let Some(desc) = obj.get("description").and_then(Value::as_str) {
-                    builder.description = Some(desc.to_string());
-                }
-
-                Ok(Parameters::Boolean(builder))
-            }
-            _ => Err(ConversionError::TypeFieldNotAString(type_str.to_string())),
-        }
     }
 }
 
@@ -656,36 +432,6 @@ mod tests {
             "required": ["name"]
         });
         assert_eq!(json, expected);
-    }
-
-    #[test]
-    fn test_try_from_value_simple_object() {
-        let json_value = json!({
-            "type": "object",
-            "description": "A user object",
-            "properties": {
-                "name": { "type": "string", "description": "User's name" },
-                "age": { "type": "integer", "description": "User's age" }
-            },
-            "required": ["name"]
-        });
-
-        let params = Parameters::try_from(json_value.clone()).unwrap();
-        let serialized_params = serde_json::to_value(&params).unwrap();
-
-        assert_eq!(serialized_params, json_value);
-    }
-
-    #[test]
-    fn test_try_from_value_with_errors() {
-        let invalid_json = json!({"type": "object", "required": ["name"]});
-        let result = Parameters::try_from(invalid_json);
-        assert!(matches!(
-            result,
-            Err(ConversionError::BuilderError(
-                ParameterBuilderError::RequiredPropertyNotDefined(_)
-            ))
-        ));
     }
 
     #[test]

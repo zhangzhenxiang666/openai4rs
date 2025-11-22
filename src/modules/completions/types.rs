@@ -1,6 +1,8 @@
-use crate::common::types::{CompletionGeneric, extract_optional};
+use crate::common::types::CompletionGeneric;
 use serde::Deserialize;
+use serde::de::{self, MapAccess, Visitor};
 use std::collections::HashMap;
+use std::fmt;
 
 pub type Completion = CompletionGeneric<CompletionChoice>;
 
@@ -52,37 +54,87 @@ impl<'de> Deserialize<'de> for CompletionChoice {
     where
         D: serde::Deserializer<'de>,
     {
-        let mut map = HashMap::<String, serde_json::Value>::deserialize(deserializer)?;
+        struct CompletionChoiceVisitor;
 
-        let index: Option<usize> = extract_optional(&mut map, "index")?;
-        let index = index.unwrap_or(0);
+        impl<'de> Visitor<'de> for CompletionChoiceVisitor {
+            type Value = CompletionChoice;
 
-        let text: Option<String> = extract_optional(&mut map, "text")?;
-        let text = text.unwrap_or("".into());
-
-        let finish_reason = extract_optional(&mut map, "finish_reason")?;
-        let logprobs = extract_optional(&mut map, "logprobs")?;
-
-        let reasoning = match (map.remove("reasoning"), map.remove("reasoning_content")) {
-            (Some(serde_json::Value::Null), Some(serde_json::Value::Null)) => None,
-            (Some(value), _) if !value.is_null() => {
-                Some(serde_json::from_value(value).map_err(serde::de::Error::custom)?)
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a CompletionChoice object")
             }
-            (_, Some(value)) if !value.is_null() => {
-                Some(serde_json::from_value(value).map_err(serde::de::Error::custom)?)
+
+            fn visit_map<V>(self, mut map: V) -> Result<CompletionChoice, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut index: Option<usize> = None;
+                let mut text: Option<String> = None;
+                let mut finish_reason: Option<Option<FinishReason>> = None;
+                let mut logprobs: Option<Option<Logprobs>> = None;
+                let mut reasoning: Option<Option<String>> = None;
+                let mut reasoning_content: Option<Option<String>> = None;
+                let mut extra_fields: Option<HashMap<String, serde_json::Value>> = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "index" => {
+                            if index.is_some() {
+                                return Err(de::Error::duplicate_field("index"));
+                            }
+                            index = Some(map.next_value()?);
+                        }
+                        "text" => {
+                            if text.is_some() {
+                                return Err(de::Error::duplicate_field("text"));
+                            }
+                            text = Some(map.next_value()?);
+                        }
+                        "finish_reason" => {
+                            if finish_reason.is_some() {
+                                return Err(de::Error::duplicate_field("finish_reason"));
+                            }
+                            finish_reason = Some(map.next_value()?);
+                        }
+                        "logprobs" => {
+                            if logprobs.is_some() {
+                                return Err(de::Error::duplicate_field("logprobs"));
+                            }
+                            logprobs = Some(map.next_value()?);
+                        }
+                        "reasoning" => {
+                            if reasoning.is_some() {
+                                return Err(de::Error::duplicate_field("reasoning"));
+                            }
+                            reasoning = Some(map.next_value()?);
+                        }
+                        "reasoning_content" => {
+                            if reasoning_content.is_some() {
+                                return Err(de::Error::duplicate_field("reasoning_content"));
+                            }
+                            reasoning_content = Some(map.next_value()?);
+                        }
+                        _ => {
+                            let value = map.next_value()?;
+                            extra_fields
+                                .get_or_insert_with(HashMap::new)
+                                .insert(key, value);
+                        }
+                    }
+                }
+
+                let final_reasoning = reasoning.flatten().or(reasoning_content.flatten());
+
+                Ok(CompletionChoice {
+                    index: index.unwrap_or(0),
+                    text: text.unwrap_or_default(),
+                    finish_reason: finish_reason.flatten(),
+                    logprobs: logprobs.flatten(),
+                    reasoning: final_reasoning,
+                    extra_fields,
+                })
             }
-            _ => None,
-        };
+        }
 
-        let extra_fields = if map.is_empty() { None } else { Some(map) };
-
-        Ok(CompletionChoice {
-            index,
-            text,
-            finish_reason,
-            logprobs,
-            reasoning,
-            extra_fields,
-        })
+        deserializer.deserialize_map(CompletionChoiceVisitor)
     }
 }
