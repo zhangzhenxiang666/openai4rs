@@ -1,12 +1,12 @@
 use super::request::{Request, RequestBuilder, RequestSpec};
-use crate::Config;
 use crate::common::types::RetryCount;
+use crate::config::Config;
 use crate::error::{ApiError, ApiErrorKind, OpenAIError, RequestError};
 use crate::utils::traits::AsyncFrom;
 use rand::Rng;
 use reqwest::{Client, Response};
+use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::time::Duration;
-use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// 处理实际发送HTTP请求的HTTP请求执行器。
 ///
@@ -45,24 +45,24 @@ impl HttpExecutor {
         }
     }
 
-    pub async fn config_read(&self) -> RwLockReadGuard<'_, Config> {
-        self.config.read().await
+    pub fn config_read(&self) -> RwLockReadGuard<'_, Config> {
+        self.config.read().unwrap()
     }
 
-    pub async fn config_write(&self) -> RwLockWriteGuard<'_, Config> {
-        self.config.write().await
+    pub fn config_write(&self) -> RwLockWriteGuard<'_, Config> {
+        self.config.write().unwrap()
     }
 
     /// 根据当前配置重建内部的`reqwest::Client`。
     ///
     /// 当HTTP配置更改时应调用此方法，
     /// 例如当代理设置或超时值更新时。
-    pub async fn rebuild_reqwest_client(&self) {
+    pub fn rebuild_reqwest_client(&self) {
         let new_client = {
-            let config_guard = self.config.read().await;
+            let config_guard = self.config.read().unwrap();
             config_guard.http().build_reqwest_client()
         };
-        let mut client_guard = self.reqwest_client.write().await;
+        let mut client_guard = self.reqwest_client.write().unwrap();
         *client_guard = new_client;
     }
 
@@ -89,12 +89,12 @@ impl HttpExecutor {
     {
         // Snapshot client and config-derived values to avoid holding locks across await
         let client = {
-            let client_guard = self.reqwest_client.read().await;
+            let client_guard = self.reqwest_client.read().unwrap();
             client_guard.clone()
         };
 
         let (retry_count, request) = {
-            let config_guard = self.config.read().await;
+            let config_guard = self.config.read().unwrap();
 
             let mut request = Request::new(reqwest::Method::POST, (params.url_fn)(&config_guard));
 
@@ -146,12 +146,12 @@ impl HttpExecutor {
     {
         // Snapshot client and config-derived values to avoid holding locks across await
         let client = {
-            let client_guard = self.reqwest_client.read().await;
+            let client_guard = self.reqwest_client.read().unwrap();
             client_guard.clone()
         };
 
         let (retry_count, request) = {
-            let config_guard = self.config.read().await;
+            let config_guard = self.config.read().unwrap();
 
             let mut request = Request::new(reqwest::Method::GET, (params.url_fn)(&config_guard));
 

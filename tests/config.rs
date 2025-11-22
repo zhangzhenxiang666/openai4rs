@@ -93,6 +93,6 @@ async fn test_build_openai() {
         .build_openai()
         .unwrap();
 
-    assert_eq!(client.api_key().await, "test-key");
-    assert_eq!(client.base_url().await, "https://api.test.com/v1");
+    assert_eq!(client.api_key(), "test-key");
+    assert_eq!(client.base_url(), "https://api.test.com/v1");
 }

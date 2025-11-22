@@ -1,12 +1,12 @@
 use super::request::RequestSpec;
-use crate::Config;
+use crate::config::Config;
 use crate::error::{OpenAIError, ProcessingError};
 use crate::service::executor::HttpExecutor;
 use crate::service::request::Request;
 use eventsource_stream::{Event, EventStreamError, Eventsource};
 use futures::StreamExt;
 use std::any::type_name;
-use tokio::sync::{RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{RwLockReadGuard, RwLockWriteGuard};
 use tokio_stream::wrappers::ReceiverStream;
 
 /// 用于处理流事件的结果类型。
@@ -61,13 +61,13 @@ impl InnerHttp {
     }
 
     /// 获取对配置的只读访问权限。
-    pub async fn config_read(&self) -> RwLockReadGuard<'_, Config> {
-        self.executor.config_read().await
+    pub fn config_read(&self) -> RwLockReadGuard<'_, Config> {
+        self.executor.config_read()
     }
 
     /// 获取对配置的写入访问权限。
-    pub async fn config_write(&self) -> RwLockWriteGuard<'_, Config> {
-        self.executor.config_write().await
+    pub fn config_write(&self) -> RwLockWriteGuard<'_, Config> {
+        self.executor.config_write()
     }
 
     /// 使用JSON负载发送POST请求并使用HttpParams反序列化响应。
@@ -249,7 +249,7 @@ impl InnerHttp {
     ///
     /// 此方法触发底层HTTP客户端的重建
     /// 以及任何更新的配置设置。
-    pub async fn refresh_client(&self) {
-        self.executor.rebuild_reqwest_client().await;
+    pub fn refresh_client(&self) {
+        self.executor.rebuild_reqwest_client();
     }
 }

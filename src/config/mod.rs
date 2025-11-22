@@ -29,51 +29,25 @@ pub struct Credentials {
 }
 
 impl Credentials {
-    /// 使用指定的API密钥和基础URL创建新的BaseConfig
-    ///
-    /// # 参数
-    ///
-    /// * `api_key` - 用于身份验证的API密钥
-    /// * `base_url` - API请求的基础URL
     pub fn new(api_key: String, base_url: String) -> Self {
         Self { api_key, base_url }
     }
 
-    /// 返回基础URL的引用
     #[inline]
     pub fn base_url(&self) -> &str {
         &self.base_url
     }
 
-    /// 返回API密钥的引用
     #[inline]
     pub fn api_key(&self) -> &str {
         &self.api_key
     }
 
-    /// 为当前配置设置新的基础URL
-    ///
-    /// # 参数
-    ///
-    /// * `base_url` - 要使用的新基础URL
-    ///
-    /// # 返回
-    ///
-    /// 用于方法链的可变引用
     pub fn with_base_url<T: Into<String>>(&mut self, base_url: T) -> &mut Self {
         self.base_url = base_url.into();
         self
     }
 
-    /// 为当前配置设置新的API密钥
-    ///
-    /// # 参数
-    ///
-    /// * `api_key` - 要使用的新API密钥
-    ///
-    /// # 返回
-    ///
-    /// 用于方法链的可变引用
     pub fn with_api_key<T: Into<String>>(&mut self, api_key: T) -> &mut Self {
         self.api_key = api_key.into();
         self

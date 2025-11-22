@@ -54,12 +54,6 @@ pub struct Config {
     retry_count: usize,
 }
 impl Config {
-    /// 使用指定的API密钥和基础URL创建新的Config
-    ///
-    /// # 参数
-    ///
-    /// * `api_key` - 用于身份验证的API密钥
-    /// * `base_url` - API请求的基础URL
     pub fn new(api_key: impl Into<String>, base_url: impl Into<String>) -> Self {
         Self {
             credentials: Credentials::new(api_key.into(), base_url.into()),
@@ -68,7 +62,6 @@ impl Config {
         }
     }
 
-    /// 创建用于流畅配置的ConfigBuilder
     pub fn builder() -> ConfigBuilder {
         ConfigBuilder {
             retry_count: 5,
@@ -77,153 +70,81 @@ impl Config {
         }
     }
 
-    /// 返回API密钥
     #[inline]
     pub fn api_key(&self) -> &str {
         self.credentials.api_key()
     }
 
-    /// 返回基础URL
     #[inline]
     pub fn base_url(&self) -> &str {
         self.credentials.base_url()
     }
 
-    /// 返回重试次数
     #[inline]
     pub fn retry_count(&self) -> usize {
         self.retry_count
     }
 
-    /// 返回请求超时时间
     #[inline]
     pub fn timeout(&self) -> Duration {
         self.http.timeout()
     }
 
-    /// 返回可选的代理URL
     #[inline]
     pub fn proxy(&self) -> Option<&String> {
         self.http.proxy()
     }
 
-    /// 返回可选的自定义用户代理字符串
     #[inline]
     pub fn user_agent(&self) -> Option<&HeaderValue> {
         self.http.user_agent()
     }
 
-    /// 返回连接超时时间
     #[inline]
     pub fn connect_timeout(&self) -> Duration {
         self.http.connect_timeout()
     }
 
-    /// 返回对HTTP配置的引用
     #[inline]
     pub fn http(&self) -> &HttpConfig {
         &self.http
     }
 
-    /// 返回对基础配置的引用
     #[inline]
     pub fn credentials(&self) -> &Credentials {
         &self.credentials
     }
 
-    /// 为此配置设置新的基础URL
-    ///
-    /// # 参数
-    ///
-    /// * `base_url` - 要使用的新基础URL
-    ///
-    /// # 返回
-    ///
-    /// 用于方法链的自引用
     pub fn with_base_url<T: Into<String>>(&mut self, base_url: T) -> &mut Self {
         self.credentials.with_base_url(base_url);
         self
     }
 
-    /// 为此配置设置新的API密钥
-    ///
-    /// # 参数
-    ///
-    /// * `api_key` - 要使用的新API密钥
-    ///
-    /// # 返回
-    ///
-    /// 用于方法链的自引用
     pub fn with_api_key<T: Into<String>>(&mut self, api_key: T) -> &mut Self {
         self.credentials.with_api_key(api_key);
         self
     }
 
-    /// 设置失败请求的重试次数
-    ///
-    /// # 参数
-    ///
-    /// * `retry_count` - 重试次数
-    ///
-    /// # 返回
-    ///
-    /// 用于方法链的自引用
     pub fn with_retry_count(&mut self, retry_count: usize) -> &mut Self {
         self.retry_count = retry_count;
         self
     }
 
-    /// 设置请求超时时间
-    ///
-    /// # 参数
-    ///
-    /// * `timeout` - 超时值
-    ///
-    /// # 返回
-    ///
-    /// 用于方法链的自引用
     pub fn with_timeout(&mut self, timeout: Duration) -> &mut Self {
         self.http.with_timeout(timeout);
         self
     }
 
-    /// 设置连接超时时间
-    ///
-    /// # 参数
-    ///
-    /// * `connect_timeout` - 连接超时值
-    ///
-    /// # 返回
-    ///
-    /// 用于方法链的自引用
     pub fn with_connect_timeout(&mut self, connect_timeout: Duration) -> &mut Self {
         self.http.with_connect_timeout(connect_timeout);
         self
     }
 
-    /// 为请求设置HTTP代理
-    ///
-    /// # 参数
-    ///
-    /// * `proxy` - 要使用的代理URL
-    ///
-    /// # 返回
-    ///
-    /// 用于方法链的自引用
     pub fn with_proxy<T: Into<String>>(&mut self, proxy: T) -> &mut Self {
         self.http.with_proxy(proxy);
         self
     }
 
-    /// 设置自定义用户代理字符串
-    ///
-    /// # 参数
-    ///
-    /// * `user_agent` - 要使用的用户代理字符串
-    ///
-    /// # 返回
-    ///
-    /// 用于方法链的自引用
     pub fn with_user_agent(&mut self, user_agent: HeaderValue) -> &mut Self {
         self.http.with_user_agent(user_agent);
         self

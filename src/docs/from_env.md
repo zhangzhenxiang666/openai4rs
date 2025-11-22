@@ -32,7 +32,7 @@ async fn main() -> Result<(), String> {
     let client = OpenAI::from_env()?;
 
     // 客户端已准备就绪
-    println!("Connected to: {}", client.base_url().await);
+    println!("Connected to: {}", client.base_url());
     Ok(())
 }
 ```

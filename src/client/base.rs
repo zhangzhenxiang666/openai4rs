@@ -45,12 +45,12 @@ pub struct OpenAI {
 impl OpenAI {
     /// 使用指定的API密钥和基础URL创建新的OpenAI客户端。
     ///
-    /// # 参数
+    /// # arguments
     ///
     /// * `api_key` - 您的OpenAI API密钥
     /// * `base_url` - API的基础URL (例如 "https://api.openai.com/v1")
     ///
-    /// # 示例
+    /// # example
     ///
     /// ```rust
     /// use openai4rs::OpenAI;
@@ -149,43 +149,6 @@ impl OpenAI {
 }
 
 impl OpenAI {
-    /// 更新客户端配置并重新创建HTTP客户端。
-    ///
-    /// 此方法允许您修改现有客户端的配置，并使用新设置自动重新创建内部HTTP客户端。
-    ///
-    /// # 参数
-    ///
-    /// * `update_fn` - 更新配置的函数
-    ///
-    /// # 示例
-    ///
-    /// ```rust
-    /// use openai4rs::OpenAI;
-    /// use std::time::Duration;
-    /// #[tokio::main]
-    /// async fn main() {
-    /// let client = OpenAI::new("key", "https://api.openai.com/v1");
-    ///
-    /// // 一次更新多个设置
-    /// client.update_config(|config| {
-    ///     config.with_timeout(Duration::from_secs(60))
-    ///           .with_retry_count(3)
-    ///           .with_proxy("http://localhost:8080");
-    /// }).await;
-    /// }
-    /// ```
-    pub async fn update_config<F>(&self, update_fn: F)
-    where
-        F: FnOnce(&mut Config),
-    {
-        {
-            let mut config_guard = self.http_client.config_write().await;
-            update_fn(&mut config_guard);
-        }
-
-        self.http_client.refresh_client().await;
-    }
-
     #[doc = include_str!("../docs/chat.md")]
     #[inline]
     pub fn chat(&self) -> &Chat {
@@ -210,80 +173,80 @@ impl OpenAI {
         &self.embeddings
     }
 
-    /// 返回当前的基础URL。
-    pub async fn base_url(&self) -> String {
-        self.http_client.config_read().await.base_url().to_string()
+    pub fn base_url(&self) -> String {
+        self.http_client.config_read().base_url().to_string()
     }
 
-    /// 返回当前的API密钥。
-    pub async fn api_key(&self) -> String {
-        self.http_client.config_read().await.api_key().to_string()
+    pub fn api_key(&self) -> String {
+        self.http_client.config_read().api_key().to_string()
     }
 
-    /// 更新客户端的基础URL。
-    ///
-    /// 此操作不会重建HTTP客户端，因为它在每个请求中都会使用。
-    pub async fn with_base_url<T: Into<String>>(&self, base_url: T) {
+    pub fn timeout(&self) -> Duration {
+        self.http_client.config_read().timeout()
+    }
+
+    pub fn connect_timeout(&self) -> Duration {
+        self.http_client.config_read().connect_timeout()
+    }
+
+    pub fn proxy(&self) -> Option<String> {
         self.http_client
-            .config_write()
-            .await
-            .with_base_url(base_url);
+            .config_read()
+            .proxy()
+            .map(|s| s.to_string())
     }
 
-    /// 更新客户端的API密钥。
-    ///
-    /// 此操作不会重建HTTP客户端，因为API密钥在每个请求的头部中发送。
-    pub async fn with_api_key<T: Into<String>>(&self, api_key: T) {
-        self.http_client.config_write().await.with_api_key(api_key);
-    }
-
-    /// 更新客户端的请求超时时间。
-    ///
-    /// 此操作将使用新设置重建内部HttpService。
-    pub async fn with_timeout(&self, timeout: Duration) {
-        self.update_config(|config| {
-            config.with_timeout(timeout);
-        })
-        .await;
-    }
-
-    /// 更新客户端的连接超时时间。
-    ///
-    /// 此操作将使用新设置重建内部HttpService。
-    pub async fn with_connect_timeout(&self, connect_timeout: Duration) {
-        self.update_config(|config| {
-            config.with_connect_timeout(connect_timeout);
-        })
-        .await;
-    }
-
-    /// 更新客户端的最大重试次数。
-    ///
-    /// 此操作不会重建HTTP客户端，因为它在每次重试时都会使用。
-    pub async fn with_retry_count(&self, retry_count: usize) {
+    pub fn user_agent(&self) -> Option<HeaderValue> {
         self.http_client
-            .config_write()
-            .await
-            .with_retry_count(retry_count);
+            .config_read()
+            .user_agent()
+            .map(|hv| hv.clone())
     }
 
-    /// 更新客户端的HTTP代理。
-    ///
-    /// 此操作将使用新设置重建内部HttpService。
-    pub async fn with_proxy(&self, proxy: impl Into<String>) {
-        self.update_config(|config| {
-            config.with_proxy(proxy);
-        })
-        .await;
+    pub fn retry_count(&self) -> usize {
+        self.http_client.config_read().retry_count()
     }
 
-    /// 更新客户端的自定义用户代理。
+    pub fn with_base_url<T: Into<String>>(&self, base_url: T) {
+        self.http_client.config_write().with_base_url(base_url);
+    }
+
+    pub fn with_api_key<T: Into<String>>(&self, api_key: T) {
+        self.http_client.config_write().with_api_key(api_key);
+    }
+
+    /// 更新客户端配置并重新创建HTTP客户端。
     ///
-    /// 此操作将使用新设置重建内部HttpService。
-    pub async fn with_user_agent(&self, user_agent: HeaderValue) {
-        self.update_config(|config| {
-            config.with_user_agent(user_agent);
-        })
-        .await;
+    /// 此方法允许您修改现有客户端的配置，并使用新设置自动重新创建内部HTTP客户端。
+    ///
+    /// # 参数
+    ///
+    /// * `update_fn` - 更新配置的函数
+    ///
+    /// # 示例
+    ///
+    /// ```rust
+    /// use openai4rs::OpenAI;
+    /// use std::time::Duration;
+    ///
+    /// let client = OpenAI::new("key", "https://api.openai.com/v1");
+    ///
+    /// // 一次更新多个设置
+    /// client.update_config(|config| {
+    ///     config.with_timeout(Duration::from_secs(60))
+    ///           .with_retry_count(3)
+    ///           .with_proxy("http://localhost:8080");
+    /// });
+    /// ```
+    pub fn update_config<F>(&self, update_fn: F)
+    where
+        F: FnOnce(&mut Config),
+    {
+        {
+            let mut config_guard = self.http_client.config_write();
+            update_fn(&mut config_guard);
+        }
+
+        self.http_client.refresh_client();
     }
 }
