@@ -18,25 +18,11 @@ use std::time::Duration;
 /// 执行器对reqwest客户端使用读写锁，以允许并发读取，
 /// 同时确保配置更改时的线程安全更新。
 pub(crate) struct HttpExecutor {
-    /// 主OpenAI客户端配置。
-    ///
-    /// 用于确定重试次数和其他客户端特定设置。
     config: RwLock<Config>,
-
-    /// 包装在RwLock中的底层reqwest HTTP客户端。
-    ///
-    /// 这允许多个并发请求，同时确保配置更改时的线程安全更新。
     reqwest_client: RwLock<Client>,
 }
 
 impl HttpExecutor {
-    /// 使用给定配置创建一个新的HttpExecutor。
-    ///
-    /// # 参数
-    /// * `config` - 主OpenAI客户端配置
-    ///
-    /// # 返回值
-    /// 新的HttpExecutor实例
     pub fn new(config: Config) -> HttpExecutor {
         let reqwest_client = config.http().build_reqwest_client();
         HttpExecutor {
@@ -45,115 +31,70 @@ impl HttpExecutor {
         }
     }
 
+    #[inline]
     pub fn config_read(&self) -> RwLockReadGuard<'_, Config> {
-        self.config.read().unwrap()
+        self.config.read().expect("Failed to acquire read lock on config. This indicates a serious internal error, possibly due to a poisoned RwLock.")
     }
 
+    #[inline]
     pub fn config_write(&self) -> RwLockWriteGuard<'_, Config> {
-        self.config.write().unwrap()
+        self.config.write().expect("Failed to acquire write lock on config. This indicates a serious internal error, possibly due to a poisoned RwLock.")
     }
 
-    /// 根据当前配置重建内部的`reqwest::Client`。
-    ///
-    /// 当HTTP配置更改时应调用此方法，
-    /// 例如当代理设置或超时值更新时。
     pub fn rebuild_reqwest_client(&self) {
         let new_client = {
-            let config_guard = self.config.read().unwrap();
+            let config_guard = self.config_read();
             config_guard.http().build_reqwest_client()
         };
-        let mut client_guard = self.reqwest_client.write().unwrap();
+        let mut client_guard = self.client_write();
         *client_guard = new_client;
     }
 
-    /// 使用HttpParams发送POST请求并返回原始HTTP响应。
-    ///
-    /// 此方法处理完整的请求生命周期，包括：
-    /// - 使用提供的函数构建请求
-    /// - 使用重试逻辑执行请求
-    /// - 处理错误和重试
-    ///
-    /// # 参数
-    /// * `params` - 包含所有必要请求参数的HttpParams结构
-    ///
-    /// # 类型参数
-    /// * `U` - 用于生成URL的函数类型，返回一个String
-    /// * `F` - 用于构建请求的函数类型
-    ///
-    /// # 返回值
-    /// 包含原始HTTP响应或OpenAIError的Result
+    /// 根据请求参数发送post请求
     pub async fn post<U, F>(&self, params: RequestSpec<U, F>) -> Result<Response, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
         F: FnOnce(&Config, Request) -> Request,
     {
-        // Snapshot client and config-derived values to avoid holding locks across await
-        let client = {
-            let client_guard = self.reqwest_client.read().unwrap();
-            client_guard.clone()
-        };
-
-        let (retry_count, request) = {
-            let config_guard = self.config.read().unwrap();
-
-            let mut request = Request::new(reqwest::Method::POST, (params.url_fn)(&config_guard));
-
-            request = (params.builder_fn)(&config_guard, request);
-
-            let mut request_builder = RequestBuilder::new(request);
-
-            HttpExecutor::apply_global_http_settings(&config_guard, &mut request_builder);
-
-            request = request_builder.take();
-
-            let retry_count = match request.extensions().get::<RetryCount>() {
-                Some(retry) => {
-                    if retry.0 != 0 {
-                        retry.0
-                    } else {
-                        config_guard.retry_count()
-                    }
-                }
-                None => config_guard.retry_count(),
-            };
-
-            (retry_count, request)
-        };
-
-        HttpExecutor::send_with_retries(request, retry_count as u32, client).await
+        self.send(reqwest::Method::POST, params).await
     }
 
-    /// 使用HttpParams发送GET请求并返回原始HTTP响应。
-    ///
-    /// 此方法处理完整的请求生命周期，包括：
-    /// - 使用提供的函数构建请求
-    /// - 使用重试逻辑执行请求
-    /// - 处理错误和重试
-    ///
-    /// # 参数
-    /// * `params` - 包含所有必要请求参数的HttpParams结构
-    ///
-    /// # 类型参数
-    /// * `U` - 用于生成URL的函数类型，返回一个String
-    /// * `F` - 用于构建请求的函数类型
-    ///
-    /// # 返回值
-    /// 包含原始HTTP响应或OpenAIError的Result
+    /// 根据请求参数发送get请求
     pub async fn get<U, F>(&self, params: RequestSpec<U, F>) -> Result<Response, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
         F: FnOnce(&Config, Request) -> Request,
     {
-        // Snapshot client and config-derived values to avoid holding locks across await
-        let client = {
-            let client_guard = self.reqwest_client.read().unwrap();
-            client_guard.clone()
-        };
+        self.send(reqwest::Method::GET, params).await
+    }
+}
+
+impl HttpExecutor {
+    #[inline]
+    fn client_read(&self) -> RwLockReadGuard<'_, Client> {
+        self.reqwest_client.read().expect("Failed to acquire read lock on reqwest_client. This indicates a serious internal error, possibly due to a poisoned RwLock.")
+    }
+
+    #[inline]
+    pub fn client_write(&self) -> RwLockWriteGuard<'_, Client> {
+        self.reqwest_client.write().expect("Failed to acquire write lock on reqwest_client during rebuild. This indicates a serious internal error, possibly due to a poisoned RwLock.")
+    }
+
+    async fn send<U, F>(
+        &self,
+        method: reqwest::Method,
+        params: RequestSpec<U, F>,
+    ) -> Result<Response, OpenAIError>
+    where
+        U: FnOnce(&Config) -> String,
+        F: FnOnce(&Config, Request) -> Request,
+    {
+        let client = self.client_read().clone();
 
         let (retry_count, request) = {
-            let config_guard = self.config.read().unwrap();
+            let config_guard = self.config_read();
 
-            let mut request = Request::new(reqwest::Method::GET, (params.url_fn)(&config_guard));
+            let mut request = Request::new(method, (params.url_fn)(&config_guard));
 
             request = (params.builder_fn)(&config_guard, request);
 
@@ -164,14 +105,8 @@ impl HttpExecutor {
             request = request_builder.take();
 
             let retry_count = match request.extensions().get::<RetryCount>() {
-                Some(retry) => {
-                    if retry.0 != 0 {
-                        retry.0
-                    } else {
-                        config_guard.retry_count()
-                    }
-                }
-                None => config_guard.retry_count(),
+                Some(retry) if retry.0 != 0 => retry.0,
+                _ => config_guard.retry_count(),
             };
 
             (retry_count, request)
@@ -179,11 +114,7 @@ impl HttpExecutor {
 
         HttpExecutor::send_with_retries(request, retry_count as u32, client).await
     }
-}
 
-impl HttpExecutor {
-    /// 将全局HTTP设置（头、查询参数、主体字段）应用到请求构建器
-    /// 仅在本地未设置时才应用全局设置（本地具有更高优先级）
     fn apply_global_http_settings(config: &Config, request_builder: &mut RequestBuilder) {
         // 仅在本地未设置时才应用全局头
         config.http().headers().iter().for_each(|(k, v)| {
@@ -273,6 +204,17 @@ impl HttpExecutor {
     }
 }
 
+const API_ERROR_DEFAULT_BASE_DELAY_MS: u64 = 500;
+const API_ERROR_INTERNAL_SERVER_BASE_DELAY_MS: u64 = 1000;
+const API_ERROR_RATE_LIMIT_BASE_DELAY_MS: u64 = 5000;
+const API_ERROR_MAX_DELAY_MS: u64 = 30_000;
+
+const REQUEST_ERROR_DEFAULT_BASE_DELAY_MS: u64 = 100;
+const REQUEST_ERROR_CONNECTION_BASE_DELAY_MS: u64 = 200;
+const REQUEST_ERROR_MAX_DELAY_MS: u64 = 10_000;
+
+const RETRY_AFTER_JITTER_MS: u64 = 1000;
+
 /// 根据错误类型计算重试前的适当延迟。
 ///
 /// 此函数实现带有抖动的指数退避策略，
@@ -292,24 +234,25 @@ fn calculate_retry_delay(
 ) -> Duration {
     // 如果服务器指定了重试延迟，使用该延迟并添加抖动
     if let Some(duration) = retry_after {
-        let jitter = Duration::from_millis(rand::thread_rng().gen_range(0..1000));
+        let jitter = Duration::from_millis(rand::thread_rng().gen_range(0..RETRY_AFTER_JITTER_MS));
         return duration + jitter;
     }
 
     // 基础延迟因错误类型而异
     let base_delay_ms = match error_kind {
-        ApiErrorKind::RateLimit => 5000,      // 速率限制为5秒
-        ApiErrorKind::InternalServer => 1000, // 服务器错误为1秒
-        _ => 500,                             // 其他错误为0.5秒
+        ApiErrorKind::RateLimit => API_ERROR_RATE_LIMIT_BASE_DELAY_MS,
+        ApiErrorKind::InternalServer => API_ERROR_INTERNAL_SERVER_BASE_DELAY_MS,
+        _ => API_ERROR_DEFAULT_BASE_DELAY_MS,
     };
 
     // 指数退避：base_delay * 2^(attempt-1)
-    let delay_ms = base_delay_ms * 2u64.pow(attempt - 1);
-    // 将延迟限制为30秒
-    let base_delay = Duration::from_millis(delay_ms.min(30_000));
+    let delay_ms = base_delay_ms.saturating_mul(2u64.pow(attempt - 1));
+    // 将延迟限制在最大值内
+    let base_delay = Duration::from_millis(delay_ms.min(API_ERROR_MAX_DELAY_MS));
 
     // 添加0-10%的抖动以防止雷鸣般涌入
-    let jitter_ms = (base_delay.as_millis() as u64 * (rand::thread_rng().gen_range(0..10))) / 100;
+    let jitter_percent = rand::thread_rng().gen_range(0..10);
+    let jitter_ms = (base_delay.as_millis() as u64 * jitter_percent) / 100;
     base_delay + Duration::from_millis(jitter_ms)
 }
 
@@ -325,18 +268,19 @@ fn calculate_retry_delay(
 /// 重试前等待的持续时间
 fn calculate_retry_delay_for_request_error(attempt: u32, error: &RequestError) -> Duration {
     // 基础延迟因错误类型而异
-    let base_delay = match error {
-        RequestError::Timeout(_) => 100,    // 超时为100ms
-        RequestError::Connection(_) => 200, // 连接错误为200ms
-        _ => 100,                           // 其他错误为100ms
+    let base_delay_ms = match error {
+        RequestError::Timeout(_) => REQUEST_ERROR_DEFAULT_BASE_DELAY_MS,
+        RequestError::Connection(_) => REQUEST_ERROR_CONNECTION_BASE_DELAY_MS,
+        _ => REQUEST_ERROR_DEFAULT_BASE_DELAY_MS,
     };
 
     // 指数退避：base_delay * 2^(attempt-1)
-    let delay_ms = base_delay * 2u64.pow(attempt - 1);
-    // 将延迟限制为10秒
-    let base_delay = Duration::from_millis(delay_ms.min(10_000));
+    let delay_ms = base_delay_ms.saturating_mul(2u64.pow(attempt - 1));
+    // 将延迟限制在最大值内
+    let base_delay = Duration::from_millis(delay_ms.min(REQUEST_ERROR_MAX_DELAY_MS));
 
     // 添加0-10%的抖动以防止雷鸣般涌入
-    let jitter_ms = (base_delay.as_millis() as u64 * (rand::random::<u64>() % 10)) / 100;
+    let jitter_percent = rand::thread_rng().gen_range(0..10);
+    let jitter_ms = (base_delay.as_millis() as u64 * jitter_percent) / 100;
     base_delay + Duration::from_millis(jitter_ms)
 }

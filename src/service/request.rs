@@ -19,11 +19,7 @@ where
     U: FnOnce(&Config) -> String,
     F: FnOnce(&Config, Request) -> Request,
 {
-    /// 基于提供的配置生成URL的函数
-    /// 接受一个Config共享引用并返回请求的完整URL字符串
     pub url_fn: U,
-    /// 使用特定参数配置Request的函数
-    /// 接受Config共享引用和Request并返回Request以设置请求头、请求体等
     pub builder_fn: F,
 }
 
@@ -32,7 +28,6 @@ where
     U: FnOnce(&Config) -> String,
     F: FnOnce(&Config, Request) -> Request,
 {
-    /// 创建一个新的RequestSpec实例
     pub fn new(url_fn: U, builder_fn: F) -> Self {
         Self { url_fn, builder_fn }
     }
@@ -140,19 +135,16 @@ impl RequestBuilder {
         RequestBuilder { request }
     }
 
-    /// 获取请求的共享引用
     #[inline]
     pub fn request(&self) -> &Request {
         &self.request
     }
 
-    /// 获取请求的可变引用
     #[inline]
     pub fn request_mut(&mut self) -> &mut Request {
         &mut self.request
     }
 
-    /// 添加请求头
     #[inline]
     pub fn header<K: IntoHeaderName>(&mut self, key: K, value: HeaderValue) -> &mut Self {
         self.request.headers.insert(key, value);
@@ -191,20 +183,17 @@ impl RequestBuilder {
         self
     }
 
-    /// 设置请求超时
     #[inline]
     pub fn timeout(&mut self, timeout: Duration) -> &mut Self {
         self.request.extensions.insert(Timeout(timeout));
         self
     }
 
-    /// 检查请求头是否存在
     #[inline]
     pub fn has_header<K: AsHeaderName>(&self, key: K) -> bool {
         self.request.headers.contains_key(key)
     }
 
-    /// 检查请求体字段是否存在
     #[inline]
     pub fn has_body_field(&self, key: &str) -> bool {
         match self.request.body.as_ref() {
@@ -213,7 +202,6 @@ impl RequestBuilder {
         }
     }
 
-    /// 获取请求
     pub fn take(self) -> Request {
         self.request
     }

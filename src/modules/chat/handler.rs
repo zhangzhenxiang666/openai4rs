@@ -118,7 +118,7 @@ impl Chat {
                 builder.take()
             },
         );
-        self.http_client.post_json_stream(http_params).await
+        self.http_client.post_json_sse(http_params).await
     }
 }
 

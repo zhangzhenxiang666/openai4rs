@@ -714,8 +714,7 @@ impl<'de> Deserialize<'de> for ChatCompletionToolParam {
                     Ok(ChatCompletionToolParam::Function(function))
                 } else {
                     Err(de::Error::custom(format!(
-                        "Expected type 'function', found '{}'",
-                        r#type
+                        "Expected type 'function', found '{type}'"
                     )))
                 }
             }

@@ -5,6 +5,7 @@ use crate::service::executor::HttpExecutor;
 use crate::service::request::Request;
 use eventsource_stream::{Event, EventStreamError, Eventsource};
 use futures::StreamExt;
+use http::HeaderValue;
 use std::any::type_name;
 use std::sync::{RwLockReadGuard, RwLockWriteGuard};
 use tokio_stream::wrappers::ReceiverStream;
@@ -47,13 +48,6 @@ pub(crate) struct InnerHttp {
 }
 
 impl InnerHttp {
-    /// 使用给定的配置创建一个新的 `InnerHttp`。
-    ///
-    /// # 参数
-    /// * `config` - 主OpenAI客户端配置
-    ///
-    /// # 返回值
-    /// 新的InnerHttp实例
     pub fn new(config: Config) -> InnerHttp {
         InnerHttp {
             executor: HttpExecutor::new(config),
@@ -70,21 +64,7 @@ impl InnerHttp {
         self.executor.config_write()
     }
 
-    /// 使用JSON负载发送POST请求并使用HttpParams反序列化响应。
-    ///
-    /// 此方法发送一个POST请求并自动将
-    /// JSON响应反序列化为指定类型。
-    ///
-    /// # 参数
-    /// * `params` - 包含所有必要请求参数的HttpParams结构
-    ///
-    /// # 类型参数
-    /// * `U` - 用于生成URL的函数类型，返回一个String
-    /// * `F` - 用于构建请求的函数类型
-    /// * `T` - 实现DeserializeOwned的预期响应类型
-    ///
-    /// # 返回值
-    /// 包含反序列化响应对象或OpenAIError的Result
+    /// 根据请求参数发送post请求并反序列化JSON响应。
     pub async fn post_json<U, F, T>(&self, params: RequestSpec<U, F>) -> Result<T, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
@@ -107,21 +87,7 @@ impl InnerHttp {
         })
     }
 
-    /// 使用HttpParams发送GET请求并反序列化JSON响应。
-    ///
-    /// 此方法发送一个GET请求并自动将
-    /// JSON响应反序列化为指定类型。
-    ///
-    /// # 参数
-    /// * `params` - 包含所有必要请求参数的HttpParams结构
-    ///
-    /// # 类型参数
-    /// * `U` - 用于生成URL的函数类型，返回一个String
-    /// * `F` - 用于构建请求的函数类型
-    /// * `T` - 实现DeserializeOwned的预期响应类型
-    ///
-    /// # 返回值
-    /// 包含反序列化响应对象或OpenAIError的Result
+    /// 根据请求参数发送get请求并反序列化JSON响应。
     pub async fn get_json<U, F, T>(&self, params: RequestSpec<U, F>) -> Result<T, OpenAIError>
     where
         U: FnOnce(&Config) -> String,
@@ -144,23 +110,8 @@ impl InnerHttp {
         })
     }
 
-    /// 使用HttpParams发送POST请求并期望流式JSON响应。
-    ///
-    /// 此方法发送一个POST请求并处理流式响应
-    /// 使用服务器发送事件（SSE）。它返回反序列化
-    /// 响应块的流。
-    ///
-    /// # 参数
-    /// * `params` - 包含所有必要请求参数的HttpParams结构
-    ///
-    /// # 类型参数
-    /// * `U` - 用于生成URL的函数类型，返回一个String
-    /// * `F` - 用于构建请求的函数类型
-    /// * `T` - 实现DeserializeOwned的预期响应块类型
-    ///
-    /// # 返回值
-    /// 包含响应块流或OpenAIError的Result
-    pub async fn post_json_stream<U, F, T>(
+    /// 根据请求参数发送post请求,尝试接收sse,并反序列化JSON响应。
+    pub async fn post_json_sse<U, F, T>(
         &self,
         params: RequestSpec<U, F>,
     ) -> Result<tokio_stream::wrappers::ReceiverStream<Result<T, OpenAIError>>, OpenAIError>
@@ -169,6 +120,15 @@ impl InnerHttp {
         F: FnOnce(&Config, Request) -> Request,
         T: serde::de::DeserializeOwned + Send + 'static,
     {
+        let RequestSpec { url_fn, builder_fn } = params;
+        let params = RequestSpec::new(url_fn, move |config, request| {
+            let mut request = builder_fn(config, request);
+            request.headers_mut().insert(
+                http::header::ACCEPT,
+                HeaderValue::from_static("text/event-stream"),
+            );
+            request
+        });
         let res = self.executor.post(params).await?;
         let mut event_stream = res.bytes_stream().eventsource();
         let (tx, rx) = tokio::sync::mpsc::channel(32);
@@ -197,20 +157,7 @@ impl InnerHttp {
         Ok(ReceiverStream::new(rx))
     }
 
-    /// 处理来自SSE流的流式事件。
-    ///
-    /// 此方法处理解析和处理单个事件
-    /// 来自服务器发送事件流，将它们转换为ProcessEventResult
-    /// 变体。
-    ///
-    /// # 参数
-    /// * `event_result` - 事件流的结果（事件或错误）
-    ///
-    /// # 类型参数
-    /// * `T` - 实现DeserializeOwned的预期响应块类型
-    ///
-    /// # 返回值
-    /// 指示如何处理此事件的ProcessEventResult
+    /// 处理服务器发送的事件。
     fn process_stream_event<T>(
         event_result: Result<Event, EventStreamError<reqwest::Error>>,
     ) -> SseEventResult<T>
@@ -245,10 +192,6 @@ impl InnerHttp {
         }
     }
 
-    /// 更新内部HTTP客户端配置。
-    ///
-    /// 此方法触发底层HTTP客户端的重建
-    /// 以及任何更新的配置设置。
     pub fn refresh_client(&self) {
         self.executor.rebuild_reqwest_client();
     }
